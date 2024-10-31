@@ -1,7 +1,8 @@
 from pathlib import Path
 from dotenv import load_dotenv
 
-ENV_FILE = Path.home() / "readwise-sqlalchemy-application" / ".env"
+APPLICATION_FOLDER = Path.home() / "readwise-sqlalchemy-application"
+ENV_FILE = APPLICATION_FOLDER / "readwise-sqlalchemy-application" / ".env"
 
 class MissingEnvironmentFile(Exception):
     """Custom exception if environment file is not in the expected location."""

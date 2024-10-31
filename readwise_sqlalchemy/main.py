@@ -1,8 +1,11 @@
+import json
 import os
+from pathlib import Path
 
 import requests
 
 import readwise_sqlalchemy.config 
+from readwise_sqlalchemy.config import APPLICATION_FOLDER
 from readwise_sqlalchemy.logger import logger
 
 # The config import ensures the .env file is loaded on module import
@@ -43,10 +46,28 @@ def _fetch_from_export_api(self, updated_after: str|None=None) -> list[dict]:
         return full_data
 
 
+class FileHandler:
+    """Handle file I/O."""
+    
+    @staticmethod
+    def write_json(data, file_path):
+        """Static method to write json."""
+        with open(file_path, "w") as file_handle:
+            json.dump(data, file_handle)
+
+    @staticmethod
+    def read_json(file_path):
+        """Static method to read json."""
+        with open(file_path, "r") as file_handle:
+            content = json.load(file_handle)
+        return content
+
+
 def main():
-    test_data = _fetch_from_export_api("2024-10-20")
-    print(len(test_data))
-    print(test_data[0])
+    file_name = APPLICATION_FOLDER / "test_output.json"
+    test_data = _fetch_from_export_api("2024-10-30")
+    FileHandler.write_json(test_data, file_name)
+    
 
 
 if __name__ == "__main__":

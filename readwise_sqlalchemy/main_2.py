@@ -1,18 +1,3 @@
-from dataclasses import dataclass
-import datetime
-from dotenv import load_dotenv
-from functools import cache
-from pathlib import Path
-import json
-import os
-
-from readwise_obsidian.logger import logger
-import requests
-
-load_dotenv()
-READWISE_API_TOKEN = os.getenv("READWISE_API_TOKEN")
-
-
 @dataclass
 class UserConfig:
     last_fetch_file : Path = Path("readwise_obsidian") / "data" / "last_fetch.txt" 

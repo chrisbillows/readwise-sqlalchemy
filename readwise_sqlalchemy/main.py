@@ -1,29 +1,128 @@
+from dataclasses import dataclass
+from datetime import datetime
 import json
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+from readwise_sqlalchemy.logger import logger
+from readwise_sqlalchemy.sql_alchemy import (
+    create_database,
+    get_session,
+    populate_database,
+    ReadwiseBatches,
+    query_get_last_fetch,
+)
 import requests
 
-import readwise_sqlalchemy.config 
-from readwise_sqlalchemy.config import APPLICATION_FOLDER
-from readwise_sqlalchemy.logger import logger
 
-# The config import ensures the .env file is loaded on module import
-READWISE_API_TOKEN = os.getenv("READWISE_API_TOKEN")
+class MissingEnvironmentFile(Exception):
+    """Custom exception if environment file not available."""
+    pass
 
 
-def _fetch_from_export_api(self, updated_after: str|None=None) -> list[dict]:
-    """Fetch function copied from the Readwise docs.
+class UserConfig:
+    """Object containing user configuration information."""
     
-    Parameter
-    ---------
-    updated_after: str
-        Fetch only highlights updated after this date, formatted as ISO 8601 string.
+    def __init__(
+            self, 
+            application_dir: Path = Path.home() / "readwise-sqlalchemy-application"
+        ):
+        """
+        Initialise object.
+        
+        Attributes
+        ----------
+        APPLICATION_DIR: pathlib.Path
+
+        ENV_FILE: pathlib.Path
+        
+        READWISE_API_TOKEN: str       
+        
+        """        
+        self.APPLICATION_DIR: Path = application_dir
+        self.APPLICATION_DIR.mkdir(exist_ok=True)
+        self.ENV_FILE: Path = self.APPLICATION_DIR / ".env"
+        self.load_environment_variables_file()
+        self.READWISE_API_TOKEN: str = os.getenv("READWISE_API_TOKEN")
+        self.DB: str = self.APPLICATION_DIR / "readwise.db" 
+
+    def load_environment_variables_file(self):
+        """
+        Load the `.env` file. 
+        
+        Raises
+        ------
+        MissingEnvironmentFile
+            If the .env file is not in the expected location.
+        """
+        print("here")
+        if self.ENV_FILE.exists():
+            load_dotenv(self.ENV_FILE)
+        else:
+            raise MissingEnvironmentFile(
+                "A `.env` file is expected in the `~/readwise-sqlalchemy-application` " 
+                "directory."
+        )
+
+
+class FileHandler:
+    """Handle file I/O."""
+    
+    @staticmethod
+    def write_json(data, file_path) -> None:
+        """Static method to write json."""
+        with open(file_path, "w") as file_handle:
+            json.dump(data, file_handle)
+        print(f"Written to: {file_path}")
+
+    @staticmethod
+    def read_json(file_path) -> list[dict]:
+        """Static method to read json."""
+        with open(file_path, "r") as file_handle:
+            content = json.load(file_handle)
+        return content
+
+    
+def fetch_from_export_api(user_config: UserConfig, updated_after=None) -> list[dict]:
+    """Fetch highlights from the Readwise 'Highlight EXPORT' endpoint.
+    
+    Code is per the documentation. See: https://readwise.io/api_deets
+    
+    Parameters
+    ----------
+    updated_after: str = None
+        An ISO formatted datetime E.g. '2024-11-09T10:15:38.428687'
     
     Returns
     -------
     list[dict]
-        A list where every Readwise highlight is a dict.
+    A list of dicts where each dict represents a "book".
+    
+    Notes
+    -----
+    Readwise uses 'book' for all types of highlight source. They are split into these
+    categories: `{'tweets', 'books', 'articles', 'podcasts'}`
+    
+    Each 'book' has the following keys:
+    
+    ```     
+    book_keys = [
+        'user_book_id', 'title', 'author', 'readable_title', 'source', 'cover_image_url', 
+        'unique_url', 'summary', 'book_tags', 'category', 'document_note', 
+        'readwise_url', 'source_url', 'asin', 'highlights']
+    ```
+    
+    `'highlights'` is a list of dicts where each dict is a highlight. Each highlight
+    contains the following keys:
+    
+    ```
+    highlight_keys = [
+        'id', 'text', 'location', 'location_type', 'note', 'color', 'highlighted_at', 
+        'created_at', 'updated_at', 'external_id', 'end_location', 'url', 'book_id', 
+        'tags', 'is_favorite', 'is_discard', 'readwise_url'
+        ]
+    ```
     """
     full_data = []
     next_page_cursor = None
@@ -33,41 +132,71 @@ def _fetch_from_export_api(self, updated_after: str|None=None) -> list[dict]:
             params['pageCursor'] = next_page_cursor
         if updated_after:
             params['updatedAfter'] = updated_after
-        logger.debug("Making export api request with params " + str(params) + "...")
+        print("Making export api request with params " + str(params) + "...")
         response = requests.get(
             url="https://readwise.io/api/v2/export/",
             params=params,
-            headers={"Authorization": f"Token {READWISE_API_TOKEN}"}, verify=True
+            # Readwise Docs specify `verify=False`. `True` used to suppress warnings. 
+            headers={"Authorization": f"Token {user_config.READWISE_API_TOKEN}"}, verify=True
         )
         full_data.extend(response.json()['results'])
         next_page_cursor = response.json().get('nextPageCursor')
         if not next_page_cursor:
             break
-        return full_data
+    return full_data
 
 
-class FileHandler:
-    """Handle file I/O."""
-    
-    @staticmethod
-    def write_json(data, file_path):
-        """Static method to write json."""
-        with open(file_path, "w") as file_handle:
-            json.dump(data, file_handle)
+def first_run(user_config: UserConfig):
+    create_database(user_config.DB)
+    start_fetch = datetime.now()
+    all_books = fetch_from_export_api(user_config) 
+    end_fetch = datetime.now()
+    session = get_session(user_config.DB) 
+    populate_database(session, all_books, start_fetch, end_fetch) 
+    print("Initial download of all highlights complete")
 
-    @staticmethod
-    def read_json(file_path):
-        """Static method to read json."""
-        with open(file_path, "r") as file_handle:
-            content = json.load(file_handle)
-        return content
+
+def update_since_last(user_config: UserConfig):
+    session = get_session(user_config.DB)
+    last_fetch = query_get_last_fetch()
+    print(last_fetch)
+
+
 
 
 def main():
-    file_name = APPLICATION_FOLDER / "test_output.json"
-    test_data = _fetch_from_export_api("2024-10-30")
-    FileHandler.write_json(test_data, file_name)
+    user_config = UserConfig()    
+    if user_config.DB.exists():
+        print("Database exists")
+        update_since_last(user_config)
+    else:
+        first_run(user_config)
+    # books_json = APPLICATION_FOLDER / "highlights.json"
+    # cicero_highlights_test = APPLICATION_FOLDER / "cicero_new_highlight_test.json"
+    # cicero_highlights_test_2 = APPLICATION_FOLDER / "cicero_new_highlight_test_2.json"
     
+    # # updated_after = "2024-11-10T00:00:00Z"   
+    
+    # # data = fetch_from_export_api(updated_after)
+    # # FileHandler.write_json(data, )
+    
+    # # 194 HIGHLIGHTS
+    # books = FileHandler.read_json(books_json)
+    # # 10 HIGHLIGHTS - so maybe Amazon didn't sync for a long time? And there were more?
+    # cicero_highlights_1 = FileHandler.read_json(cicero_highlights_test)
+    # # 1 HIGHLIGHT - this was the highlight I just created
+    # # 811782474 "William L. Smith, London, 1851"
+    # #! This confirms that Readwise only exports NEW highlights, i.e. as you'd expect.
+    # cicero_highlights_2 = FileHandler.read_json(cicero_highlights_test_2)
+    
+    # for highlights_collection in [books, cicero_highlights_1, cicero_highlights_2]:
+    #     for book in highlights_collection:
+    #         if book['title'] == "The Cicero Trilogy":
+    #             for highlight in book['highlights']:
+    #                 print(highlight['id'], highlight['text'])
+    #             print(f"{len(book['highlights'])} HIGHLIGHTS")
+
+
 
 
 if __name__ == "__main__":

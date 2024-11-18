@@ -11,7 +11,9 @@ from readwise_sqlalchemy.sql_alchemy import (
     get_session,
     populate_database,
     ReadwiseBatches,
+    query_database_tables,
     query_get_last_fetch,
+    test_queries,
 )
 import requests
 
@@ -158,11 +160,9 @@ def first_run(user_config: UserConfig):
 
 def update_since_last(user_config: UserConfig):
     session = get_session(user_config.DB)
-    last_fetch = query_get_last_fetch()
-    print(last_fetch)
-
-
-
+    last_fetch = query_get_last_fetch(session)
+    last_fetch_iso = last_fetch.isoformat()
+    print(last_fetch_iso)
 
 def main():
     user_config = UserConfig()    
@@ -171,32 +171,6 @@ def main():
         update_since_last(user_config)
     else:
         first_run(user_config)
-    # books_json = APPLICATION_FOLDER / "highlights.json"
-    # cicero_highlights_test = APPLICATION_FOLDER / "cicero_new_highlight_test.json"
-    # cicero_highlights_test_2 = APPLICATION_FOLDER / "cicero_new_highlight_test_2.json"
-    
-    # # updated_after = "2024-11-10T00:00:00Z"   
-    
-    # # data = fetch_from_export_api(updated_after)
-    # # FileHandler.write_json(data, )
-    
-    # # 194 HIGHLIGHTS
-    # books = FileHandler.read_json(books_json)
-    # # 10 HIGHLIGHTS - so maybe Amazon didn't sync for a long time? And there were more?
-    # cicero_highlights_1 = FileHandler.read_json(cicero_highlights_test)
-    # # 1 HIGHLIGHT - this was the highlight I just created
-    # # 811782474 "William L. Smith, London, 1851"
-    # #! This confirms that Readwise only exports NEW highlights, i.e. as you'd expect.
-    # cicero_highlights_2 = FileHandler.read_json(cicero_highlights_test_2)
-    
-    # for highlights_collection in [books, cicero_highlights_1, cicero_highlights_2]:
-    #     for book in highlights_collection:
-    #         if book['title'] == "The Cicero Trilogy":
-    #             for highlight in book['highlights']:
-    #                 print(highlight['id'], highlight['text'])
-    #             print(f"{len(book['highlights'])} HIGHLIGHTS")
-
-
 
 
 if __name__ == "__main__":

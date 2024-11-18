@@ -1,7 +1,19 @@
 from datetime import datetime
 import json
 
-from sqlalchemy import create_engine, inspect, Column, Integer, String, Text, ForeignKey, DateTime, Boolean, select
+from sqlalchemy import (
+    create_engine,
+    inspect,
+    Column,
+    Integer,
+    String,
+    Text,
+    ForeignKey,
+    DateTime,
+    Boolean,
+    select,
+    desc,
+)
 from sqlalchemy.orm import relationship, sessionmaker, Session, declarative_base
 from sqlalchemy.types import TypeDecorator, String
 
@@ -141,12 +153,24 @@ def populate_database(
         print(f"Error occurred with book_id {book_data.user_book_id}: {e}")
 
 
-def query_get_last_fetch(session: Session):
-    stmt = select(Book).where(Book.title == "The Cicero Trilogy")
-    result = session.execute(stmt)
-    print(result)
+def query_get_last_fetch(session: Session) -> datetime:
+    stmt = select(ReadwiseBatches).order_by(desc(ReadwiseBatches.database_write_time)).limit(1)
+    result = session.execute(stmt).scalars().first()
+    return result.database_write_time
 
-def query_get_last_fetch(session: Session):
+def test_queries(session: Session):
+    stmt = select(Book).where(Book.category == "tweets").limit(10)
+    # print(stmt)
+    chunked_iterator = session.execute(stmt)
+    for row in chunked_iterator:
+        (book, ) = row
+        print(row) 
+    scalar_result = chunked_iterator.scalars()
+    for book in scalar_result:
+        print(type(book))
+        print(book.category, book.title)
+
+def query_database_tables(session: Session):
     inspector = inspect(session.bind)
     tables = inspector.get_table_names()
     print("Tables in the database:", tables)

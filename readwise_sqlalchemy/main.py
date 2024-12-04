@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from readwise_sqlalchemy.sql_alchemy import (
     create_database,
     get_session,
-    populate_database,
     query_get_last_fetch,
 )
 import requests

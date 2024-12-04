@@ -1,7 +1,6 @@
 import pytest
 
 
-
 @pytest.mark.parametrize("attribute, check_function", 
     [
         ("APPLICATION_DIR", lambda attribute: attribute.is_dir()), 

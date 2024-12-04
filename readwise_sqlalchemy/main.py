@@ -1,19 +1,14 @@
-from dataclasses import dataclass
 from datetime import datetime
 import json
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from readwise_sqlalchemy.logger import logger
 from readwise_sqlalchemy.sql_alchemy import (
     create_database,
     get_session,
     populate_database,
-    ReadwiseBatches,
-    query_database_tables,
     query_get_last_fetch,
-    test_queries,
 )
 import requests
 

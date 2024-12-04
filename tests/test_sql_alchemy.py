@@ -1,7 +1,5 @@
 import pytest
 
-from readwise_sqlalchemy.sql_alchemy import DatabasePopulater
-from readwise_sqlalchemy.main import UserConfig
 
 
 @pytest.mark.parametrize("attribute, check_function", 

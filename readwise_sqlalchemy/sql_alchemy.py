@@ -1,6 +1,5 @@
 from datetime import datetime
 import json
-from tracemalloc import start
 
 from sqlalchemy import (
     create_engine,
@@ -16,7 +15,7 @@ from sqlalchemy import (
     desc,
 )
 from sqlalchemy.orm import relationship, sessionmaker, Session, declarative_base
-from sqlalchemy.types import TypeDecorator, String
+from sqlalchemy.types import TypeDecorator
 
 Base = declarative_base()
 
@@ -140,17 +139,18 @@ class DatabasePopulater:
         self.start_fetch = start_fetch
         self.end_fetch = end_fetch
 
-    def driver(self):
-        self.initiate_batch()
-        for book in self.books:
-            highlights_data = book.pop("highlights", [])
-            book_data = self.process_book(book, Session)
-            for highlight in highlights_data:
-                processed_highlight = self.process_highlight(highlight)
+    # TODO: Work in progress.
+    # def driver(self):
+    #     self.initiate_batch()
+    #     for book in self.books:
+    #         highlights_data = book.pop("highlights", [])
+            # book_data = self.process_book(book, Session)
+            # for highlight in highlights_data:
+            #     processed_highlight = self.process_highlight(highlight)
 
-    def initiate_batch(self):
-        """Create and maybe also close batch???"""
-
+    # TODO: Work in progress.
+    # def initiate_batch(self):
+    #     """Create and maybe also close batch???"""
     # new_batch = ReadwiseBatches(
     #    start_time=start_fetch,
     #    end_time=end_fetch,
@@ -266,7 +266,6 @@ def query_database_tables(session: Session):
 
 
 def query_books_table(session: Session):
-    inspector = inspect(session.bind)
     books = session.query(Book).all()
     print(books)
     

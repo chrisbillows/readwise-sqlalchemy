@@ -148,7 +148,8 @@ def first_run(user_config: UserConfig):
     all_books = fetch_from_export_api(user_config) 
     end_fetch = datetime.now()
     session = get_session(user_config.DB) 
-    populate_database(session, all_books, start_fetch, end_fetch) 
+    # TODO: Function is deleted. Will be a method call once the class is finished.
+    # populate_database(session, all_books, start_fetch, end_fetch) 
     print("Initial download of all highlights complete")
 
 

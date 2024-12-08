@@ -144,9 +144,9 @@ class DatabasePopulater:
     #     self.initiate_batch()
     #     for book in self.books:
     #         highlights_data = book.pop("highlights", [])
-            # book_data = self.process_book(book, Session)
-            # for highlight in highlights_data:
-            #     processed_highlight = self.process_highlight(highlight)
+    # book_data = self.process_book(book, Session)
+    # for highlight in highlights_data:
+    #     processed_highlight = self.process_highlight(highlight)
 
     # TODO: Work in progress.
     # def initiate_batch(self):
@@ -268,4 +268,3 @@ def query_database_tables(session: Session):
 def query_books_table(session: Session):
     books = session.query(Book).all()
     print(books)
-    

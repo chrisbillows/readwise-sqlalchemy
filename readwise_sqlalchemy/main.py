@@ -1,11 +1,11 @@
-from datetime import datetime
+# from datetime import datetime
 import json
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 from readwise_sqlalchemy.sql_alchemy import (
-    create_database,
+    # create_database,
     get_session,
     query_get_last_fetch,
 )
@@ -165,7 +165,8 @@ def main():
         print("Database exists")
         update_since_last(user_config)
     else:
-        first_run(user_config)
+        pass
+        # first_run(user_config)
 
 
 if __name__ == "__main__":

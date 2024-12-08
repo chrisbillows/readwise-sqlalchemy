@@ -142,15 +142,15 @@ def fetch_from_export_api(user_config: UserConfig, updated_after=None) -> list[d
     return full_data
 
 
-def first_run(user_config: UserConfig):
-    create_database(user_config.DB)
-    start_fetch = datetime.now()
-    all_books = fetch_from_export_api(user_config) 
-    end_fetch = datetime.now()
-    session = get_session(user_config.DB) 
-    # TODO: Function is deleted. Will be a method call once the class is finished.
-    # populate_database(session, all_books, start_fetch, end_fetch) 
-    print("Initial download of all highlights complete")
+# TODO: Function called is deleted. Will be a method call once the class is finished.
+# def first_run(user_config: UserConfig):
+#     create_database(user_config.DB)
+#     start_fetch = datetime.now()
+#     all_books = fetch_from_export_api(user_config) 
+#     end_fetch = datetime.now()
+#     session = get_session(user_config.DB) 
+#     populate_database(session, all_books, start_fetch, end_fetch) 
+#     print("Initial download of all highlights complete")
 
 
 def update_since_last(user_config: UserConfig):

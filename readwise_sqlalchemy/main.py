@@ -81,7 +81,9 @@ class FileHandler:
         return content
 
 
-def fetch_from_export_api(user_config: UserConfig, updated_after: None | str = None) -> list[dict[Any, Any]]:
+def fetch_from_export_api(
+    user_config: UserConfig, updated_after: None | str = None
+) -> list[dict[Any, Any]]:
     """Fetch highlights from the Readwise 'Highlight EXPORT' endpoint.
 
     Code is per the documentation. See: https://readwise.io/api_deets
@@ -162,7 +164,7 @@ def update_since_last(user_config: UserConfig) -> None:
         print(last_fetch.isoformat())
     else:
         raise TypeError(f"Expected a string. Got {type(last_fetch)}")
-    
+
 
 def main() -> None:
     user_config = UserConfig()

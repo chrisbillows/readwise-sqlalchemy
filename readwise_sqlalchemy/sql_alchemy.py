@@ -1,5 +1,5 @@
-from datetime import datetime
 import json
+from datetime import datetime
 from typing import Any, List, Optional
 
 from sqlalchemy import (
@@ -30,11 +30,12 @@ def convert_to_datetime(date_str: Any | None) -> datetime | None:
 class JSONEncodedList(TypeDecorator[list[dict[Any, Any]]]):
     """
     Encode and decode a list of dictionaries stored as a JSON string.
-    
+
     Note
     ----
     `Dialect` is required by the `sqlalchemy.TypeDecorator`.
     """
+
     impl = Text
 
     def process_bind_param(self, value: Any | None, dialect: Any) -> str | None:
@@ -44,18 +45,21 @@ class JSONEncodedList(TypeDecorator[list[dict[Any, Any]]]):
             raise ValueError(f"Expected a list, got {type(value)}")
         return ",".join(value)
 
-    def process_result_value(self, value: str| None, dialect: Any) -> list[dict[str, str]] | None:
+    def process_result_value(
+        self, value: str | None, dialect: Any
+    ) -> list[dict[str, str]] | None:
         return json.loads(value) if value is not None else []
 
 
 class CommaSeparatedList(TypeDecorator[list[str]]):
     """
     Encode and a decode a list stored as a comma-separated string.
-    
+
     Note
     ----
     `Dialect` is required by the `sqlalchemy.TypeDecorator`.
     """
+
     impl = String
 
     def process_bind_param(self, value: list[str] | None, dialect: Any) -> str | None:
@@ -89,7 +93,9 @@ class Book(Base):
     readwise_url: Mapped[Optional[str]] = mapped_column(nullable=True)
     source_url: Mapped[Optional[str]] = mapped_column(nullable=True)
     asin: Mapped[Optional[str]] = mapped_column(nullable=True)
-    book_tags: Mapped[Optional[List[str]]] = mapped_column(CommaSeparatedList, nullable=True)
+    book_tags: Mapped[Optional[List[str]]] = mapped_column(
+        CommaSeparatedList, nullable=True
+    )
 
     highlights: Mapped[List["Highlight"]] = relationship(back_populates="book")
 
@@ -98,7 +104,9 @@ class Highlight(Base):
     __tablename__ = "highlights"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    book_id: Mapped[int] = mapped_column(ForeignKey("books.user_book_id"), nullable=False)
+    book_id: Mapped[int] = mapped_column(
+        ForeignKey("books.user_book_id"), nullable=False
+    )
     text: Mapped[str] = mapped_column(nullable=False)
     location: Mapped[Optional[int]] = mapped_column(nullable=True)
     location_type: Mapped[Optional[str]] = mapped_column(nullable=True)
@@ -113,7 +121,9 @@ class Highlight(Base):
     is_favorite: Mapped[bool] = mapped_column(default=False)
     is_discard: Mapped[bool] = mapped_column(default=False)
     readwise_url: Mapped[Optional[str]] = mapped_column(nullable=True)
-    tags: Mapped[Optional[List[dict[Any, Any]]]] = mapped_column(JSONEncodedList, nullable=True)
+    tags: Mapped[Optional[List[dict[Any, Any]]]] = mapped_column(
+        JSONEncodedList, nullable=True
+    )
 
     book: Mapped["Book"] = relationship(back_populates="highlights")
 
@@ -265,6 +275,7 @@ class DatabasePopulater:
 #         print(type(book))
 #         print(book.category, book.title)
 
+
 def query_get_last_fetch(session: Session) -> datetime | None:
     """Get the last fetch."""
     stmt = (
@@ -275,7 +286,7 @@ def query_get_last_fetch(session: Session) -> datetime | None:
     result = session.execute(stmt).scalars().first()
     if result:
         return result.database_write_time
-    else: 
+    else:
         return None
 
 

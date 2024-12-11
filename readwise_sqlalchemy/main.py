@@ -1,16 +1,16 @@
-from datetime import datetime
 import json
 import os
 from pathlib import Path
 from typing import Any
 
+import requests
 from dotenv import load_dotenv
+
 from readwise_sqlalchemy.sql_alchemy import (
     # create_database,
     get_session,
     query_get_last_fetch,
 )
-import requests
 
 
 class MissingEnvironmentFile(Exception):
@@ -159,7 +159,7 @@ def update_since_last(user_config: UserConfig) -> None:
     session = get_session(str(user_config.DB))
     last_fetch = query_get_last_fetch(session)
     if isinstance(last_fetch, str):
-        last_fetch_iso = last_fetch.isoformat()
+        print(last_fetch.isoformat())
     else:
         raise TypeError(f"Expected a string. Got {type(last_fetch)}")
     

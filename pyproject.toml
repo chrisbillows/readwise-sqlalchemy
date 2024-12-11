@@ -12,6 +12,7 @@ dependencies = [
     "requests",
     "rich",
     "ruff",
+    "types-requests",
 ]
 
 [project.scripts]

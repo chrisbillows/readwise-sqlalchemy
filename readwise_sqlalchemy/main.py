@@ -1,7 +1,8 @@
-# from datetime import datetime
+from datetime import datetime
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from readwise_sqlalchemy.sql_alchemy import (
@@ -40,10 +41,10 @@ class UserConfig:
         self.APPLICATION_DIR.mkdir(exist_ok=True)
         self.ENV_FILE: Path = self.APPLICATION_DIR / ".env"
         self.load_environment_variables_file()
-        self.READWISE_API_TOKEN: str = os.getenv("READWISE_API_TOKEN")
-        self.DB: str = self.APPLICATION_DIR / "readwise.db"
+        self.READWISE_API_TOKEN: str | None = os.getenv("READWISE_API_TOKEN")
+        self.DB: Path = self.APPLICATION_DIR / "readwise.db"
 
-    def load_environment_variables_file(self):
+    def load_environment_variables_file(self) -> None:
         """
         Load the `.env` file.
 
@@ -66,21 +67,21 @@ class FileHandler:
     """Handle file I/O."""
 
     @staticmethod
-    def write_json(data, file_path) -> None:
+    def write_json(data: dict[Any, Any], file_path: Path) -> None:
         """Static method to write json."""
         with open(file_path, "w") as file_handle:
             json.dump(data, file_handle)
         print(f"Written to: {file_path}")
 
     @staticmethod
-    def read_json(file_path) -> list[dict]:
+    def read_json(file_path: Path) -> Any:
         """Static method to read json."""
         with open(file_path, "r") as file_handle:
             content = json.load(file_handle)
         return content
 
 
-def fetch_from_export_api(user_config: UserConfig, updated_after=None) -> list[dict]:
+def fetch_from_export_api(user_config: UserConfig, updated_after: None | str = None) -> list[dict[Any, Any]]:
     """Fetch highlights from the Readwise 'Highlight EXPORT' endpoint.
 
     Code is per the documentation. See: https://readwise.io/api_deets
@@ -154,14 +155,16 @@ def fetch_from_export_api(user_config: UserConfig, updated_after=None) -> list[d
 #     print("Initial download of all highlights complete")
 
 
-def update_since_last(user_config: UserConfig):
-    session = get_session(user_config.DB)
+def update_since_last(user_config: UserConfig) -> None:
+    session = get_session(str(user_config.DB))
     last_fetch = query_get_last_fetch(session)
-    last_fetch_iso = last_fetch.isoformat()
-    print(last_fetch_iso)
+    if isinstance(last_fetch, str):
+        last_fetch_iso = last_fetch.isoformat()
+    else:
+        raise TypeError(f"Expected a string. Got {type(last_fetch)}")
+    
 
-
-def main():
+def main() -> None:
     user_config = UserConfig()
     if user_config.DB.exists():
         print("Database exists")

@@ -1,9 +1,9 @@
 from datetime import datetime
 import json
+from typing import Any, List, Optional
 
 from sqlalchemy import (
     create_engine,
-    inspect,
     Column,
     Integer,
     String,
@@ -13,100 +13,122 @@ from sqlalchemy import (
     Boolean,
     select,
     desc,
+    inspect,
 )
-from sqlalchemy.orm import relationship, sessionmaker, Session, declarative_base
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+    DeclarativeBase,
+    Session,
+    sessionmaker,
+)
 from sqlalchemy.types import TypeDecorator
 
-Base = declarative_base()
 
-
-def convert_to_datetime(date_str):
-    """Converts ISO 8601 string to a datetime object. Returns None if input is None."""
+def convert_to_datetime(date_str: Any | None) -> datetime | None:
+    """Convert an ISO 8601 string to a datetime object."""
     return datetime.fromisoformat(date_str.replace("Z", "+00:00")) if date_str else None
 
 
-class CommaSeparatedList(TypeDecorator):
-    """Converts a list to a comma-separated string for storage, and back to a list when retrieved."""
-
-    impl = String
-
-    def process_bind_param(self, value, dialect):
-        # Convert list to comma-separated string before storing
-        return ",".join(value) if isinstance(value, list) else value
-
-    def process_result_value(self, value, dialect):
-        # Convert comma-separated string back to list when retrieving
-        return value.split(",") if value else []
-
-
-class JSONEncodedList(TypeDecorator):
-    """Converts a list of dictionaries to a JSON string for storage, and back to a list when retrieved."""
-
+class JSONEncodedList(TypeDecorator[list[dict[Any, Any]]]):
+    """
+    Encode and decode a list of dictionaries stored as a JSON string.
+    
+    Note
+    ----
+    `Dialect` is required by the `sqlalchemy.TypeDecorator`.
+    """
     impl = Text
 
-    def process_bind_param(self, value, dialect):
-        # Convert the list of dicts to JSON string before storing
-        return json.dumps(value) if value is not None else None
+    def process_bind_param(self, value: Any | None, dialect: Any) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError(f"Expected a list, got {type(value)}")
+        return ",".join(value)
 
-    def process_result_value(self, value, dialect):
-        # Convert JSON string back to list of dicts when retrieving
+    def process_result_value(self, value: str| None, dialect: Any) -> list[dict[str, str]] | None:
         return json.loads(value) if value is not None else []
 
 
-class Book(Base):
-    """Create the `'books'` table."""
+class CommaSeparatedList(TypeDecorator[list[str]]):
+    """
+    Encode and a decode a list stored as a comma-separated string.
+    
+    Note
+    ----
+    `Dialect` is required by the `sqlalchemy.TypeDecorator`.
+    """
+    impl = String
 
+    def process_bind_param(self, value: list[str] | None, dialect: Any) -> str | None:
+        if value is None:
+            return None
+        return ",".join(value)
+
+    def process_result_value(self, value: str | None, dialect: Any) -> list[str] | None:
+        if value is None:
+            return None
+        return value.split(",")
+
+
+class Base(DeclarativeBase):
+    __allow_unmapped__ = True
+
+
+class Book(Base):
     __tablename__ = "books"
 
-    user_book_id = Column(Integer, primary_key=True)
-    title = Column(String, nullable=False)
-    author = Column(String, nullable=True)
-    readable_title = Column(String, nullable=True)
-    source = Column(String, nullable=True)
-    cover_image_url = Column(String, nullable=True)
-    unique_url = Column(String, nullable=True)
-    summary = Column(Text, nullable=True)
-    category = Column(String, nullable=True)
-    document_note = Column(Text, nullable=True)
-    readwise_url = Column(String, nullable=True)
-    source_url = Column(String, nullable=True)
-    asin = Column(String, nullable=True)
-    book_tags = Column(CommaSeparatedList, nullable=True)
+    user_book_id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(nullable=False)
+    author: Mapped[Optional[str]] = mapped_column(nullable=True)
+    readable_title: Mapped[Optional[str]] = mapped_column(nullable=True)
+    source: Mapped[Optional[str]] = mapped_column(nullable=True)
+    cover_image_url: Mapped[Optional[str]] = mapped_column(nullable=True)
+    unique_url: Mapped[Optional[str]] = mapped_column(nullable=True)
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(nullable=True)
+    document_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    readwise_url: Mapped[Optional[str]] = mapped_column(nullable=True)
+    source_url: Mapped[Optional[str]] = mapped_column(nullable=True)
+    asin: Mapped[Optional[str]] = mapped_column(nullable=True)
+    book_tags: Mapped[Optional[List[str]]] = mapped_column(CommaSeparatedList, nullable=True)
 
-    highlights = relationship("Highlight", back_populates="book")
+    highlights: Mapped[List["Highlight"]] = relationship(back_populates="book")
 
 
 class Highlight(Base):
     __tablename__ = "highlights"
 
-    id = Column(Integer, primary_key=True)
-    book_id = Column(Integer, ForeignKey("books.user_book_id"), nullable=False)
-    text = Column(Text, nullable=False)
-    location = Column(Integer, nullable=True)
-    location_type = Column(String, nullable=True)
-    note = Column(Text, nullable=True)
-    color = Column(String, nullable=True)
-    highlighted_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, nullable=True)
-    updated_at = Column(DateTime, nullable=True)
-    external_id = Column(String, nullable=True)
-    end_location = Column(Integer, nullable=True)
-    url = Column(String, nullable=True)
-    is_favorite = Column(Boolean, default=False)
-    is_discard = Column(Boolean, default=False)
-    readwise_url = Column(String, nullable=True)
-    tags = Column(JSONEncodedList, nullable=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.user_book_id"), nullable=False)
+    text: Mapped[str] = mapped_column(nullable=False)
+    location: Mapped[Optional[int]] = mapped_column(nullable=True)
+    location_type: Mapped[Optional[str]] = mapped_column(nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    color: Mapped[Optional[str]] = mapped_column(nullable=True)
+    highlighted_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    external_id: Mapped[Optional[str]] = mapped_column(nullable=True)
+    end_location: Mapped[Optional[int]] = mapped_column(nullable=True)
+    url: Mapped[Optional[str]] = mapped_column(nullable=True)
+    is_favorite: Mapped[bool] = mapped_column(default=False)
+    is_discard: Mapped[bool] = mapped_column(default=False)
+    readwise_url: Mapped[Optional[str]] = mapped_column(nullable=True)
+    tags: Mapped[Optional[List[dict[Any, Any]]]] = mapped_column(JSONEncodedList, nullable=True)
 
-    book = relationship("Book", back_populates="highlights")
+    book: Mapped["Book"] = relationship(back_populates="highlights")
 
 
 class ReadwiseBatches(Base):
     __tablename__ = "readwise_batches"
 
-    batch_id = Column(Integer, primary_key=True)
-    start_time = Column(DateTime, nullable=False)
-    end_time = Column(DateTime, nullable=False)
-    database_write_time = Column(DateTime, nullable=False)
+    batch_id: Mapped[int] = mapped_column(primary_key=True)
+    start_time: Mapped[datetime] = mapped_column(nullable=False)
+    end_time: Mapped[datetime] = mapped_column(nullable=False)
+    database_write_time: Mapped[datetime] = mapped_column(nullable=False)
 
 
 def create_database(database_path: str) -> None:
@@ -130,7 +152,7 @@ class DatabasePopulater:
     def __init__(
         self,
         session: Session,
-        books: list[dict],
+        books: list[dict[Any, Any]],
         start_fetch: datetime,
         end_fetch: datetime,
     ):
@@ -158,7 +180,7 @@ class DatabasePopulater:
     # )
     # session.add(new_batch)
 
-    def process_book(self, book: dict):
+    def process_book(self, book: dict[Any, Any]) -> None:
         print(book["title"])
         existing_book = (
             self.session.query(Book)
@@ -177,7 +199,7 @@ class DatabasePopulater:
                 f"Book with ID {book['user_book_id']} already exists, adding new highlights..."
             )
 
-    def process_highlight(self, highlight: dict):
+    def process_highlight(self, highlight: dict[Any, Any]) -> dict[Any, Any]:
         highlight["highlighted_at"] = convert_to_datetime(
             highlight.get("highlighted_at")
         )
@@ -235,17 +257,6 @@ class DatabasePopulater:
 #     highlight.pop("book_id")
 #     return highlight
 
-
-def query_get_last_fetch(session: Session) -> datetime:
-    stmt = (
-        select(ReadwiseBatches)
-        .order_by(desc(ReadwiseBatches.database_write_time))
-        .limit(1)
-    )
-    result = session.execute(stmt).scalars().first()
-    return result.database_write_time
-
-
 # def test_queries(session: Session):
 #     stmt = select(Book).where(Book.category == "tweets").limit(10)
 #     # print(stmt)
@@ -258,13 +269,30 @@ def query_get_last_fetch(session: Session) -> datetime:
 #         print(type(book))
 #         print(book.category, book.title)
 
+def query_get_last_fetch(session: Session) -> datetime | None:
+    """Get the last fetch."""
+    stmt = (
+        select(ReadwiseBatches)
+        .order_by(desc(ReadwiseBatches.database_write_time))
+        .limit(1)
+    )
+    result = session.execute(stmt).scalars().first()
+    if result:
+        return result.database_write_time
+    else: 
+        return None
 
-def query_database_tables(session: Session):
+
+def query_database_tables(session: Session) -> None:
+    """Test query for getting a result back."""
+    if session.bind is None:
+        raise ValueError("The session is not bound to an engine or connection.")
     inspector = inspect(session.bind)
     tables = inspector.get_table_names()
     print("Tables in the database:", tables)
 
 
-def query_books_table(session: Session):
+def query_books_table(session: Session) -> None:
+    """Test query for getting a result back."""
     books = session.query(Book).all()
     print(books)

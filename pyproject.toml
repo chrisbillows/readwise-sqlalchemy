@@ -18,6 +18,9 @@ dependencies = [
 [project.scripts]
 rw = "readwise_sqlalchemy.main:main"
 
+[tool.mypy]
+strict = true
+
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [

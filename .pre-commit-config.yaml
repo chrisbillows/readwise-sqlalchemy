@@ -10,18 +10,18 @@ repos:
     -   id: check-case-conflict
     -   id: check-illegal-windows-names
 
-- repo: https://github.com/astral-sh/ruff-pre-commit
-  # Ruff version.
-  rev: v0.8.1
-  hooks:
-    # Run the linter.
-    - id: ruff
-      args: [ --fix --select I ]
-    # Run the formatter.
-    - id: ruff-format
+# - repo: https://github.com/astral-sh/ruff-pre-commit
+#   # Ruff version.
+#   rev: v0.8.1
+#   hooks:
+#     # Run the linter.
+#     - id: ruff
+#       args: [ --fix --select I ]
+#     # Run the formatter.
+#     - id: ruff-format
 
-# -   repo: local
-#     hooks:
+-   repo: local
+    hooks:
 #     -   id: ruff-linter-with-isort
 #         name: ruff lint with isort
 #         entry: ruff check --select I --fix .
@@ -35,12 +35,11 @@ repos:
 #         language: system
 #         types: [python]
 #         stages: [commit]
-
     -   id: pytest
         name: pytest
         entry: pytest
         language: system
         types: [python]
-        stages: [commit]
+        stages: [pre-commit]
         pass_filenames: false
         always_run: true

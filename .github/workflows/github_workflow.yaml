@@ -47,11 +47,8 @@ jobs:
     - name: Run ruff format
       run: ruff format --diff
 
-    - name: Confirm ruff config
-      run: ruff --show-config
-
-    # - name: Run pytest
-    #   run: pytest
+    - name: Run pytest
+      run: pytest
 
     # TODO: See #2: Run CLI help in GitHub action
     # - name: Run ldm --help

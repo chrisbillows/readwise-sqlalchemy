@@ -41,11 +41,14 @@ jobs:
           pip install dist/*.tar.gz
         fi
 
-    # - name: Run ruff
-    #   run: ruff check --select I --fix
+    - name: Run ruff
+      run: ruff check
 
-    # - name: Run ruff format
-    #   run: ruff format
+    - name: Run ruff format
+      run: ruff format --diff
+
+    - name: Confirm ruff config
+      run: ruff --show-config
 
     # - name: Run pytest
     #   run: pytest

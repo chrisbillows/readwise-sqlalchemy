@@ -48,7 +48,7 @@ jobs:
       run: ruff format --diff
 
     - name: Run mypy
-      run: mypy readwise_sql --strict --config-file=pyproject.toml
+      run: mypy readwise_sqlalchemy --strict --config-file=pyproject.toml
 
     - name: Run pytest
       run: pytest

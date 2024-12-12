@@ -1,4 +1,3 @@
-from os import mkdir
 import pytest
 
 from readwise_sqlalchemy.main import UserConfig

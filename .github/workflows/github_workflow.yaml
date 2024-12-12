@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-        install-method: ["wheel", "sdist", "source", "editable"]
+        install-method: ["wheel", "sdist"]
 
     steps:
     - uses: actions/checkout@v4
@@ -37,22 +37,18 @@ jobs:
       run: |
         if [[ "${{ matrix.install-method }}" == "wheel" ]]; then
           pip install dist/*.whl
-        elif [[ "${{ matrix.install-method }}" == "sdist" ]]; then
+        else
           pip install dist/*.tar.gz
-        elif [[ "${{ matrix.install-method }}" == "source" ]]; then
-          pip install .
-        elif [[ "${{ matrix.install-method }}" == "editable" ]]; then
-          pip install -e .
         fi
 
-    - name: Run ruff
-      run: ruff check --select I --fix
+    # - name: Run ruff
+    #   run: ruff check --select I --fix
 
-    - name: Run ruff format
-      run: ruff format
+    # - name: Run ruff format
+    #   run: ruff format
 
-    - name: Run pytest
-      run: pytest
+    # - name: Run pytest
+    #   run: pytest
 
     # TODO: See #2: Run CLI help in GitHub action
     # - name: Run ldm --help

@@ -9,6 +9,7 @@ dependencies = [
     "mypy",
     "pre-commit",
     "pytest",
+    "python-dotenv",
     "requests",
     "rich",
     "ruff",

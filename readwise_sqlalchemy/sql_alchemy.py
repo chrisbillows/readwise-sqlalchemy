@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any, List, Optional
 
 from sqlalchemy import (
@@ -145,7 +146,7 @@ def create_database(database_path: str) -> None:
     Base.metadata.create_all(engine)
 
 
-def get_session(database_path: str) -> Session:
+def get_session(database_path: str | Path) -> Session:
     """
     Establish a connection to the database and return a session.
     """
@@ -263,18 +264,6 @@ class DatabasePopulater:
 #     highlight.pop("book_id")
 #     return highlight
 
-# def test_queries(session: Session):
-#     stmt = select(Book).where(Book.category == "tweets").limit(10)
-#     # print(stmt)
-#     chunked_iterator = session.execute(stmt)
-#     for row in chunked_iterator:
-#         (book, ) = row
-#         print(row)
-#     scalar_result = chunked_iterator.scalars()
-#     for book in scalar_result:
-#         print(type(book))
-#         print(book.category, book.title)
-
 
 def query_get_last_fetch(session: Session) -> datetime | None:
     """Get the last fetch."""
@@ -301,5 +290,19 @@ def query_database_tables(session: Session) -> None:
 
 def query_books_table(session: Session) -> None:
     """Test query for getting a result back."""
-    books = session.query(Book).all()
-    print(books)
+    stmt = select(Book).limit(10)
+    result = session.execute(stmt).scalars().all()
+    print("=== TEST DATA ===")
+    for book in result:
+        print(book.title, book.author)
+    print("==================")
+
+
+def query_books_table_tweets(session: Session) -> None:
+    """Test query for getting a result back."""
+    stmt = select(Book).where(Book.category == "tweets").limit(10)
+    result = session.execute(stmt).scalars().all()
+    print("=== TEST DATA ===")
+    for book in result:
+        print(book.category, book.title)
+    print("==================")

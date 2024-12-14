@@ -138,7 +138,7 @@ class ReadwiseBatches(Base):
     database_write_time: Mapped[datetime] = mapped_column(nullable=False)
 
 
-def create_database(database_path: str) -> None:
+def create_database(database_path: str | Path) -> None:
     """
     Create the database schema. This should only be called during setup.
     """
@@ -168,26 +168,27 @@ class DatabasePopulater:
         self.start_fetch = start_fetch
         self.end_fetch = end_fetch
 
-    # TODO: Work in progress.
-    # def driver(self):
-    #     self.initiate_batch()
-    #     for book in self.books:
-    #         highlights_data = book.pop("highlights", [])
-    # book_data = self.process_book(book, Session)
-    # for highlight in highlights_data:
-    #     processed_highlight = self.process_highlight(highlight)
+    def populate_database(self) -> None:
+        # self.initiate_batch()
+        # for book in self.books:
+        #     highlights_data = book.pop("highlights", [])
+        #     book_data = self.process_book(book, Session)
+        #     for highlight in highlights_data:
+        #     processed_highlight = self.process_highlight(highlight)
+        print("Populating database")
+        pass
 
-    # TODO: Work in progress.
-    # def initiate_batch(self):
-    #     """Create and maybe also close batch???"""
-    # new_batch = ReadwiseBatches(
-    #    start_time=start_fetch,
-    #    end_time=end_fetch,
-    #    database_write_time=datetime.now()
-    # )
-    # session.add(new_batch)
+    def _initiate_batch(self) -> None:
+        """Create and maybe also close batch???"""
+        # new_batch = ReadwiseBatches(
+        # start_time=start_fetch,
+        # end_time=end_fetch,
+        # database_write_time=datetime.now()
+        # )
+        # session.add(new_batch)
+        pass
 
-    def process_book(self, book: dict[Any, Any]) -> None:
+    def _process_book(self, book: dict[Any, Any]) -> None:
         print(book["title"])
         existing_book = (
             self.session.query(Book)
@@ -206,7 +207,7 @@ class DatabasePopulater:
                 f"Book with ID {book['user_book_id']} already exists, adding new highlights..."
             )
 
-    def process_highlight(self, highlight: dict[Any, Any]) -> dict[Any, Any]:
+    def _process_highlight(self, highlight: dict[Any, Any]) -> dict[Any, Any]:
         highlight["highlighted_at"] = convert_to_datetime(
             highlight.get("highlighted_at")
         )

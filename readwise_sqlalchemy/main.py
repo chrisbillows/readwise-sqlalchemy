@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 from pathlib import Path
@@ -7,10 +8,9 @@ import requests
 from dotenv import load_dotenv
 
 from readwise_sqlalchemy.sql_alchemy import (
+    DatabasePopulater,
+    create_database,
     get_session,
-    query_books_table,
-    query_books_table_tweets,
-    query_database_tables,
     query_get_last_fetch,
 )
 
@@ -75,7 +75,7 @@ class FileHandler:
         print(f"Written to: {file_path}")
 
     @staticmethod
-    def read_json(file_path: Path) -> Any:
+    def read_json(file_path: Path | str) -> Any:
         """Static method to read json."""
         with open(file_path, "r") as file_handle:
             content = json.load(file_handle)
@@ -147,31 +147,36 @@ def fetch_from_export_api(
     return full_data
 
 
-# TODO: Function called is deleted. Will be a method call once the class is finished.
-# def first_run(user_config: UserConfig):
-#     create_database(user_config.DB)
-#     start_fetch = datetime.now()
-#     all_books = fetch_from_export_api(user_config)
-#     end_fetch = datetime.now()
-#     session = get_session(user_config.DB)
-#     populate_database(session, all_books, start_fetch, end_fetch)
-#     print("Initial download of all highlights complete")
-
-
 def main() -> None:
+    """Main function ran with `rw` entry point.
+
+    Create a database and populate it with all readwise data or, if the database already
+    exists, fetch all data since the last fetch.
+    """
     user_config = UserConfig()
+    session = get_session(user_config.DB)
+    last_fetch = None
+
     if user_config.DB.exists():
         print("Database exists")
-        session = get_session(user_config.DB)
-        last_updated = query_get_last_fetch(session)
-        print("Last updated:", last_updated)
-        query_database_tables(session)
-        query_books_table(session)
-        query_books_table_tweets(session)
-
+        last_fetch = query_get_last_fetch(session)
+        print("Last fetch:", last_fetch)
     else:
-        pass
-        # first_run(user_config)
+        print("Creating database")
+        create_database(user_config.DB)
+
+    print("Updating database")
+    start_fetch = datetime.datetime.now()
+    # data = fetch_from_export_api()
+    # TODO: Replace with real API call
+    data = FileHandler.read_json(
+        "/Users/chrisbillows/Documents/CODE/MY_GITHUB_REPOS/readwise-sqlalchemy/tests/data/real/sample_updated_25th_nov_to_26th_nov.json"
+    )
+    end_fetch = datetime.datetime.now()
+    dbp = DatabasePopulater(session, data, start_fetch, end_fetch)
+    print(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
+    dbp.populate_database()
+    print("Database contains all Readwise highlights to date")
 
 
 if __name__ == "__main__":

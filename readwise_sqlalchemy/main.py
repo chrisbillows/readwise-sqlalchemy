@@ -7,8 +7,10 @@ import requests
 from dotenv import load_dotenv
 
 from readwise_sqlalchemy.sql_alchemy import (
-    # create_database,
     get_session,
+    query_books_table,
+    query_books_table_tweets,
+    query_database_tables,
     query_get_last_fetch,
 )
 
@@ -53,7 +55,6 @@ class UserConfig:
         MissingEnvironmentFile
             If the .env file is not in the expected location.
         """
-        print("here")
         if self.ENV_FILE.exists():
             load_dotenv(self.ENV_FILE)
         else:
@@ -157,20 +158,17 @@ def fetch_from_export_api(
 #     print("Initial download of all highlights complete")
 
 
-def update_since_last(user_config: UserConfig) -> None:
-    session = get_session(str(user_config.DB))
-    last_fetch = query_get_last_fetch(session)
-    if isinstance(last_fetch, str):
-        print(last_fetch.isoformat())
-    else:
-        raise TypeError(f"Expected a string. Got {type(last_fetch)}")
-
-
 def main() -> None:
     user_config = UserConfig()
     if user_config.DB.exists():
         print("Database exists")
-        update_since_last(user_config)
+        session = get_session(user_config.DB)
+        last_updated = query_get_last_fetch(session)
+        print("Last updated:", last_updated)
+        query_database_tables(session)
+        query_books_table(session)
+        query_books_table_tweets(session)
+
     else:
         pass
         # first_run(user_config)

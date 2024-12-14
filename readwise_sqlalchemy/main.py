@@ -1,6 +1,6 @@
-import datetime
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -166,13 +166,13 @@ def main() -> None:
         create_database(user_config.DB)
 
     print("Updating database")
-    start_fetch = datetime.datetime.now()
+    start_fetch = datetime.now()
     # data = fetch_from_export_api()
     # TODO: Replace with real API call
     data = FileHandler.read_json(
         "/Users/chrisbillows/Documents/CODE/MY_GITHUB_REPOS/readwise-sqlalchemy/tests/data/real/sample_updated_25th_nov_to_26th_nov.json"
     )
-    end_fetch = datetime.datetime.now()
+    end_fetch = datetime.now()
     dbp = DatabasePopulater(session, data, start_fetch, end_fetch)
     print(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
     dbp.populate_database()

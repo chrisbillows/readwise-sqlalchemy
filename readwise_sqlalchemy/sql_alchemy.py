@@ -163,107 +163,73 @@ class DatabasePopulater:
         start_fetch: datetime,
         end_fetch: datetime,
     ):
+        """Initialiser.
+
+        Parameters
+        ----------
+        session: Session
+        books: list[dict[Any, Any]]
+        start_fetch: datetime
+        end_fetch: datetime
+        """
         self.session = session
         self.books = books
         self.start_fetch = start_fetch
         self.end_fetch = end_fetch
 
     def populate_database(self) -> None:
-        # self.initiate_batch()
-        # for book in self.books:
-        #     highlights_data = book.pop("highlights", [])
-        #     book_data = self.process_book(book, Session)
-        #     for highlight in highlights_data:
-        #     processed_highlight = self.process_highlight(highlight)
+        self._process_batch()
         print("Populating database")
-        pass
 
-    def _initiate_batch(self) -> None:
-        """Create and maybe also close batch???"""
-        # new_batch = ReadwiseBatches(
-        # start_time=start_fetch,
-        # end_time=end_fetch,
-        # database_write_time=datetime.now()
-        # )
-        # session.add(new_batch)
-        pass
+        for book in self.books:
+            # highlights_data = book.pop("highlights", [])
+            book.pop("highlights", [])
+            self._process_book(book)
+            # for highlight in highlights_data:
+            #     processed_highlight = self._process_highlight(highlight)
+
+        try:
+            print("Committing session...")
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            print("Error occurred.")
+
+    def _process_batch(self) -> None:
+        """Add"""
+        new_batch = ReadwiseBatches(
+            start_time=self.start_fetch,
+            end_time=self.end_fetch,
+            database_write_time=datetime.now(),
+        )
+        self.session.add(new_batch)
 
     def _process_book(self, book: dict[Any, Any]) -> None:
-        print(book["title"])
+        print("Book title:", book["title"])
         existing_book = (
             self.session.query(Book)
             .filter_by(user_book_id=book["user_book_id"])
             .first()
         )
         if not existing_book:
-            print("Book not existing")
+            print("Book not in database")
             book_data = Book(**book)
             self.session.add(book_data)
             self.session.flush()
             print(f"Added new book: {book['title']}, ID: {book_data.user_book_id}")
         else:
             book_data = existing_book
-            print(
-                f"Book with ID {book['user_book_id']} already exists, adding new highlights..."
-            )
+            print(f"Book with ID {book['user_book_id']} already exists")
 
-    def _process_highlight(self, highlight: dict[Any, Any]) -> dict[Any, Any]:
-        highlight["highlighted_at"] = convert_to_datetime(
-            highlight.get("highlighted_at")
-        )
-        highlight["created_at"] = convert_to_datetime(highlight.get("created_at"))
-        highlight["updated_at"] = convert_to_datetime(highlight.get("updated_at"))
-        highlight.pop("book_id")
-        return highlight
-
-
-# def populate_database(
-#     session: Session,
-#     books: list[dict],
-#     start_fetch: datetime,
-#     end_fetch: datetime
-#     ):
-#     for book in books:
-#         highlights_data = book.pop("highlights", [])
-#         book_data = process_book(book, Session)
-#         for highlight in highlights_data:
-#             process_highlight = process_highlight
-
-#     new_batch = ReadwiseBatches(
-#        start_time=start_fetch,
-#        end_time=end_fetch,
-#        database_write_time=datetime.now()
-#     )
-#     session.add(new_batch)
-
-#     try:
-#         print("Committing session...")
-#         session.commit()
-#     except Exception as e:
-#         session.rollback()
-#         print(f"Error occurred with book_id {book_data.user_book_id}: {e}")
-
-
-# def process_book(book: dict, session: Session):
-#     print(book['title'])
-#     existing_book = session.query(Book).filter_by(user_book_id=book["user_book_id"]).first()
-#     if not existing_book:
-#         print("Book not existing")
-#         book_data = Book(**book)
-#         session.add(book_data)
-#         session.flush()
-#         print(f"Added new book: {book['title']}, ID: {book_data.user_book_id}")
-#     else:
-#         book_data = existing_book
-#         print(f"Book with ID {book['user_book_id']} already exists, adding new highlights...")
-
-
-# def process_highlight(highlight: dict, session: Session):
-#     highlight["highlighted_at"] = convert_to_datetime(highlight.get("highlighted_at"))
-#     highlight["created_at"] = convert_to_datetime(highlight.get("created_at"))
-#     highlight["updated_at"] = convert_to_datetime(highlight.get("updated_at"))
-#     highlight.pop("book_id")
-#     return highlight
+    # def _process_highlight(self, highlight: dict[Any, Any]) -> dict[Any, Any]:
+    #     print(f"Adding highlight")
+    #     highlight["highlighted_at"] = convert_to_datetime(
+    #         highlight.get("highlighted_at")
+    #     )
+    #     highlight["created_at"] = convert_to_datetime(highlight.get("created_at"))
+    #     highlight["updated_at"] = convert_to_datetime(highlight.get("updated_at"))
+    #     highlight.pop("book_id")
+    #     return highlight
 
 
 def query_get_last_fetch(session: Session) -> datetime | None:

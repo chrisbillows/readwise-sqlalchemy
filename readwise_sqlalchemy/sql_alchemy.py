@@ -23,7 +23,7 @@ from sqlalchemy.orm import (
 from sqlalchemy.types import TypeDecorator
 
 
-def convert_to_datetime(date_str: Any | None) -> datetime | None:
+def convert_iso_to_datetime(date_str: Any | None) -> datetime | None:
     """Convert an ISO 8601 string to a datetime object."""
     return datetime.fromisoformat(date_str.replace("Z", "+00:00")) if date_str else None
 
@@ -43,7 +43,7 @@ class JSONEncodedList(TypeDecorator[list[dict[Any, Any]]]):
             return None
         if not isinstance(value, list):
             raise ValueError(f"Expected a list, got {type(value)}")
-        return ",".join(value)
+        return json.dumps(value)
 
     def process_result_value(
         self, value: str | None, dialect: Any
@@ -127,7 +127,7 @@ class Highlight(Base):
     book: Mapped["Book"] = relationship(back_populates="highlights")
 
 
-class ReadwiseBatches(Base):
+class ReadwiseBatch(Base):
     __tablename__ = "readwise_batches"
 
     batch_id: Mapped[int] = mapped_column(primary_key=True)
@@ -208,7 +208,7 @@ class DatabasePopulater:
 
     def _process_batch(self) -> None:
         """Add the ReadwiseBatch to the session."""
-        new_batch = ReadwiseBatches(
+        new_batch = ReadwiseBatch(
             start_time=self.start_fetch,
             end_time=self.end_fetch,
             database_write_time=datetime.now(),
@@ -293,11 +293,11 @@ class DatabasePopulater:
         self._validate_book_id(highlight, book)
         self._validate_highlight_id(highlight, book)
 
-        highlight["highlighted_at"] = convert_to_datetime(
+        highlight["highlighted_at"] = convert_iso_to_datetime(
             highlight.get("highlighted_at")
         )
-        highlight["created_at"] = convert_to_datetime(highlight["created_at"])
-        highlight["updated_at"] = convert_to_datetime(highlight["updated_at"])
+        highlight["created_at"] = convert_iso_to_datetime(highlight["created_at"])
+        highlight["updated_at"] = convert_iso_to_datetime(highlight["updated_at"])
 
         # SQL Alchemy will ignore in favour of 'book' but included to be explicit.
         highlight.pop("book_id", None)
@@ -309,9 +309,7 @@ class DatabasePopulater:
 def query_get_last_fetch(session: Session) -> datetime | None:
     """Get the last fetch."""
     stmt = (
-        select(ReadwiseBatches)
-        .order_by(desc(ReadwiseBatches.database_write_time))
-        .limit(1)
+        select(ReadwiseBatch).order_by(desc(ReadwiseBatch.database_write_time)).limit(1)
     )
     result = session.execute(stmt).scalars().first()
     if result:

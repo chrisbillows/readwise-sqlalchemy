@@ -1,20 +1,11 @@
 import pytest
 
-from readwise_sqlalchemy.main import UserConfig
-
 
 class TestUserConfig:
     @pytest.fixture
-    def temp_user_config(self, tmp_path: pytest.TempPathFactory) -> None:
-        """Create a temporary user configuration."""
-        temp_application_dir = tmp_path / "readwise-sqlalchemy-application"
-        temp_env_file = temp_application_dir / ".env"
-
-        temp_application_dir.mkdir()
-        temp_env_file.touch()
-        temp_env_file.write_text("READWISE_API_TOKEN = 'abc123'")
-
-        self.user_config = UserConfig(temp_application_dir)
+    def add_temp_user_config_to_self(self, synthetic_user_config) -> None:
+        """Make `synthetic_user_config` available to all tests in the class."""
+        self.user_config = synthetic_user_config
 
     @pytest.mark.parametrize(
         "expected_is_true",

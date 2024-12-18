@@ -4,8 +4,11 @@ from readwise_sqlalchemy.main import UserConfig
 
 
 @pytest.fixture
-def temp_user_config(tmp_path: pytest.TempPathFactory) -> None:
-    """Create a temporary user configuration."""
+def synthetic_user_config(tmp_path: pytest.TempPathFactory) -> None:
+    """Create a temporary user configuration.
+
+    Use a `tmp_path` as the User's home directory.
+    """
     temp_application_dir = tmp_path / "readwise-sqlalchemy-application"
     temp_env_file = temp_application_dir / ".env"
 

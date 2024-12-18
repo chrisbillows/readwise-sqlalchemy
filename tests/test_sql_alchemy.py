@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from datetime import datetime
 
@@ -6,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.sql_alchemy import (
     CommaSeparatedList,
+    DatabasePopulater,
     JSONEncodedList,
     convert_iso_to_datetime,
     create_database,
@@ -83,3 +85,44 @@ def test_get_session(synthetic_user_config):
     """Test a Session object is returned (which is assumed to be valid)."""
     actual = get_session(synthetic_user_config.DB)
     assert isinstance(actual, Session)
+
+
+class TestDatabasePopulater:
+    @pytest.fixture(autouse=True)
+    def test_setup(self, synthetic_user_config):
+        # Attach the synthetic user_config to the object
+        self.user_config = synthetic_user_config
+        # Create a temporary database
+        create_database(self.user_config.DB)
+        session = get_session(self.user_config)
+        sample_API_data = "tests/data/real/sample_updated_books.json"
+        with open(sample_API_data, "r") as file_handle:
+            books_and_highlights = json.load(file_handle)
+        start_fetch = datetime(2025, 1, 1, 1, 0)
+        end_fetch = datetime(2025, 1, 1, 1, 1)
+        dbp = DatabasePopulater(session, books_and_highlights, start_fetch, end_fetch)
+        self.dbp = dbp
+
+    def test_init(self):
+        """Basic test that an object can be instantiated with expected values."""
+        assert list(self.dbp.__dict__.keys()) == [
+            "session",
+            "books",
+            "start_fetch",
+            "end_fetch",
+        ]
+
+    def test_process_batch(self):
+        pass
+
+    def test_process_book(self):
+        pass
+
+    def test_validate_book_id(self):
+        pass
+
+    def test_validate_highlight_id(self):
+        pass
+
+    def test_process_highlight(self):
+        pass

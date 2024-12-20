@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.sql_alchemy import (
+    Book,
     CommaSeparatedList,
     DatabasePopulater,
     JSONEncodedList,
@@ -171,7 +172,15 @@ class TestDatabasePopulater:
         assert expected.items() <= actual.items()
 
     def test_process_book(self):
-        pass
+        """Test adding a single book is to the session."""
+        book = self.dbp.books[0]
+        book.pop("highlights", [])
+        self.dbp._process_book(book)
+        stmt = select(Book)
+        results = self.dbp.session.execute(stmt).scalars().all()
+        actual = vars(results[0])
+        expected = {"user_book_id": 46095532, "author": "Hugo Rifkind"}
+        assert expected.items() <= actual.items()
 
     # def test_validate_book_id(self):
     #     pass

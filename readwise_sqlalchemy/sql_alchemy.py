@@ -220,7 +220,7 @@ class DatabasePopulater:
         """Process a book.
 
         Checks if a book exists in the database and, if it does not, adds it to the
-        session.
+        session. Expects that 'highlights' are not present in the passed in dictionary.
 
         Returns
         -------

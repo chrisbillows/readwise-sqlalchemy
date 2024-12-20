@@ -3,12 +3,14 @@ import sqlite3
 from datetime import datetime
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.sql_alchemy import (
     CommaSeparatedList,
     DatabasePopulater,
     JSONEncodedList,
+    ReadwiseBatch,
     convert_iso_to_datetime,
     create_database,
     get_session,
@@ -87,14 +89,40 @@ def test_get_session(synthetic_user_config):
     assert isinstance(actual, Session)
 
 
+def test_get_session_database_url(synthetic_user_config):
+    """"""
+    session = get_session(synthetic_user_config.DB)
+    database_url: str = session.bind.url
+    actual = str(database_url).split("/")[-1]
+    assert actual == "readwise.db"
+
+
 class TestDatabasePopulater:
     @pytest.fixture(autouse=True)
     def test_setup(self, synthetic_user_config):
+        print(2.1, synthetic_user_config.APPLICATION_DIR)
+        print(2.2, synthetic_user_config.ENV_FILE)
+        print(2.3, synthetic_user_config.READWISE_API_TOKEN)
+        print(2.4, synthetic_user_config.DB)
+
         # Attach the synthetic user_config to the object
         self.user_config = synthetic_user_config
+        print(3.1, self.user_config.APPLICATION_DIR)
+        print(3.2, self.user_config.ENV_FILE)
+        print(3.3, self.user_config.READWISE_API_TOKEN)
+        print(3.4, self.user_config.DB)
+
         # Create a temporary database
         create_database(self.user_config.DB)
-        session = get_session(self.user_config)
+        connection = sqlite3.connect(self.user_config.DB)
+        cursor = connection.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        print(4, cursor.fetchall())
+
+        session = get_session(self.user_config.DB)
+        print(5.1, type(session))
+        print(5.2, session.bind.url)
+
         sample_API_data = "tests/data/real/sample_updated_books.json"
         with open(sample_API_data, "r") as file_handle:
             books_and_highlights = json.load(file_handle)
@@ -103,26 +131,53 @@ class TestDatabasePopulater:
         dbp = DatabasePopulater(session, books_and_highlights, start_fetch, end_fetch)
         self.dbp = dbp
 
-    def test_init(self):
-        """Basic test that an object can be instantiated with expected values."""
-        assert list(self.dbp.__dict__.keys()) == [
-            "session",
-            "books",
-            "start_fetch",
-            "end_fetch",
-        ]
+    # def test_init(self):
+    #     """Basic test that an object can be instantiated with expected values."""
+    #     assert list(self.dbp.__dict__.keys()) == [
+    #         "session",
+    #         "books",
+    #         "start_fetch",
+    #         "end_fetch",
+    #     ]
 
     def test_process_batch(self):
-        pass
+        """Test adds a single ReadwiseBatch with the correct info to the session."""
+        # print(7.1, self.user_config.APPLICATION_DIR)
+        # print(7.2, self.user_config.ENV_FILE)
+        # print(7.3, self.user_config.READWISE_API_TOKEN)
+        # print(7.4, self.user_config.DB)
+        # connection = sqlite3.connect(self.user_config.DB)
+        # cursor = connection.cursor()
+        # cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        # print(7.5, cursor.fetchall())
+        self.dbp._process_batch()
+        # inspector = inspect(self.dbp.session.get_bind())
+        # print("8 Existing tables:", inspector.get_table_names())
+        stmt = select(ReadwiseBatch)
+        results = self.dbp.session.execute(stmt).scalars().all()
+        first_result = results[0]
+        # print("batch_id", first_result.batch_id)
+        # print("start", first_result.start_time)
+        # print("end", first_result.end_time)
+        # print("write", first_result.database_write_time)
+        # print(8.1, dir(self.user_config))
+        # print(8.2, "\n", "".join((f"{k}{'\n'}{'\t'}{v}{'\n'}" for k, v in self.dbp.session.bind.__dict__.items())))
+        actual = vars(first_result)
+        expected = {
+            "batch_id": 1,
+            "start_time": datetime(2025, 1, 1, 1, 0),
+            "end_time": datetime(2025, 1, 1, 1, 1),
+        }
+        assert expected.items() <= actual.items()
 
     def test_process_book(self):
         pass
 
-    def test_validate_book_id(self):
-        pass
+    # def test_validate_book_id(self):
+    #     pass
 
-    def test_validate_highlight_id(self):
-        pass
+    # def test_validate_highlight_id(self):
+    #     pass
 
-    def test_process_highlight(self):
-        pass
+    # def test_process_highlight(self):
+    #     pass

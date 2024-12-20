@@ -145,8 +145,9 @@ def create_database(database_path: str | Path) -> None:
 def get_session(database_path: str | Path) -> Session:
     """Establish a connection to the database and return a session."""
     engine = create_engine(f"sqlite:///{database_path}")
-    Session = sessionmaker(bind=engine)
-    return Session()
+    SessionFactory = sessionmaker(bind=engine)
+    session = SessionFactory()
+    return session
 
 
 class DatabasePopulater:

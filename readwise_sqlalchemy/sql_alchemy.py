@@ -269,6 +269,10 @@ class DatabasePopulater:
 
         Check if the highlight 'id' already exists in the database.
 
+        Note
+        ----
+        Book is passed to create a more helpful error message.
+
         Raises
         ------
         ValueError
@@ -281,7 +285,7 @@ class DatabasePopulater:
         if existing_highlight:
             raise ValueError(
                 f"Highlight ID already in database: Highlight 'id'={highlight['id']},  "
-                f"Book 'user_book_id'={highlight['user_book_id']}"
+                f"Book 'user_book_id'={book.user_book_id}"
             )
 
     def _process_highlight(self, highlight: dict[Any, Any], book: Book) -> None:

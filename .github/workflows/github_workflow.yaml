@@ -60,3 +60,6 @@ jobs:
     - name: List installed package files for debugging
       run: |
         pip show -f readwise_sqlalchemy
+
+    - name: Run pytest-cov
+      run: pytest --cov=readwise_sqlalchemy tests/

@@ -23,14 +23,13 @@ from sqlalchemy.orm import (
 from sqlalchemy.types import TypeDecorator
 
 
-def convert_to_datetime(date_str: Any | None) -> datetime | None:
+def convert_iso_to_datetime(date_str: Any | None) -> datetime | None:
     """Convert an ISO 8601 string to a datetime object."""
     return datetime.fromisoformat(date_str.replace("Z", "+00:00")) if date_str else None
 
 
 class JSONEncodedList(TypeDecorator[list[dict[Any, Any]]]):
-    """
-    Encode and decode a list of dictionaries stored as a JSON string.
+    """Encode and decode a list of dictionaries stored as a JSON string.
 
     Note
     ----
@@ -44,7 +43,7 @@ class JSONEncodedList(TypeDecorator[list[dict[Any, Any]]]):
             return None
         if not isinstance(value, list):
             raise ValueError(f"Expected a list, got {type(value)}")
-        return ",".join(value)
+        return json.dumps(value)
 
     def process_result_value(
         self, value: str | None, dialect: Any
@@ -53,8 +52,7 @@ class JSONEncodedList(TypeDecorator[list[dict[Any, Any]]]):
 
 
 class CommaSeparatedList(TypeDecorator[list[str]]):
-    """
-    Encode and a decode a list stored as a comma-separated string.
+    """Encode and a decode a list stored as a comma-separated string.
 
     Note
     ----
@@ -129,7 +127,7 @@ class Highlight(Base):
     book: Mapped["Book"] = relationship(back_populates="highlights")
 
 
-class ReadwiseBatches(Base):
+class ReadwiseBatch(Base):
     __tablename__ = "readwise_batches"
 
     batch_id: Mapped[int] = mapped_column(primary_key=True)
@@ -139,20 +137,17 @@ class ReadwiseBatches(Base):
 
 
 def create_database(database_path: str | Path) -> None:
-    """
-    Create the database schema. This should only be called during setup.
-    """
+    """Create the database schema. This should only be called during setup."""
     engine = create_engine(f"sqlite:///{database_path}")
     Base.metadata.create_all(engine)
 
 
 def get_session(database_path: str | Path) -> Session:
-    """
-    Establish a connection to the database and return a session.
-    """
+    """Establish a connection to the database and return a session."""
     engine = create_engine(f"sqlite:///{database_path}")
-    Session = sessionmaker(bind=engine)
-    return Session()
+    SessionFactory = sessionmaker(bind=engine)
+    session = SessionFactory()
+    return session
 
 
 class DatabasePopulater:
@@ -163,115 +158,163 @@ class DatabasePopulater:
         start_fetch: datetime,
         end_fetch: datetime,
     ):
+        """Initialiser.
+
+        Parameters
+        ----------
+        session: Session
+            An SQL Alchemy session.
+        books: list[dict[Any, Any]]
+            A list of Books and their highlights, expected to come from the Readwise
+            Export API.
+        start_fetch: datetime
+            The time when the API fetch was started.
+        end_fetch: datetime
+            The time when the API fetch was completed.
+        """
         self.session = session
         self.books = books
         self.start_fetch = start_fetch
         self.end_fetch = end_fetch
 
     def populate_database(self) -> None:
-        # self.initiate_batch()
-        # for book in self.books:
-        #     highlights_data = book.pop("highlights", [])
-        #     book_data = self.process_book(book, Session)
-        #     for highlight in highlights_data:
-        #     processed_highlight = self.process_highlight(highlight)
+        """Populate the database with books and highlights from a Readwise API response.
+
+        Readwise highlights are exported as books, with each book containing a list
+        of highlights. If specified, only highlights created since the 'last_fetch' date
+        are included. i.e. A book might have 100 highlights, but if only 1 highlight has
+        been added since the last fetch, only 1 highlight will be in the highlights
+        list.
+
+        This method records the ReadwiseBatch and then iterates over each book, and each
+        list of highlights for each book, validating and adding books and highlights to
+        the passed session object. This session is then either successfully committed
+        to the database, or the database is rolled back to it's previous state.
+        """
+        self._process_batch()
         print("Populating database")
-        pass
 
-    def _initiate_batch(self) -> None:
-        """Create and maybe also close batch???"""
-        # new_batch = ReadwiseBatches(
-        # start_time=start_fetch,
-        # end_time=end_fetch,
-        # database_write_time=datetime.now()
-        # )
-        # session.add(new_batch)
-        pass
+        for book in self.books:
+            highlights_data = book.pop("highlights", [])
+            book_obj = self._process_book(book)
+            for highlight in highlights_data:
+                self._process_highlight(highlight, book_obj)
 
-    def _process_book(self, book: dict[Any, Any]) -> None:
-        print(book["title"])
+        try:
+            print("Committing session")
+            self.session.commit()
+        except Exception as e:
+            self.session.rollback()
+            print(f"Error occurred: {e}")
+
+    def _process_batch(self) -> None:
+        """Add the ReadwiseBatch to the session."""
+        new_batch = ReadwiseBatch(
+            start_time=self.start_fetch,
+            end_time=self.end_fetch,
+            database_write_time=datetime.now(),
+        )
+        self.session.add(new_batch)
+
+    def _process_book(self, book: dict[Any, Any]) -> Book:
+        """Process a book.
+
+        Checks if a book exists in the database and, if it does not, adds it to the
+        session. Expects that 'highlights' are not present in the passed in dictionary.
+
+        Returns
+        -------
+        Book
+            The book object that either already exists in the database or has been
+            added to the session.
+        """
+        print("Book title:", book["title"])
         existing_book = (
             self.session.query(Book)
             .filter_by(user_book_id=book["user_book_id"])
             .first()
         )
         if not existing_book:
-            print("Book not existing")
-            book_data = Book(**book)
-            self.session.add(book_data)
+            print("Book not in database")
+            new_book = Book(**book)
+            self.session.add(new_book)
             self.session.flush()
-            print(f"Added new book: {book['title']}, ID: {book_data.user_book_id}")
+            print(f"Added new book: {book['title']}, ID: {new_book.user_book_id}")
+            return new_book
         else:
-            book_data = existing_book
-            print(
-                f"Book with ID {book['user_book_id']} already exists, adding new highlights..."
+            print(f"Book with ID {book['user_book_id']} already exists")
+            return existing_book
+
+    def _validate_book_id(self, highlight: dict[Any, Any], book: Book) -> None:
+        """Validate a highlight's 'book_id'.
+
+        Check the highlight 'book_id' matches the book 'user_book_id'. A previous step
+        is presumed to have confirmed the book appears in the database or session.
+
+        Raises
+        ------
+        ValueError
+            If the 'book_id' and 'user_book_id' don't match.
+        KeyError
+            If 'book_id' not present in a highlight; all highlights should this key.
+        """
+        if highlight["book_id"] != book.user_book_id:
+            raise ValueError(
+                f"Mismatch in book IDs: Highlight 'book_id'={highlight['book_id']} "
+                f"does not match Book 'user_book_id'={book.user_book_id}"
             )
 
-    def _process_highlight(self, highlight: dict[Any, Any]) -> dict[Any, Any]:
-        highlight["highlighted_at"] = convert_to_datetime(
+    def _validate_highlight_id(self, highlight: dict[Any, Any], book: Book) -> None:
+        """Validate a highlights 'id'.
+
+        Check if the highlight 'id' already exists in the database.
+
+        Note
+        ----
+        Book is passed to create a more helpful error message.
+
+        Raises
+        ------
+        ValueError
+            If the highlight 'id' already exists in the database. This should not be
+            possible since API fetches should only contain new highlights.
+        """
+        existing_highlight = (
+            self.session.query(Highlight).filter_by(id=highlight["id"]).first()
+        )
+        if existing_highlight:
+            raise ValueError(
+                f"Highlight ID already in database: Highlight 'id'={highlight['id']},  "
+                f"Book 'user_book_id'={book.user_book_id}"
+            )
+
+    def _process_highlight(self, highlight: dict[Any, Any], book: Book) -> None:
+        """Process a highlight and add it to the session.
+
+        Perform validation checks, field processing and add the highlight to the
+        session.
+        """
+        print(f"Highlight: {highlight['text'][:20]}")
+        self._validate_book_id(highlight, book)
+        self._validate_highlight_id(highlight, book)
+
+        highlight["highlighted_at"] = convert_iso_to_datetime(
             highlight.get("highlighted_at")
         )
-        highlight["created_at"] = convert_to_datetime(highlight.get("created_at"))
-        highlight["updated_at"] = convert_to_datetime(highlight.get("updated_at"))
-        highlight.pop("book_id")
-        return highlight
+        highlight["created_at"] = convert_iso_to_datetime(highlight["created_at"])
+        highlight["updated_at"] = convert_iso_to_datetime(highlight["updated_at"])
 
+        # SQL Alchemy will ignore in favour of 'book' but included to be explicit.
+        highlight.pop("book_id", None)
 
-# def populate_database(
-#     session: Session,
-#     books: list[dict],
-#     start_fetch: datetime,
-#     end_fetch: datetime
-#     ):
-#     for book in books:
-#         highlights_data = book.pop("highlights", [])
-#         book_data = process_book(book, Session)
-#         for highlight in highlights_data:
-#             process_highlight = process_highlight
-
-#     new_batch = ReadwiseBatches(
-#        start_time=start_fetch,
-#        end_time=end_fetch,
-#        database_write_time=datetime.now()
-#     )
-#     session.add(new_batch)
-
-#     try:
-#         print("Committing session...")
-#         session.commit()
-#     except Exception as e:
-#         session.rollback()
-#         print(f"Error occurred with book_id {book_data.user_book_id}: {e}")
-
-
-# def process_book(book: dict, session: Session):
-#     print(book['title'])
-#     existing_book = session.query(Book).filter_by(user_book_id=book["user_book_id"]).first()
-#     if not existing_book:
-#         print("Book not existing")
-#         book_data = Book(**book)
-#         session.add(book_data)
-#         session.flush()
-#         print(f"Added new book: {book['title']}, ID: {book_data.user_book_id}")
-#     else:
-#         book_data = existing_book
-#         print(f"Book with ID {book['user_book_id']} already exists, adding new highlights...")
-
-
-# def process_highlight(highlight: dict, session: Session):
-#     highlight["highlighted_at"] = convert_to_datetime(highlight.get("highlighted_at"))
-#     highlight["created_at"] = convert_to_datetime(highlight.get("created_at"))
-#     highlight["updated_at"] = convert_to_datetime(highlight.get("updated_at"))
-#     highlight.pop("book_id")
-#     return highlight
+        highlight_obj = Highlight(**highlight, book=book)
+        self.session.add(highlight_obj)
 
 
 def query_get_last_fetch(session: Session) -> datetime | None:
     """Get the last fetch."""
     stmt = (
-        select(ReadwiseBatches)
-        .order_by(desc(ReadwiseBatches.database_write_time))
-        .limit(1)
+        select(ReadwiseBatch).order_by(desc(ReadwiseBatch.database_write_time)).limit(1)
     )
     result = session.execute(stmt).scalars().first()
     if result:

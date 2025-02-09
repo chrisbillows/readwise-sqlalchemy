@@ -19,6 +19,73 @@ from readwise_sqlalchemy.sql_alchemy import (
 )
 
 
+@pytest.fixture
+def empty_database(synthetic_user_config):
+        """
+
+        """
+        create_database(synthetic_user_config.DB)
+        session = get_session(synthetic_user_config.DB)
+        return session 
+      
+def test_schema(empty_database):
+    json_data = """
+    [
+        {
+            "book_with_one_highlight": {
+                "user_book_id": 1,
+                "title": "book title",
+                "author": "name surname",
+                "readable_title": "book title",
+                "source": "a source",
+                "cover_image_url": "//link/to/image",
+                "unique_url": null,
+                "summary": null,
+                "book_tags": [],
+                "category": "books",
+                "document_note": null,
+                "readwise_url": "https://readwise.io/bookreview/1",
+                "source_url": null,
+                "asin": null,
+                "highlights": [
+                    {
+                        "id": 10,
+                        "text": "The the highlight",
+                        "location": 1000,
+                        "location_type": "location",
+                        "note": "",
+                        "color": "yellow",
+                        "highlighted_at": "2025-01-01T00:00:00Z",
+                        "created_at": "2025-01-01T00:00:00Z",
+                        "updated_at": "2025-01-01T00:00:00Z",
+                        "external_id": null,
+                        "end_location": null,
+                        "url": null,
+                        "book_id": 1,
+                        "tags": [],
+                        "is_favorite": false,
+                        "is_discard": false,
+                        "readwise_url": "https://readwise.io/open/10"
+                    }
+                ]
+            }
+        }
+    ]
+    """
+    data = json.loads(json_data)
+    
+    # # with open("tests/data/real/example_books.json", "r") as file_handle:
+    # #     content = json.load(file_handle)['book_with_one_highlight']
+
+    start_fetch = datetime(2025, 1, 1, 1, 0)
+    end_fetch = datetime(2025, 1, 1, 1, 1)
+    # dbp = DatabasePopulater(
+    #     session, books_and_highlights, start_fetch, end_fetch
+    # )
+    
+    assert 1 == 2
+
+
 def test_convert_to_datetime_valid():
     iso_date = "2025-01-01T00:00"
     actual = convert_iso_to_datetime(iso_date)

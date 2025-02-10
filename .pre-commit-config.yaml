@@ -26,6 +26,7 @@ repos:
           - SQLAlchemy
           - rich
           - python-dotenv
+          - pydantic
         # Run on package files only
         files: ^readwise_sqlalchemy/
 -   repo: local

@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
     "mypy",
     "pre-commit",
+    "pydantic",
     "pytest",
     "pytest-cov",
     "python-dotenv",
@@ -22,6 +23,8 @@ dependencies = [
 rw = "readwise_sqlalchemy.main:main"
 
 [tool.mypy]
+# See: https://docs.pydantic.dev/latest/integrations/mypy/
+plugins = ['pydantic.mypy']
 strict = true
 
 [tool.ruff]

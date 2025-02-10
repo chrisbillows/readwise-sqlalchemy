@@ -36,6 +36,46 @@ SCHEMA_VARIATIONS = {
         "value_invalid_type": "not_a_web_address",
         "nullable": True,
     },
+    "unique_url": {
+        "value_valid": "http://www.article.com/article",
+        "value_invalid_type": (),
+        "nullable": True,
+    },
+    "summary": {
+        "value_valid": "An example summary",
+        "value_invalid_type": 987,
+        "nullable": True,
+    },
+    "book_tags": {
+        "value_valid": [],
+        "value_invalid_type": [1, 2, 3],
+        "nullable": False,
+    },
+    "category": {
+        "value_valid": "books",
+        "value_invalid_type": "youtube",
+        "nullable": False,
+    },
+    "readwise_url": {
+        "value_valid": "http://www.readwise.io/book123",
+        "value_invalid_type": "a_normal_string",
+        "nullable": False,
+    },
+    "source_url": {
+        "value_valid": "http://www.source.com/the_source",
+        "value_invalid_type": "a_normal_string",
+        "nullable": True,
+    },
+    "asin": {
+        "value_valid": "A0099BC1Z0",
+        "value_invalid_type": "A00-BC-1Z0",
+        "nullable": True,
+    },
+    "highlights": {
+        "value_valid": [],
+        "value_invalid_type": 123,
+        "nullable": False,
+    },
 }
 
 
@@ -91,7 +131,5 @@ def test_book_schema_with_null_values_where_not_allowed(invalid_null_field, mock
 @pytest.mark.parametrize("removed_field", [field for field in SCHEMA_VARIATIONS.keys()])
 def test_book_schema_with_missing_fields(removed_field, mock_book):
     del mock_book[removed_field]
-    # if removed_field == "cover_image_url":
-    #     breakpoint()
     with pytest.raises(ValidationError):
         BookSchema(**mock_book)

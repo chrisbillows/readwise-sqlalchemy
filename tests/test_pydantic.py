@@ -1,11 +1,68 @@
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
-from readwise_sqlalchemy.pydantic import BookSchema
+from readwise_sqlalchemy.pydantic import BookSchema, HighlightSchema
 
 # Construct various test arrays. Invalid types are just a single example, they are not
 # exhaustive.
-SCHEMA_VARIATIONS = {
+HIGHLIGHT_SCHEMA_VARIANTS = {
+    "id": {
+        "value_valid": 1,
+        "value_invalid_type": "string",
+        "nullable": False,
+    },
+    "text": {
+        "value_valid": "I am the text of a highlight",
+        "value_invalid_type": 987654321,
+        "nullable": False,
+    },
+    "location": {
+        "value_valid": 12345,
+        "value_invalid_type": "one two three",
+        "nullable": True,
+    },
+    "location_type": {
+        "value_valid": "page",
+        "value_invalid_type": "time",
+        "nullable": True,
+    },
+    "note": {
+        "value_valid": "",
+        "value_invalid_type": [],
+        "nullable": True,
+    },
+    "color": {
+        "value_valid": "yellow",
+        "value_invalid_type": "magenta",
+        "nullable": True,
+    },
+    "highlighted_at": {
+        "value_valid": "2025-01-01T01:02:04.456Z",
+        "value_invalid_type": "2024-13-01T10:20:30.123Z",
+        "nullable": True,
+    },
+    "created_at": {
+        "value_valid": "2025-01-01T01:02:04.456Z",
+        "value_invalid_type": "2024-13-01T10:20:30.123Z",
+        "nullable": True,
+    },
+    "updated_at": {
+        "value_valid": "2025-01-01T01:02:04.456Z",
+        "value_invalid_type": "2024-13-01T10:20:30.123Z",
+        "nullable": True,
+    },
+    "external_id": {
+        "value_valid": "6320b2bd7fbcdd7b0c000b3e",
+        "value_invalid_type": 12345,
+        "nullable": True,
+    },
+}
+
+# Construct various test arrays. Invalid types are just a single example, they are not
+# exhaustive.
+BOOK_SCHEMA_VARIANTS = {
     "user_book_id": {
         "value_valid": 1,
         "value_invalid_type": "string",
@@ -80,21 +137,83 @@ SCHEMA_VARIATIONS = {
 
 
 @pytest.fixture
+def mock_highlight():
+    fields = HIGHLIGHT_SCHEMA_VARIANTS.keys()
+    return {field: HIGHLIGHT_SCHEMA_VARIANTS[field]["value_valid"] for field in fields}
+
+
+def test_highlight_schema_with_valid_values(mock_highlight: dict):
+    assert HighlightSchema(**mock_highlight)
+
+
+@pytest.mark.parametrize("invalid_field", HIGHLIGHT_SCHEMA_VARIANTS.keys())
+def test_highlight_schema_with_invalid_types(
+    invalid_field: str, mock_highlight: dict[str, Any]
+):
+    mock_highlight[invalid_field] = HIGHLIGHT_SCHEMA_VARIANTS[invalid_field][
+        "value_invalid_type"
+    ]
+    with pytest.raises(ValidationError):
+        HighlightSchema(**mock_highlight)
+
+
+@pytest.mark.parametrize(
+    "valid_null_field",
+    [
+        field
+        for field in HIGHLIGHT_SCHEMA_VARIANTS.keys()
+        if HIGHLIGHT_SCHEMA_VARIANTS[field]["nullable"]
+    ],
+)
+def test_highlight_schema_with_null_values_where_allowed(
+    valid_null_field: str, mock_highlight: dict[str, Any]
+):
+    mock_highlight[valid_null_field] = None
+    assert HighlightSchema(**mock_highlight)
+
+
+@pytest.mark.parametrize(
+    "invalid_null_field",
+    [
+        field
+        for field in HIGHLIGHT_SCHEMA_VARIANTS.keys()
+        if not HIGHLIGHT_SCHEMA_VARIANTS[field]["nullable"]
+    ],
+)
+def test_highlight_schema_with_null_values_where_not_allowed(
+    invalid_null_field: str, mock_highlight: dict[str, Any]
+):
+    mock_highlight[invalid_null_field] = None
+    with pytest.raises(ValidationError):
+        HighlightSchema(**mock_highlight)
+
+
+# Raise if any field is missing.
+@pytest.mark.parametrize(
+    "removed_field", [field for field in HIGHLIGHT_SCHEMA_VARIANTS.keys()]
+)
+def test_highlight_schema_with_missing_fields(
+    removed_field: str, mock_highlight: dict[str, Any]
+):
+    del mock_highlight[removed_field]
+    with pytest.raises(ValidationError):
+        HighlightSchema(**mock_highlight)
+
+
+@pytest.fixture
 def mock_book():
     """Return a valid mock book."""
-    fields = SCHEMA_VARIATIONS.keys()
-    return {field: SCHEMA_VARIATIONS[field]["value_valid"] for field in fields}
+    fields = BOOK_SCHEMA_VARIANTS.keys()
+    return {field: BOOK_SCHEMA_VARIANTS[field]["value_valid"] for field in fields}
 
 
-def test_book_schema_with_valid_values(mock_book):
-    book = BookSchema(**mock_book)
-    assert book
+def test_book_schema_with_valid_values(mock_book: dict):
+    assert BookSchema(**mock_book)
 
 
-@pytest.mark.parametrize("invalid_field", SCHEMA_VARIATIONS.keys())
-def test_book_schema_with_invalid_types(invalid_field, mock_book):
-    mock_book[invalid_field] = SCHEMA_VARIATIONS[invalid_field]["value_invalid_type"]
-    print(mock_book)
+@pytest.mark.parametrize("invalid_field", BOOK_SCHEMA_VARIANTS.keys())
+def test_book_schema_with_invalid_types(invalid_field: str, mock_book: dict[str, Any]):
+    mock_book[invalid_field] = BOOK_SCHEMA_VARIANTS[invalid_field]["value_invalid_type"]
     with pytest.raises(ValidationError):
         BookSchema(**mock_book)
 
@@ -103,33 +222,38 @@ def test_book_schema_with_invalid_types(invalid_field, mock_book):
     "valid_null_field",
     [
         field
-        for field in SCHEMA_VARIATIONS.keys()
-        if SCHEMA_VARIATIONS[field]["nullable"]
+        for field in BOOK_SCHEMA_VARIANTS.keys()
+        if BOOK_SCHEMA_VARIANTS[field]["nullable"]
     ],
 )
-def test_book_schema_with_null_values_where_allowed(valid_null_field, mock_book):
+def test_book_schema_with_null_values_where_allowed(
+    valid_null_field: str, mock_book: dict[str, Any]
+):
     mock_book[valid_null_field] = None
-    book = BookSchema(**mock_book)
-    assert book
+    assert BookSchema(**mock_book)
 
 
 @pytest.mark.parametrize(
     "invalid_null_field",
     [
         field
-        for field in SCHEMA_VARIATIONS.keys()
-        if not SCHEMA_VARIATIONS[field]["nullable"]
+        for field in BOOK_SCHEMA_VARIANTS.keys()
+        if not BOOK_SCHEMA_VARIANTS[field]["nullable"]
     ],
 )
-def test_book_schema_with_null_values_where_not_allowed(invalid_null_field, mock_book):
+def test_book_schema_with_null_values_where_not_allowed(
+    invalid_null_field: str, mock_book: dict[str, Any]
+):
     mock_book[invalid_null_field] = None
     with pytest.raises(ValidationError):
         BookSchema(**mock_book)
 
 
-# Error if any field is missing.
-@pytest.mark.parametrize("removed_field", [field for field in SCHEMA_VARIATIONS.keys()])
-def test_book_schema_with_missing_fields(removed_field, mock_book):
+# Raise if any field is missing.
+@pytest.mark.parametrize(
+    "removed_field", [field for field in BOOK_SCHEMA_VARIANTS.keys()]
+)
+def test_book_schema_with_missing_fields(removed_field: str, mock_book: dict[str, Any]):
     del mock_book[removed_field]
     with pytest.raises(ValidationError):
         BookSchema(**mock_book)

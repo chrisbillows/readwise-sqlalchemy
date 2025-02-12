@@ -5,8 +5,8 @@ from pydantic import ValidationError
 
 from readwise_sqlalchemy.pydantic import BookSchema, HighlightSchema
 
-# Construct various test arrays. Invalid types are just a single example, they are not
-# exhaustive.
+# Construct various test dicts. 'value_invalid_type' is a single example of an invalid
+# type. It is not exhaustive.
 HIGHLIGHT_SCHEMA_VARIANTS = {
     "id": {
         "value_valid": 1,
@@ -58,10 +58,45 @@ HIGHLIGHT_SCHEMA_VARIANTS = {
         "value_invalid_type": 12345,
         "nullable": True,
     },
+    "end_location": {
+        "value_valid": None,
+        "value_invalid_type": 12345,
+        "nullable": True,
+    },
+    "url": {
+        "value_valid": "http://www.url.com",
+        "value_invalid_type": "not-a-url",
+        "nullable": True,
+    },
+    "book_id": {
+        "value_valid": 1,
+        "value_invalid_type": -1,
+        "nullable": False,
+    },
+    "tags": {  # The 'HighlightTagsSchema' is simple enough to test here.
+        "value_valid": [{"id": 1234, "name": "tag_2"}],
+        "value_invalid_type": [{"id": 1234, "name": 1234}],
+        "nullable": True,
+    },
+    "is_favorite": {
+        "value_valid": True,
+        "value_invalid_type": "true",
+        "nullable": True,
+    },
+    "is_discard": {
+        "value_valid": False,
+        "value_invalid_type": "false",
+        "nullable": True,
+    },
+    "readwise_url": {
+        "value_valid": "https://readwise.io/open/123456",
+        "value_invalid_type": "readwise.io/open/123456",
+        "nullable": True,
+    },
 }
 
-# Construct various test arrays. Invalid types are just a single example, they are not
-# exhaustive.
+# Construct various test dicts. 'value_invalid_type' is a single example of an invalid
+# type. It is not exhaustive.
 BOOK_SCHEMA_VARIANTS = {
     "user_book_id": {
         "value_valid": 1,

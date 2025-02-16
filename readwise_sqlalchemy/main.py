@@ -7,12 +7,12 @@ from typing import Any
 import requests
 from dotenv import load_dotenv
 
-from readwise_sqlalchemy.sql_alchemy import (
-    DatabasePopulater,
-    create_database,
-    get_session,
-    query_get_last_fetch,
-)
+# from readwise_sqlalchemy.sql_alchemy import (
+#     DatabasePopulater,
+#     create_database,
+#     get_session,
+#     query_get_last_fetch,
+# )
 
 
 class MissingEnvironmentFile(Exception):

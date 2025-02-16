@@ -3,9 +3,9 @@ import pytest
 
 class TestUserConfig:
     @pytest.fixture
-    def add_temp_user_config_to_self(self, synthetic_user_config) -> None:
+    def add_temp_user_config_to_self(self, mock_user_config) -> None:
         """Make `synthetic_user_config` available to all tests in the class."""
-        self.user_config = synthetic_user_config
+        self.user_config = mock_user_config
 
     @pytest.mark.parametrize(
         "expected_is_true",

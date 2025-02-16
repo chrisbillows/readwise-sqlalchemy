@@ -1,16 +1,11 @@
-from datetime import datetime, timezone
-import json
+from dataclasses import dataclass
 from typing import Any
 
-from dataclasses import dataclass
-from unittest import mock
 import pytest
-from sqlalchemy import create_engine, select, Engine, Column, Integer, ForeignKey
-from sqlalchemy.exc import IntegrityError, DataError
+from sqlalchemy import Column, Engine, ForeignKey, Integer, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
-import sqlite3
 
-from .conftest import HIGHLIGHT_SCHEMA_VARIANTS, BOOK_SCHEMA_VARIANTS
 from readwise_sqlalchemy.sql_alchemy import (
     Base,
     Book,
@@ -18,18 +13,24 @@ from readwise_sqlalchemy.sql_alchemy import (
     safe_create_sqlite_engine,
 )
 
+from .conftest import BOOK_SCHEMA_VARIANTS
+
 
 def test_safe_create_sqlite_engine():
-    test_engine = safe_create_sqlite_engine(':memory:')
+    test_engine = safe_create_sqlite_engine(":memory:")
+
     class TestBase(DeclarativeBase):
-        pass        
+        pass
+
     class Parent(TestBase):
-        __tablename__ = 'parent'
+        __tablename__ = "parent"
         id = Column(Integer, primary_key=True)
+
     class Child(TestBase):
-        __tablename__ = 'child'
+        __tablename__ = "child"
         id = Column(Integer, primary_key=True)
-        parent_id = Column(Integer, ForeignKey('parent.id'))
+        parent_id = Column(Integer, ForeignKey("parent.id"))
+
     TestBase.metadata.create_all(test_engine)
     with pytest.raises(IntegrityError):
         with Session(test_engine) as session, session.begin():

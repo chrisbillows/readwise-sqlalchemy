@@ -1,6 +1,3 @@
-import json
-from datetime import datetime
-from pathlib import Path
 import sqlite3
 from typing import Any, List, Optional
 
@@ -8,21 +5,14 @@ from sqlalchemy import (
     Engine,
     ForeignKey,
     String,
-    Text,
     create_engine,
-    desc,
     event,
-    inspect,
-    null,
-    select,
 )
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
-    Session,
     mapped_column,
     relationship,
-    sessionmaker,
 )
 from sqlalchemy.types import TypeDecorator
 
@@ -31,14 +21,14 @@ def safe_create_sqlite_engine(sqlite_database: str, echo: bool = False) -> Engin
     """
     Create a SQLite engine with foreign key enforcement enabled for all connections.
 
-    Foreign key constraints are not enforced by default in SQLite. They must be 
-    enabled for every new database connection using the ``PRAGMA foreign_keys=ON`` 
-    statement, as PRAGMA settings do not persist in the database file. This function 
+    Foreign key constraints are not enforced by default in SQLite. They must be
+    enabled for every new database connection using the ``PRAGMA foreign_keys=ON``
+    statement, as PRAGMA settings do not persist in the database file. This function
     creates a SQLAlchemy ``Engine`` configured with an event listener that ensures
-    this PRAGMA statement is always executed. 
+    this PRAGMA statement is always executed.
 
     Create SQLite engines with this function to ensure consistent foreign key behaviour.
-    For more details, see: 
+    For more details, see:
     https://docs.sqlalchemy.org/en/20/dialects/sqlite.html#foreign-key-support
 
     Parameters
@@ -55,10 +45,14 @@ def safe_create_sqlite_engine(sqlite_database: str, echo: bool = False) -> Engin
         A SQLAlchemy ``Engine`` instance that will enforce foreign key constraints
         on all connections.
     """
-    def set_sqlite_pragma(dbapi_connection: sqlite3.Connection, connection_record: Any) -> None:
+
+    def set_sqlite_pragma(
+        dbapi_connection: sqlite3.Connection, connection_record: Any
+    ) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
     db_path = "sqlite:///" + sqlite_database
     engine = create_engine(db_path, echo=echo)
     event.listen(engine, "connect", set_sqlite_pragma)

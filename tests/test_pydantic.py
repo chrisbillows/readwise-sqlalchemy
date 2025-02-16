@@ -3,8 +3,9 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from .conftest import HIGHLIGHT_SCHEMA_VARIANTS, BOOK_SCHEMA_VARIANTS
 from readwise_sqlalchemy.pydantic import BookSchema, HighlightSchema
+
+from .conftest import BOOK_SCHEMA_VARIANTS, HIGHLIGHT_SCHEMA_VARIANTS
 
 
 def test_highlight_schema_with_valid_values(mock_highlight: dict):

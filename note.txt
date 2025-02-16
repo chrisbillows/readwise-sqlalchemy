@@ -4,7 +4,7 @@ I could offer a wrapper for their endpoints
 
 from readwise_local import pydantic_models
 from readwise_local import sql_models
-from readwise_local import 
+from readwise_local import
 
 No so of course it's actually via the init
 
@@ -13,4 +13,4 @@ So it'd be
 from readwise_local import UserConfig
 
 
-Readwise Local is 
+Readwise Local is

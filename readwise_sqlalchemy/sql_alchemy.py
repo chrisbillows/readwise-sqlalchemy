@@ -2,6 +2,7 @@ import sqlite3
 from typing import Any, List, Optional
 
 from sqlalchemy import (
+    Dialect,
     Engine,
     ForeignKey,
     String,
@@ -59,22 +60,83 @@ def safe_create_sqlite_engine(sqlite_database: str, echo: bool = False) -> Engin
     return engine
 
 
-class CommaSeparatedList(TypeDecorator[list[str]]):
-    """Encode and a decode a list stored as a comma-separated string.
+class CommaSeparatedList(TypeDecorator):
+    """
+    Convert to/from a list of strings/a comma separated list as a single string.
 
-    Note
-    ----
-    `Dialect` is required by the `sqlalchemy.TypeDecorator`.
+    A custom SQLAlchemy type, extending SQL String type via TypeDecorator to store a
+    list of strings as a comma separated list, rendered as a single str. (SQLite has no
+    list types). The custom behaviour is provided by overriding the TypeDecorator
+    methods ``process_bind_param`` and  ``process_result_value``.
+
+                list[str]                                   str^
+                    |                                        |
+                    |                                        |
+                write to db                             read from db
+                    |                                        |
+                    |                                        |
+                    v                                        V
+                   str^                                   list[str]
+
+    ^The str is a comma separated list rendered as a single string.
+
+    See:
+    https://docs.sqlalchemy.org/en/20/core/custom_types.html#augmenting-existing-types
     """
 
     impl = String
+    # The same values will always give the same results.
+    cache_ok = True
 
-    def process_bind_param(self, value: list[str] | None, dialect: Any) -> str | None:
+    def process_bind_param(
+        self, value: list[str] | None, dialect: Dialect
+    ) -> str | None:
+        """
+        Receive a bound parameter of type ``list[str]`` and convert to ``str``.
+
+        Overrides the TypeDecorator method. This method is called at statement execution
+        time and is passed the literal Python data value which is to be associated with
+        a bound parameter in the statement.
+
+        Parameters
+        ----------
+        value: list[str]
+            Data to operate upon, here a list of strings.
+
+        dialect: Dialect
+            The SQL Dialect in use.
+
+        Returns
+        -------
+        str
+            A single Python string representing a list as comma separated values.
+        """
         if value is None:
             return None
         return ",".join(value)
 
-    def process_result_value(self, value: str | None, dialect: Any) -> list[str] | None:
+    def process_result_value(
+        self, value: str | None, dialect: Dialect
+    ) -> list[str] | None:
+        """
+        Receive a result-row column value of type ``str` and convert to ``list[str]``.
+
+        This method is called at result fetching time and is passed the literal Python
+        data value extracted from a database result row.
+
+        Parameters
+        ----------
+        value: str
+            Data to operate upon, here a string of comma separated value.
+
+        dialect: Dialect
+            The SQL Dialect in use.
+
+        Returns
+        -------
+        list[str]
+            A list of strings.
+        """
         if value is None:
             return None
         return value.split(",")
@@ -169,28 +231,6 @@ class Highlight(Base):
 #         self, value: str | None, dialect: Any
 #     ) -> list[dict[str, str]] | None:
 #         return json.loads(value) if value is not None else []
-
-
-class CommaSeparatedList(TypeDecorator[list[str]]):
-    """
-    Encode and a decode a list stored as a comma-separated string.
-
-    Note
-    ----
-    `Dialect` is required by the `sqlalchemy.TypeDecorator`.
-    """
-
-    impl = String
-
-    def process_bind_param(self, value: list[str] | None, dialect: Any) -> str | None:
-        if value is None:
-            return None
-        return ",".join(value)
-
-    def process_result_value(self, value: str | None, dialect: Any) -> list[str] | None:
-        if value is None:
-            return None
-        return value.split(",")
 
 
 # class Base(DeclarativeBase):

@@ -9,6 +9,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from readwise_sqlalchemy.sql_alchemy import (
     Base,
     Book,
+    CommaSeparatedList,
     Highlight,
     safe_create_sqlite_engine,
 )
@@ -35,6 +36,31 @@ def test_safe_create_sqlite_engine():
     with pytest.raises(IntegrityError):
         with Session(test_engine) as session, session.begin():
             session.add(Child(id=1, parent_id=999))
+
+
+class TestCommaSeparatedList:
+    LIST_OF_STRINGS = ["book_tag_1", "book_tag_2"]
+    STRING = "book_tag_1,book_tag_2"
+
+    def test_process_bind_param_list_of_strings(self):
+        csl = CommaSeparatedList()
+        actual = csl.process_bind_param(self.LIST_OF_STRINGS, None)
+        assert actual == self.STRING
+
+    def test_process_bind_param_null(self):
+        csl = CommaSeparatedList()
+        actual = csl.process_bind_param(None, None)
+        assert actual == None
+
+    def test_process_result_value_list_of_strings(self):
+        csl = CommaSeparatedList()
+        decoded = csl.process_result_value(self.STRING, None)
+        assert decoded == self.LIST_OF_STRINGS
+
+    def test_process_result_value_null(self):
+        csl = CommaSeparatedList()
+        decoded = csl.process_result_value(self.STRING, None)
+        assert decoded == self.LIST_OF_STRINGS
 
 
 @dataclass
@@ -322,25 +348,6 @@ def test_mapped_highlight_prevents_a_missing_book(
 #         decorator = JSONEncodedList()
 #         decoded = decorator.process_result_value(self.STRING, None)
 #         assert decoded == self.JSON_LIST_OF_DICTS
-
-
-# class TestCommaSeparatedList:
-#     """Test CommaSeparatedList decorator."""
-
-#     JSON_LIST_OF_STRINGS = ["book_tag_1", "book_tag_2"]
-#     STRING = "book_tag_1,book_tag_2"
-
-#     def test_process_bind_param_valid(self):
-#         """Test the CSL encoding/binding."""
-#         decorator = CommaSeparatedList()
-#         actual = decorator.process_bind_param(self.JSON_LIST_OF_STRINGS, None)
-#         assert actual == self.STRING
-
-#     def test_process_result_value_valid(self):
-#         """Test the CSL decoding/result."""
-#         decorator = CommaSeparatedList()
-#         decoded = decorator.process_result_value(self.STRING, None)
-#         assert decoded == self.JSON_LIST_OF_STRINGS
 
 
 # def test_create_database_tables(synthetic_user_config):

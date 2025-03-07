@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 import pytest
@@ -6,12 +7,16 @@ from sqlalchemy import Column, Engine, ForeignKey, Integer, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
+
 from readwise_sqlalchemy.sql_alchemy import (
     Base,
     Book,
     CommaSeparatedList,
     Highlight,
+    HighlightTag,
+    ReadwiseBatch,
     safe_create_sqlite_engine,
+    query_db_tables,
 )
 
 from .conftest import BOOK_SCHEMA_VARIANTS
@@ -47,24 +52,24 @@ class TestCommaSeparatedList:
         actual = csl.process_bind_param(self.LIST_OF_STRINGS, None)
         assert actual == self.STRING
 
-    def test_process_bind_param_null(self):
+    def test_process_bind_param_empty_list(self):
         csl = CommaSeparatedList()
-        actual = csl.process_bind_param(None, None)
-        assert actual == None
+        actual = csl.process_bind_param([], None)
+        assert actual == ""
 
     def test_process_result_value_list_of_strings(self):
         csl = CommaSeparatedList()
         decoded = csl.process_result_value(self.STRING, None)
         assert decoded == self.LIST_OF_STRINGS
 
-    def test_process_result_value_null(self):
+    def test_process_result_value_empty_list(self):
         csl = CommaSeparatedList()
-        decoded = csl.process_result_value(self.STRING, None)
-        assert decoded == self.LIST_OF_STRINGS
+        decoded = csl.process_result_value("", None)
+        assert decoded == []
 
 
 @dataclass
-class DatabaseHandle:
+class DbHandle:
     """Group SQL Alchemy database connection objects.
 
     Attributes
@@ -79,153 +84,363 @@ class DatabaseHandle:
     session: Session
 
 
-@pytest.fixture
+@pytest.fixture()
 def mem_db():
-    """Create an in-memory SQLite database and return an engine and session.
-
-    Create tables for all ORM mapped classes that inherit from Base.
-
-    A db is required to test type validation as SQLAlchemy validates data on
-    engine/session commit.
     """
-    engine = safe_create_sqlite_engine(":memory:")
+    Create an in-memory SQLite database and return an engine and session.
+
+    Creates tables for all ORM mapped classes that inherit from Base.
+    """
+    engine = safe_create_sqlite_engine(":memory:", echo=False)
     Base.metadata.create_all(engine)
+    # This isn't needed. It's included as a best practice example or for future use.
     SessionMaker = sessionmaker(bind=engine)
     session = SessionMaker()
-    yield DatabaseHandle(engine, session)
+    yield DbHandle(engine, session)
     session.close()
 
 
-def test_mapped_book_for_a_valid_book(
-    mock_book: dict[str, Any], mem_db: DatabaseHandle
-):
-    mock_book_obj = Book(**mock_book)
+# Minimal object configurations.
+HIGHLIGHT_1_TAG_1 = {"id": 5555, "name": "orange"}
+HIGHLIGHT_1_TAG_2 = {"id": 5556, "name": "blue"}
+
+HIGHLIGHT_1 = {"id": 111, "user_book_id": 99, "text": "highlight_1"}
+HIGHLIGHT_2 = {"id": 222, "user_book_id": 99, "text": "highlight_2"}
+
+BOOK = {"user_book_id": 99, "title": "book_1"}
+
+START_TIME = datetime(2025, 1, 1, 10, 10, 10)
+END_TIME = datetime(2025, 1, 1, 10, 10, 20)
+DATABASE_WRITE_TIME = datetime(2025,1, 1, 10, 10, 22)
+
+# Expected to autoincrement to this value.
+BATCH_ID = 1
+
+
+@pytest.fixture()
+def basic_obj_mem_db_engine(mem_db: DbHandle):
+    """
+    Engine connected to an in-memory SQLite db with minimal records for all objects.
+    
+    Create a database with related entries for a book, highlights, highlight tags and a 
+    readwise batch. The objects are created with minimal fields. All *relationship* 
+    fields are included to allow testing relationship configurations behave as expected.
+    
+    Note
+    ----
+    Constructing objects with minimal field is possible as SQLAlchemy ORM mapped classes
+    do not enforce the presence of non-nullable fields.
+    """
+    batch = ReadwiseBatch(start_time=START_TIME, end_time=END_TIME)
+    
+    book = Book(**BOOK)
+    highlight_1 = Highlight(**HIGHLIGHT_1)
+    highlight_2 = Highlight(**HIGHLIGHT_2)        
+    highlight_1_tag_1 = HighlightTag(**HIGHLIGHT_1_TAG_1)
+    highlight_1_tag_2 = HighlightTag(**HIGHLIGHT_1_TAG_2)
+
+    highlight_1.tags = [highlight_1_tag_1, highlight_1_tag_2]
+    book.highlights = [highlight_1, highlight_2]
+    
+    batch.books = [book]
+    batch.highlights = [highlight_1, highlight_2]
+    batch.highlight_tags = [highlight_1_tag_1, highlight_1_tag_2]
+    
     with mem_db.session.begin():
-        mem_db.session.add(mock_book_obj)
-    with Session(mem_db.engine) as verification_session:
-        fetched_book = verification_session.get(Book, 1)
-    assert (fetched_book.user_book_id, fetched_book.title) == (
-        mock_book_obj.user_book_id,
-        mock_book_obj.title,
-    )
+        mem_db.session.add(batch)
+        # Flush to generate batch id which is no nullable for other objects.
+        mem_db.session.flush()
+        mem_db.session.add(book)
+        batch.database_write_time = DATABASE_WRITE_TIME    
+    yield mem_db.engine
+    
+
+def test_tables_created_with_basic_obj_db(basic_obj_mem_db_engine: Engine):
+    with Session(basic_obj_mem_db_engine) as clean_session:
+        tables = query_db_tables(clean_session)
+        
+        assert tables == ['books', 'highlight_tags', 'highlights', 'readwise_batches']
 
 
-def test_mapped_book_for_a_valid_book_retrieves_a_new_object(
-    mock_book: dict[str, Any], mem_db: DatabaseHandle
-):
-    # SQL Alchemy caches seen objects within a session. Test the object is truly
-    # retrieved from the database.
-    mock_book_obj = Book(**mock_book)
-    with mem_db.session.begin():
-        mem_db.session.add(mock_book_obj)
-    with Session(mem_db.engine) as verification_session:
-        fetched_book = verification_session.get(Book, 1)
-    assert fetched_book is not mock_book_obj
+@pytest.fixture()
+def test_book(basic_obj_mem_db_engine: Engine):
+    """A minimal ``Book`` fetched from the minimal object database."""
+    with Session(basic_obj_mem_db_engine) as clean_session:
+        fetched_books = clean_session.scalars(select(Book)).all()
+        test_book = fetched_books[0]
+        yield test_book
 
 
-def test_mapped_book_allocates_primary_keys_correctly(
-    mock_book: dict[str, Any], mem_db: DatabaseHandle
-):
-    # Create three valid mock books with different user ids.
-    user_book_ids = [1000, 1999, 1001]
-    mock_book_objs = []
-    for user_book_id in user_book_ids:
-        book_data = mock_book.copy()
-        book_data["user_book_id"] = user_book_id
-        mock_book_objs.append(Book(**book_data))
-    with mem_db.session.begin():
-        mem_db.session.add_all(mock_book_objs)
-    with Session(mem_db.engine) as verification_session:
-        stmt = select(Book.id, Book.title, Book.user_book_id)
-        result = verification_session.execute(stmt)
-        actual = result.mappings().all()
-        expected = [
-            {"id": 1, "title": "Example Book Title", "user_book_id": 1000},
-            {"id": 2, "title": "Example Book Title", "user_book_id": 1999},
-            {"id": 3, "title": "Example Book Title", "user_book_id": 1001},
-        ]
-    assert actual == expected
+def test_book_records_created_with_basic_obj_db(test_book: Book):
+    assert test_book.user_book_id == BOOK["user_book_id"]
+    assert test_book.title == BOOK["title"]
 
 
-def test_mapped_book_prevents_duplicate_user_book_ids(
-    mock_book: dict[str, Any], mem_db: DatabaseHandle
-):
-    book_1 = Book(**mock_book)
-    book_2 = Book(**mock_book)
-    mem_db.session.add_all([book_1, book_2])
-    with pytest.raises(IntegrityError):
-        mem_db.session.commit()
+def test_book_relationship_with_batch(test_book: Book):
+    # Foreign key.
+    assert test_book.batch_id == BATCH_ID       
+    # Relationship.
+    assert isinstance(test_book.batch, ReadwiseBatch)
+    assert test_book.batch.id == BATCH_ID
+    assert test_book.batch.start_time == START_TIME
+    
+    assert test_book.batch.books[0].user_book_id == BOOK["user_book_id"]
 
 
-@pytest.mark.parametrize(
-    "valid_null_field",
-    [
-        field
-        for field in BOOK_SCHEMA_VARIANTS.keys()
-        if BOOK_SCHEMA_VARIANTS[field]["nullable"]
-    ],
-)
-def test_mapped_book_with_null_values_where_allowed(
-    valid_null_field: str, mock_book: dict[str, Any], mem_db: DatabaseHandle
-):
-    mock_book[valid_null_field] = None
-    mock_book_obj = Book(**mock_book)
-    with mem_db.session.begin():
-        mem_db.session.add(mock_book_obj)
-    with Session(mem_db.engine) as verification_session:
-        fetched_book = verification_session.get(Book, 1)
-    assert (fetched_book.user_book_id, fetched_book.title) == (
-        mock_book_obj.user_book_id,
-        mock_book_obj.title,
-    )
+def test_book_relationship_with_highlights(test_book: Book): 
+    # Relationship.   
+    assert len(test_book.highlights) == 2
+    assert isinstance(test_book.highlights[0], Highlight)
+    assert test_book.highlights[0].id == HIGHLIGHT_1["id"]        
+    assert test_book.highlights[0].text == HIGHLIGHT_1["text"]
+    
+    assert test_book.highlights[0].book.user_book_id == BOOK["user_book_id"]
 
 
-@pytest.mark.parametrize(
-    "invalid_null_field",
-    [
-        field
-        for field in BOOK_SCHEMA_VARIANTS.keys()
-        if not BOOK_SCHEMA_VARIANTS[field]["nullable"]
-    ],
-)
-def test_mapped_book_with_null_values_where_not_allowed(
-    invalid_null_field: str, mock_book: dict[str, Any], mem_db: DatabaseHandle
-):
-    mock_book[invalid_null_field] = None
-    mock_book_obj = Book(**mock_book)
-    with pytest.raises(IntegrityError):
-        with mem_db.session.begin():
-            mem_db.session.add(mock_book_obj)
+@pytest.fixture()
+def test_highlight(basic_obj_mem_db_engine: Engine):
+    """A minimal ``Highlight`` fetched from the minimal object database."""
+    with Session(basic_obj_mem_db_engine) as clean_session:
+        fetched_highlights = clean_session.scalars(select(Highlight)).all()
+        test_highlight = fetched_highlights[0]
+        yield test_highlight
 
 
-def test_mapped_highlight_for_a_valid_highlight(
-    mock_book: dict[str, Any], mock_highlight: dict[str, Any], mem_db: DatabaseHandle
-):
-    mock_book_obj = Book(**mock_book)
-    mock_highlight_obj = Highlight(**mock_highlight)
-    with mem_db.session.begin():
-        mem_db.session.add_all([mock_book_obj, mock_highlight_obj])
-    with Session(mem_db.engine) as verification_session:
-        fetched_highlight = verification_session.get(Highlight, 1)
-    assert (fetched_highlight.text, fetched_highlight.book_id) == (
-        mock_highlight_obj.text,
-        mock_highlight_obj.book_id,
-    )
+def test_highlight_records_created_with_basic_obj_db(test_highlight: Highlight):
+    assert test_highlight.id == HIGHLIGHT_1["id"]      
+    assert test_highlight.text == "highlight_1"
 
 
-def test_mapped_highlight_prevents_a_missing_book(
-    mock_highlight: dict[str, Any], mem_db: DatabaseHandle
-):
-    # NOTE: For a SQLite dialect DB, only a connection with foreign key enforcement
-    # explicitly enabled will pass.
-    mock_highlight_obj = Highlight(**mock_highlight)
-    with pytest.raises(IntegrityError, match="FOREIGN KEY constraint failed"):
-        with mem_db.session.begin():
-            mem_db.session.add(mock_highlight_obj)
+def test_highlight_relationship_with_book(test_highlight: Highlight):
+    # Foreign key.
+    assert test_highlight.user_book_id == BOOK["user_book_id"]
+    # Relationship.
+    assert isinstance(test_highlight.book, Book)
+    assert test_highlight.book.user_book_id == BOOK["user_book_id"]
+    assert test_highlight.book.title == "book_1" 
+    
+    assert test_highlight.book.highlights[0].id == HIGHLIGHT_1["id"]  
 
-    # fetched_books = result.scalars().all()
-    #         for book in fetched_books:
-    #             print(book.__dict__)
+        
+def test_highlight_relationship_with_highlight_tag(test_highlight: Highlight):
+    # Relationship.
+    assert isinstance(test_highlight.tags[0], HighlightTag)
+    assert test_highlight.tags[0].id == HIGHLIGHT_1_TAG_1["id"]  
+    assert test_highlight.tags[0].name == "orange"
+    
+    assert test_highlight.tags[0].highlight.id == HIGHLIGHT_1["id"]  
+
+
+def test_highlight_relationship_with_batch(test_highlight: Highlight):
+    # Foreign key.
+    assert test_highlight.batch_id == BATCH_ID
+    # Relationship.
+    assert isinstance(test_highlight.batch, ReadwiseBatch)
+    assert test_highlight.batch.start_time == datetime(2025, 1, 1, 10, 10, 10)
+    assert test_highlight.batch.id == BATCH_ID
+    
+    assert test_highlight.batch.highlights[0].id == HIGHLIGHT_1["id"]  
+
+
+@pytest.fixture()
+def test_highlight_tag(basic_obj_mem_db_engine: Engine):
+    """A minimal ``HighlightTag`` fetched from the minimal object database."""
+    with Session(basic_obj_mem_db_engine) as clean_session:
+        fetched_highlight_tags = clean_session.scalars(select(HighlightTag)).all()
+        test_highlight_tag = fetched_highlight_tags[0]
+        yield test_highlight_tag
+
+
+def test_highlight_tags_created_in_basic_obj_db(test_highlight_tag: HighlightTag):
+    assert test_highlight_tag.id == HIGHLIGHT_1_TAG_1["id"]  
+    assert test_highlight_tag.name == HIGHLIGHT_1_TAG_1["name"]  
+
+
+def test_highlight_tag_relationship_with_highlight(test_highlight_tag: HighlightTag):
+    # Foreign key.
+    assert test_highlight_tag.highlight_id == HIGHLIGHT_1["id"]  
+    # Relationship.
+    assert isinstance(test_highlight_tag.highlight, Highlight)
+    assert test_highlight_tag.highlight.id == HIGHLIGHT_1["id"]  
+    assert test_highlight_tag.highlight.text == "highlight_1"
+    
+    assert test_highlight_tag.highlight.tags[0].id == HIGHLIGHT_1_TAG_1["id"]  
+    
+
+def test_highlight_tag_relationship_with_batch(test_highlight_tag: HighlightTag):        
+    # Foreign key.
+    assert test_highlight_tag.batch_id == BATCH_ID
+    
+    # Relationship.
+    assert isinstance(test_highlight_tag.batch, ReadwiseBatch)
+    assert test_highlight_tag.batch.id == BATCH_ID
+    assert test_highlight_tag.batch.start_time == START_TIME    
+
+
+@pytest.fixture()
+def test_batch(basic_obj_mem_db_engine: Engine):
+    """A minimal ``ReadwiseBatch`` fetched from the minimal object database."""
+    with Session(basic_obj_mem_db_engine) as clean_session:
+        fetched_batches = clean_session.scalars(select(ReadwiseBatch)).all()
+        test_batch = fetched_batches[0]
+        yield test_batch
+
+
+def test_readwise_batch_created_in_basic_obj_db(test_batch: ReadwiseBatch):
+    assert test_batch.start_time == START_TIME
+    assert test_batch.end_time == END_TIME
+    assert test_batch.database_write_time == DATABASE_WRITE_TIME
+
+
+def test_readwise_batch_relationship_with_book(test_batch: ReadwiseBatch):
+    # Relationship.
+    assert len(test_batch.books) == BATCH_ID
+    assert isinstance(test_batch.books[0], Book)
+    assert test_batch.books[0].user_book_id == BOOK["user_book_id"]
+    
+    assert test_batch.books[0].batch_id == BATCH_ID
+    assert test_batch.books[0].batch.id == BATCH_ID
+
+
+def test_readwise_batch_relationship_with_highlight(test_batch: ReadwiseBatch):
+    # Relationship.
+    assert len(test_batch.highlights) == 2
+    assert isinstance(test_batch.highlights[0], Highlight)
+    assert test_batch.highlights[0].id == HIGHLIGHT_1["id"]  
+    
+    assert test_batch.highlights[0].batch_id == BATCH_ID
+    assert test_batch.highlights[0].batch.id == BATCH_ID
+
+
+def test_readwise_batch_relationship_with_highlight_tag(test_batch: ReadwiseBatch):
+    # Relationship.
+    assert len(test_batch.highlight_tags) == 2
+    assert isinstance(test_batch.highlight_tags[0], HighlightTag)
+    assert test_batch.highlight_tags[0].id == HIGHLIGHT_1_TAG_1["id"]  
+
+    assert test_batch.highlight_tags[0].batch_id == BATCH_ID
+    assert test_batch.highlight_tags[0].batch.id == BATCH_ID
+
+
+# def test_mapped_book_for_a_valid_book
+# test_errors_on_non_null_fields
+
+# def test_mapped_book_for_a_valid_book_retrieves_a_new_object(
+#     mock_book: dict[str, Any], mem_db: DbHandle
+# ):
+#     # SQL Alchemy caches seen objects within a session. Test the object is truly
+#     # retrieved from the database.
+#     mock_book_obj = Book(**mock_book)
+#     with mem_db.session.begin():
+#         mem_db.session.add(mock_book_obj)
+#     with Session(mem_db.engine) as verification_session:
+#         fetched_book = verification_session.get(Book, 1)
+#     assert fetched_book is not mock_book_obj
+
+
+# def test_mapped_book_allocates_primary_keys_correctly(
+#     mock_book: dict[str, Any], mem_db: DbHandle
+# ):
+#     # Create three valid mock books with different user ids.
+#     user_book_ids = [1000, 1999, 1001]
+#     mock_book_objs = []
+#     for user_book_id in user_book_ids:
+#         book_data = mock_book.copy()
+#         book_data["user_book_id"] = user_book_id
+#         mock_book_objs.append(Book(**book_data))
+#     with mem_db.session.begin():
+#         mem_db.session.add_all(mock_book_objs)
+#     with Session(mem_db.engine) as verification_session:
+#         stmt = select(Book.id, Book.title, Book.user_book_id)
+#         result = verification_session.execute(stmt)
+#         actual = result.mappings().all()
+#         expected = [
+#             {"id": 1, "title": "Example Book Title", "user_book_id": 1000},
+#             {"id": 2, "title": "Example Book Title", "user_book_id": 1999},
+#             {"id": 3, "title": "Example Book Title", "user_book_id": 1001},
+#         ]
+#     assert actual == expected
+
+
+# def test_mapped_book_prevents_duplicate_user_book_ids(
+#     mock_book: dict[str, Any], mem_db: DbHandle
+# ):
+#     book_1 = Book(**mock_book)
+#     book_2 = Book(**mock_book)
+#     mem_db.session.add_all([book_1, book_2])
+#     with pytest.raises(IntegrityError):
+#         mem_db.session.commit()
+
+
+# @pytest.mark.parametrize(
+#     "valid_null_field",
+#     [
+#         field
+#         for field in BOOK_SCHEMA_VARIANTS.keys()
+#         if BOOK_SCHEMA_VARIANTS[field]["nullable"]
+#     ],
+# )
+# def test_mapped_book_with_null_values_where_allowed(
+#     valid_null_field: str, mock_book: dict[str, Any], mem_db: DbHandle
+# ):
+#     mock_book[valid_null_field] = None
+#     mock_book_obj = Book(**mock_book)
+#     with mem_db.session.begin():
+#         mem_db.session.add(mock_book_obj)
+#     with Session(mem_db.engine) as verification_session:
+#         fetched_book = verification_session.get(Book, 1)
+#     assert (fetched_book.user_book_id, fetched_book.title) == (
+#         mock_book_obj.user_book_id,
+#         mock_book_obj.title,
+#     )
+
+
+# @pytest.mark.parametrize(
+#     "invalid_null_field",
+#     [
+#         field
+#         for field in BOOK_SCHEMA_VARIANTS.keys()
+#         if not BOOK_SCHEMA_VARIANTS[field]["nullable"]
+#     ],
+# )
+# def test_mapped_book_with_null_values_where_not_allowed(
+#     invalid_null_field: str, mock_book: dict[str, Any], mem_db: DbHandle
+# ):
+#     mock_book[invalid_null_field] = None
+#     mock_book_obj = Book(**mock_book)
+#     with pytest.raises(IntegrityError):
+#         with mem_db.session.begin():
+#             mem_db.session.add(mock_book_obj)
+
+
+# def test_mapped_highlight_for_a_valid_highlight(
+#     mock_book: dict[str, Any], mock_highlight: dict[str, Any], mem_db: DbHandle
+# ):
+#     mock_book_obj = Book(**mock_book)
+#     mock_highlight_obj = Highlight(**mock_highlight)
+#     with mem_db.session.begin():
+#         mem_db.session.add_all([mock_book_obj, mock_highlight_obj])
+#     with Session(mem_db.engine) as verification_session:
+#         fetched_highlight = verification_session.get(Highlight, 1)
+#     assert (fetched_highlight.text, fetched_highlight.book_id) == (
+#         mock_highlight_obj.text,
+#         mock_highlight_obj.book_id,
+#     )
+
+
+# def test_mapped_highlight_prevents_a_missing_book(
+#     mock_highlight: dict[str, Any], mem_db: DbHandle
+# ):
+#     # NOTE: For a SQLite dialect DB, only a connection with foreign key enforcement
+#     # explicitly enabled will pass.
+#     mock_highlight_obj = Highlight(**mock_highlight)
+#     with pytest.raises(IntegrityError, match="FOREIGN KEY constraint failed"):
+#         with mem_db.session.begin():
+#             mem_db.session.add(mock_highlight_obj)
+
+#     fetched_books = result.scalars().all()
+#             for book in fetched_books:
+#                 print(book.__dict__)
 
     # def test_in_memory_dict(mock_book: dict):
     #     engine = create_engine("sqlite:///:memory:", echo=True)
@@ -315,7 +530,7 @@ def test_mapped_highlight_prevents_a_missing_book(
     # dbp = DatabasePopulater(
     #     session, books_and_highlights, start_fetch, end_fetch
     # )
-    pass
+    # pass
 
 
 # def test_convert_to_datetime_valid():

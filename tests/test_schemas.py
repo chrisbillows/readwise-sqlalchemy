@@ -3,12 +3,213 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from readwise_sqlalchemy.sql_alchemy import Book
-from readwise_sqlalchemy.pydantic import BookSchema, HighlightSchema, HighlightTagsSchema
+from readwise_sqlalchemy.schemas import BookSchema, HighlightSchema, HighlightTagsSchema
 
-from .conftest import (
-    BOOK_SCHEMA_VARIANTS, HIGHLIGHT_SCHEMA_VARIANTS, HIGHLIGHT_TAGS_SCHEMA_VARIANTS
-)
+# 'value_invalid_type' is an example of one possible invalid type. It is not exhaustive.
+BOOK_SCHEMA_VARIANTS = {
+    "user_book_id": {
+        "value_valid": 1,
+        "value_invalid_type": "string",
+        "nullable": False,
+    },
+    "title": {
+        "value_valid": "Example Book Title",
+        "value_invalid_type": 100,
+        "nullable": False,
+    },
+    "author": {
+        "value_valid": "Arthur Author",
+        "value_invalid_type": [],
+        "nullable": True,
+    },
+    "readable_title": {
+        "value_valid": "Example Book Title",
+        "value_invalid_type": {},
+        "nullable": False,
+    },
+    "source": {
+        "value_valid": "sauce",
+        "value_invalid_type": "a",
+        "nullable": True,
+    },
+    "cover_image_url": {
+        "value_valid": "http://www.image.com/image.jpg",
+        "value_invalid_type": "not_a_web_address",
+        "nullable": True,
+    },
+    "unique_url": {
+        "value_valid": "http://www.article.com/article",
+        "value_invalid_type": (),
+        "nullable": True,
+    },
+    "summary": {
+        "value_valid": "An example summary",
+        "value_invalid_type": 987,
+        "nullable": True,
+    },
+    "book_tags": {
+        "value_valid": ["yellow", "green"],
+        "value_invalid_type": [1, 2, 3],
+        "nullable": True,  # Field validator converts to []
+    },
+    "category": {
+        "value_valid": "books",
+        "value_invalid_type": "youtube",
+        "nullable": False,
+    },
+    "document_note": {
+        "value_valid": "A string",
+        "value_invalid_type": 1000,
+        "nullable": True,
+    },
+    "readwise_url": {
+        "value_valid": "http://www.readwise.io/book123",
+        "value_invalid_type": "a_normal_string",
+        "nullable": False,
+    },
+    "source_url": {
+        "value_valid": "http://www.source.com/the_source",
+        "value_invalid_type": "a_normal_string",
+        "nullable": True,
+    },
+    "asin": {
+        "value_valid": "A0099BC1Z0",
+        "value_invalid_type": "A00-BC-1Z0",
+        "nullable": True,
+    },
+    "highlights": {
+        "value_valid": [],
+        "value_invalid_type": 123,
+        "nullable": False,
+    },
+}
+
+
+# 'value_invalid_type' is an example of one possible invalid type. It is not exhaustive.
+HIGHLIGHT_SCHEMA_VARIANTS = {
+    "id": {
+        "value_valid": 1,
+        "value_invalid_type": "string",
+        "nullable": False,
+    },
+    "text": {
+        "value_valid": "I am the text of a highlight",
+        "value_invalid_type": 987654321,
+        "nullable": False,
+    },
+    "location": {
+        "value_valid": 12345,
+        "value_invalid_type": "one two three",
+        "nullable": True,
+    },
+    "location_type": {
+        "value_valid": "page",
+        "value_invalid_type": "time",
+        "nullable": True,
+    },
+    "note": {
+        "value_valid": "",
+        "value_invalid_type": [],
+        "nullable": True,
+    },
+    "color": {
+        "value_valid": "yellow",
+        "value_invalid_type": "magenta",
+        "nullable": True,
+    },
+    "highlighted_at": {
+        "value_valid": "2025-01-01T01:02:03.456Z",
+        "value_invalid_type": "2024-13-01T10:20:30.123Z",
+        "nullable": True,
+    },
+    "created_at": {
+        "value_valid": "2025-01-01T01:02:03.456Z",
+        "value_invalid_type": "2024-13-01T10:20:30.123Z",
+        "nullable": True,
+    },
+    "updated_at": {
+        "value_valid": "2025-01-01T01:02:03.456Z",
+        "value_invalid_type": "2024-13-01T10:20:30.123Z",
+        "nullable": True,
+    },
+    "external_id": {
+        "value_valid": "6320b2bd7fbcdd7b0c000b3e",
+        "value_invalid_type": 12345,
+        "nullable": True,
+    },
+    "end_location": {
+        "value_valid": None,
+        "value_invalid_type": 12345,
+        "nullable": True,
+    },
+    "url": {
+        "value_valid": "http://www.url.com",
+        "value_invalid_type": "not-a-url",
+        "nullable": True,
+    },
+    "book_id": {
+        "value_valid": 1,
+        "value_invalid_type": -1,
+        "nullable": False,
+    },
+    "tags": {
+        "value_valid": [],
+        "value_invalid_type": [{"unexpected_field": "value"}],
+        "nullable": True,
+    },
+    "is_favorite": {
+        "value_valid": True,
+        "value_invalid_type": "true",
+        "nullable": True,
+    },
+    "is_discard": {
+        "value_valid": False,
+        "value_invalid_type": "false",
+        "nullable": True,
+    },
+    "readwise_url": {
+        "value_valid": "https://readwise.io/open/123456",
+        "value_invalid_type": "readwise.io/open/123456",
+        "nullable": True,
+    },
+}
+
+# 'value_invalid_type' is an example of one possible invalid type. It is not exhaustive.
+HIGHLIGHT_TAGS_SCHEMA_VARIANTS = {
+    "id": {
+        "value_valid": 123456,
+        "value_invalid_type": "one",
+        "nullable": True,
+    },
+    "name": {
+        "value_valid": "label",
+        "value_invalid_type": 1,
+        "nullable": True,
+    },
+}
+
+
+@pytest.fixture
+def mock_book() -> dict:
+    """Valid Readwise mock book."""
+    fields = BOOK_SCHEMA_VARIANTS.keys()
+    return {field: BOOK_SCHEMA_VARIANTS[field]["value_valid"] for field in fields}
+
+
+@pytest.fixture
+def mock_highlight() -> dict:
+    """Valid Readwise mock highlight."""
+    fields = HIGHLIGHT_SCHEMA_VARIANTS.keys()
+    return {field: HIGHLIGHT_SCHEMA_VARIANTS[field]["value_valid"] for field in fields}
+
+
+@pytest.fixture
+def mock_highlight_tags() -> dict:
+    """Valid Readwise mock highlight tags."""
+    fields = HIGHLIGHT_TAGS_SCHEMA_VARIANTS.keys()
+    return {
+        field: HIGHLIGHT_TAGS_SCHEMA_VARIANTS[field]["value_valid"] for field in fields
+    }
 
 
 def test_highlight_tags_schema_with_valid_values(mock_highlight_tags: dict):
@@ -18,12 +219,12 @@ def test_highlight_tags_schema_with_valid_values(mock_highlight_tags: dict):
 @pytest.mark.parametrize("invalid_field", HIGHLIGHT_TAGS_SCHEMA_VARIANTS.keys())
 def test_highlight_tags_schema_with_invalid_types(
     invalid_field: str, mock_highlight_tags: dict
-): 
+):
     mock_highlight_tags[invalid_field] = HIGHLIGHT_TAGS_SCHEMA_VARIANTS[invalid_field][
         "value_invalid_type"
     ]
     with pytest.raises(ValidationError):
-        HighlightSchema(**mock_highlight_tags)    
+        HighlightSchema(**mock_highlight_tags)
 
 
 @pytest.mark.parametrize(
@@ -71,14 +272,14 @@ def test_highlight_tags_schema_with_missing_fields(
 
 
 def test_highlight_tags_schema_config_with_unexpected_field(mock_highlight_tags: dict):
-    mock_highlight_tags['extra_field'] = None
+    mock_highlight_tags["extra_field"] = None
     with pytest.raises(ValidationError):
         HighlightTagsSchema(**mock_highlight_tags)
 
 
 def test_highlight_schema_with_valid_values(mock_highlight: dict):
     assert HighlightSchema(**mock_highlight)
-       
+
 
 @pytest.mark.parametrize("invalid_field", HIGHLIGHT_SCHEMA_VARIANTS.keys())
 def test_highlight_schema_with_invalid_types(
@@ -87,8 +288,6 @@ def test_highlight_schema_with_invalid_types(
     mock_highlight[invalid_field] = HIGHLIGHT_SCHEMA_VARIANTS[invalid_field][
         "value_invalid_type"
     ]
-    if invalid_field == 'tags':
-        breakpoint()
     with pytest.raises(ValidationError):
         HighlightSchema(**mock_highlight)
 
@@ -136,14 +335,14 @@ def test_highlight_schema_with_missing_fields(
         HighlightSchema(**mock_highlight)
 
 
-def test_highlight_schema_config_with_unexpected_field(mock_highlight:dict):
-    mock_highlight['extra_field'] = None
+def test_highlight_schema_config_with_unexpected_field(mock_highlight: dict):
+    mock_highlight["extra_field"] = None
     with pytest.raises(ValidationError):
         HighlightSchema(**mock_highlight)
 
 
 def test_highlight_replace_null_with_empty_list_for_tags(mock_highlight: dict):
-    mock_highlight['tags'] = None
+    mock_highlight["tags"] = None
     highlight = HighlightSchema(**mock_highlight)
     assert highlight.tags == []
 
@@ -199,17 +398,14 @@ def test_book_schema_with_missing_fields(removed_field: str, mock_book: dict[str
     with pytest.raises(ValidationError):
         BookSchema(**mock_book)
 
-        
+
 def test_book_schema_config_with_unexpected_field(mock_book: dict):
-    mock_book['extra_field'] = None
+    mock_book["extra_field"] = None
     with pytest.raises(ValidationError):
         HighlightSchema(**mock_book)
 
 
 def test_book_replace_null_with_empty_list_for_book_tags(mock_book: dict):
-    mock_book['book_tags'] = None
+    mock_book["book_tags"] = None
     book = BookSchema(**mock_book)
     assert book.book_tags == []
-
-
-

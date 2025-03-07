@@ -1,22 +1,32 @@
+"""
+Pydantic schema for data validation.
+
+Note
+----
+All models pass ``extra=forbid`` which causes unexpected, undefined fields to raise an
+error. Pydantic schema accepted unexpected fields by default.
+
+"""
+
 import json
 from datetime import datetime
 from typing import Optional
 
-from pydantic import AnyUrl, BaseModel, Field, field_validator, HttpUrl
+from pydantic import AnyUrl, BaseModel, Field, HttpUrl, field_validator
 
 
-# `extra=forbid` causes extra fields to raise an error. They are accepted by default. 
-class HighlightTagsSchema(BaseModel, extra='forbid'):
+class HighlightTagsSchema(BaseModel, extra="forbid"):
     """
     Validate 'tags' fields in a HighlightSchema highlight.
     """
-    # Undocumented. Seems likely not null in practice but won't enforce. Default to 
+
+    # Undocumented. Seems likely not null in practice but won't enforce. Default to
     # None in case they aren't both required?
     id: Optional[int] = None
     name: Optional[str] = None
 
 
-class HighlightSchema(BaseModel, extra='forbid'):
+class HighlightSchema(BaseModel, extra="forbid"):
     """
     Validate 'highlights' fields output by the Readwise 'Highlight EXPORT' endpoint.
 
@@ -48,34 +58,34 @@ class HighlightSchema(BaseModel, extra='forbid'):
     end_location: None  # Only example in docs. What is allowed?
     url: Optional[AnyUrl] = Field(max_length=4095)
     book_id: int = Field(gt=0, strict=True)  # See 'user_book_id'.
-    # Undocumented. Assume tags will be strings. Nulls possible, not seen in 
+    # Undocumented. Assume tags will be strings. Nulls possible, not seen in
     # user data and handled @field_validator. Pydantic accepts empty lists by default.
     tags: Optional[list[HighlightTagsSchema]]
     is_favorite: Optional[bool] = Field(strict=True)
     is_discard: Optional[bool] = Field(strict=True)
     readwise_url: Optional[HttpUrl]
-    
-    @field_validator("tags", mode='before')
+
+    @field_validator("tags", mode="before")
     @classmethod
     def replace_null_with_empty_list(cls: BaseModel, value: Optional[list]) -> list:
         """
         Replace a null value with an empty list.
-        
+
         Parameters
         ----------
         cls: BaseModel
             A Pydantic Schema that inherits from ``Pydantic.BaseModel``
-        
+
         Returns
         -------
         list
             The passed value if it's a list, or an empty list.
-        
+
         """
         return value if value else []
 
 
-class BookSchema(BaseModel, extra='forbid'):
+class BookSchema(BaseModel, extra="forbid"):
     """
     Validate books output by the Readwise 'Highlight EXPORT' endpoint.
 
@@ -95,7 +105,7 @@ class BookSchema(BaseModel, extra='forbid'):
     cover_image_url: Optional[HttpUrl] = Field(max_length=2047)  # Used 'image_url'.
     unique_url: Optional[HttpUrl]
     summary: Optional[str]
-    # Undocumented. Assume book_tags will be strings. Nulls possible, not seen in 
+    # Undocumented. Assume book_tags will be strings. Nulls possible, not seen in
     # user data and handled @field_validator.
     book_tags: list[str]
     category: str = Field(pattern="^(books|articles|tweets|podcasts)$")
@@ -107,9 +117,8 @@ class BookSchema(BaseModel, extra='forbid'):
         min_length=10, max_length=10, pattern="^[A-Z0-9]{10}$"
     )  # Used Amazon Standard Identification Number.
     highlights: list[HighlightSchema]
-    
 
-    @field_validator("book_tags", mode='before')
+    @field_validator("book_tags", mode="before")
     @classmethod
     def replace_null_with_empty_list(cls: BaseModel, value: Optional[list]) -> list:
         """
@@ -129,16 +138,11 @@ if __name__ == "__main__":
         try:
             pydantic_book = BookSchema(**book)
             count += 1
-            for highlight in book['highlights']:
-                for highlight_tag in highlight['tags']:
-                    if highlight_tag['name'] == "orange":
+            for highlight in book["highlights"]:
+                for highlight_tag in highlight["tags"]:
+                    if highlight_tag["name"] == "orange":
                         print(highlight_tag)
-                    # id = highlight_tag['id']
-                    # if id not in highlight_ids:
-                    #     highlight_ids.append(id)
-                    # else:
-                    #     reused_highlight_ids.append(id)
-            
+
         except ValueError as err:
             print(f"🚨 Validation error {err} for {book['title']}")
     print(len(highlight_ids))

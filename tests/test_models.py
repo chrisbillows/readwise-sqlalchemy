@@ -1,25 +1,20 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 
 import pytest
-from sqlalchemy import Column, Engine, ForeignKey, Integer, select
+from sqlalchemy import Column, Engine, ForeignKey, Integer, select, inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-
-from readwise_sqlalchemy.sql_alchemy import (
+from readwise_sqlalchemy.models import (
     Base,
     Book,
-    CommaSeparatedList,
     Highlight,
     HighlightTag,
     ReadwiseBatch,
+    CommaSeparatedList,
     safe_create_sqlite_engine,
-    query_db_tables,
 )
-
-from .conftest import BOOK_SCHEMA_VARIANTS
 
 
 def test_safe_create_sqlite_engine():
@@ -111,7 +106,7 @@ BOOK = {"user_book_id": 99, "title": "book_1"}
 
 START_TIME = datetime(2025, 1, 1, 10, 10, 10)
 END_TIME = datetime(2025, 1, 1, 10, 10, 20)
-DATABASE_WRITE_TIME = datetime(2025,1, 1, 10, 10, 22)
+DATABASE_WRITE_TIME = datetime(2025, 1, 1, 10, 10, 22)
 
 # Expected to autoincrement to this value.
 BATCH_ID = 1
@@ -121,45 +116,45 @@ BATCH_ID = 1
 def basic_obj_mem_db_engine(mem_db: DbHandle):
     """
     Engine connected to an in-memory SQLite db with minimal records for all objects.
-    
-    Create a database with related entries for a book, highlights, highlight tags and a 
-    readwise batch. The objects are created with minimal fields. All *relationship* 
+
+    Create a database with related entries for a book, highlights, highlight tags and a
+    readwise batch. The objects are created with minimal fields. All *relationship*
     fields are included to allow testing relationship configurations behave as expected.
-    
+
     Note
     ----
     Constructing objects with minimal field is possible as SQLAlchemy ORM mapped classes
     do not enforce the presence of non-nullable fields.
     """
     batch = ReadwiseBatch(start_time=START_TIME, end_time=END_TIME)
-    
+
     book = Book(**BOOK)
     highlight_1 = Highlight(**HIGHLIGHT_1)
-    highlight_2 = Highlight(**HIGHLIGHT_2)        
+    highlight_2 = Highlight(**HIGHLIGHT_2)
     highlight_1_tag_1 = HighlightTag(**HIGHLIGHT_1_TAG_1)
     highlight_1_tag_2 = HighlightTag(**HIGHLIGHT_1_TAG_2)
 
     highlight_1.tags = [highlight_1_tag_1, highlight_1_tag_2]
     book.highlights = [highlight_1, highlight_2]
-    
+
     batch.books = [book]
     batch.highlights = [highlight_1, highlight_2]
     batch.highlight_tags = [highlight_1_tag_1, highlight_1_tag_2]
-    
+
     with mem_db.session.begin():
         mem_db.session.add(batch)
         # Flush to generate batch id which is no nullable for other objects.
         mem_db.session.flush()
         mem_db.session.add(book)
-        batch.database_write_time = DATABASE_WRITE_TIME    
+        batch.database_write_time = DATABASE_WRITE_TIME
     yield mem_db.engine
-    
+
 
 def test_tables_created_with_basic_obj_db(basic_obj_mem_db_engine: Engine):
     with Session(basic_obj_mem_db_engine) as clean_session:
-        tables = query_db_tables(clean_session)
-        
-        assert tables == ['books', 'highlight_tags', 'highlights', 'readwise_batches']
+        inspector = inspect(clean_session.bind)
+        tables = inspector.get_table_names()
+        assert tables == ["books", "highlight_tags", "highlights", "readwise_batches"]
 
 
 @pytest.fixture()
@@ -178,22 +173,22 @@ def test_book_records_created_with_basic_obj_db(test_book: Book):
 
 def test_book_relationship_with_batch(test_book: Book):
     # Foreign key.
-    assert test_book.batch_id == BATCH_ID       
+    assert test_book.batch_id == BATCH_ID
     # Relationship.
     assert isinstance(test_book.batch, ReadwiseBatch)
     assert test_book.batch.id == BATCH_ID
     assert test_book.batch.start_time == START_TIME
-    
+
     assert test_book.batch.books[0].user_book_id == BOOK["user_book_id"]
 
 
-def test_book_relationship_with_highlights(test_book: Book): 
-    # Relationship.   
+def test_book_relationship_with_highlights(test_book: Book):
+    # Relationship.
     assert len(test_book.highlights) == 2
     assert isinstance(test_book.highlights[0], Highlight)
-    assert test_book.highlights[0].id == HIGHLIGHT_1["id"]        
+    assert test_book.highlights[0].id == HIGHLIGHT_1["id"]
     assert test_book.highlights[0].text == HIGHLIGHT_1["text"]
-    
+
     assert test_book.highlights[0].book.user_book_id == BOOK["user_book_id"]
 
 
@@ -207,7 +202,7 @@ def test_highlight(basic_obj_mem_db_engine: Engine):
 
 
 def test_highlight_records_created_with_basic_obj_db(test_highlight: Highlight):
-    assert test_highlight.id == HIGHLIGHT_1["id"]      
+    assert test_highlight.id == HIGHLIGHT_1["id"]
     assert test_highlight.text == "highlight_1"
 
 
@@ -217,18 +212,18 @@ def test_highlight_relationship_with_book(test_highlight: Highlight):
     # Relationship.
     assert isinstance(test_highlight.book, Book)
     assert test_highlight.book.user_book_id == BOOK["user_book_id"]
-    assert test_highlight.book.title == "book_1" 
-    
-    assert test_highlight.book.highlights[0].id == HIGHLIGHT_1["id"]  
+    assert test_highlight.book.title == "book_1"
 
-        
+    assert test_highlight.book.highlights[0].id == HIGHLIGHT_1["id"]
+
+
 def test_highlight_relationship_with_highlight_tag(test_highlight: Highlight):
     # Relationship.
     assert isinstance(test_highlight.tags[0], HighlightTag)
-    assert test_highlight.tags[0].id == HIGHLIGHT_1_TAG_1["id"]  
+    assert test_highlight.tags[0].id == HIGHLIGHT_1_TAG_1["id"]
     assert test_highlight.tags[0].name == "orange"
-    
-    assert test_highlight.tags[0].highlight.id == HIGHLIGHT_1["id"]  
+
+    assert test_highlight.tags[0].highlight.id == HIGHLIGHT_1["id"]
 
 
 def test_highlight_relationship_with_batch(test_highlight: Highlight):
@@ -238,8 +233,8 @@ def test_highlight_relationship_with_batch(test_highlight: Highlight):
     assert isinstance(test_highlight.batch, ReadwiseBatch)
     assert test_highlight.batch.start_time == datetime(2025, 1, 1, 10, 10, 10)
     assert test_highlight.batch.id == BATCH_ID
-    
-    assert test_highlight.batch.highlights[0].id == HIGHLIGHT_1["id"]  
+
+    assert test_highlight.batch.highlights[0].id == HIGHLIGHT_1["id"]
 
 
 @pytest.fixture()
@@ -252,29 +247,29 @@ def test_highlight_tag(basic_obj_mem_db_engine: Engine):
 
 
 def test_highlight_tags_created_in_basic_obj_db(test_highlight_tag: HighlightTag):
-    assert test_highlight_tag.id == HIGHLIGHT_1_TAG_1["id"]  
-    assert test_highlight_tag.name == HIGHLIGHT_1_TAG_1["name"]  
+    assert test_highlight_tag.id == HIGHLIGHT_1_TAG_1["id"]
+    assert test_highlight_tag.name == HIGHLIGHT_1_TAG_1["name"]
 
 
 def test_highlight_tag_relationship_with_highlight(test_highlight_tag: HighlightTag):
     # Foreign key.
-    assert test_highlight_tag.highlight_id == HIGHLIGHT_1["id"]  
+    assert test_highlight_tag.highlight_id == HIGHLIGHT_1["id"]
     # Relationship.
     assert isinstance(test_highlight_tag.highlight, Highlight)
-    assert test_highlight_tag.highlight.id == HIGHLIGHT_1["id"]  
+    assert test_highlight_tag.highlight.id == HIGHLIGHT_1["id"]
     assert test_highlight_tag.highlight.text == "highlight_1"
-    
-    assert test_highlight_tag.highlight.tags[0].id == HIGHLIGHT_1_TAG_1["id"]  
-    
 
-def test_highlight_tag_relationship_with_batch(test_highlight_tag: HighlightTag):        
+    assert test_highlight_tag.highlight.tags[0].id == HIGHLIGHT_1_TAG_1["id"]
+
+
+def test_highlight_tag_relationship_with_batch(test_highlight_tag: HighlightTag):
     # Foreign key.
     assert test_highlight_tag.batch_id == BATCH_ID
-    
+
     # Relationship.
     assert isinstance(test_highlight_tag.batch, ReadwiseBatch)
     assert test_highlight_tag.batch.id == BATCH_ID
-    assert test_highlight_tag.batch.start_time == START_TIME    
+    assert test_highlight_tag.batch.start_time == START_TIME
 
 
 @pytest.fixture()
@@ -297,7 +292,7 @@ def test_readwise_batch_relationship_with_book(test_batch: ReadwiseBatch):
     assert len(test_batch.books) == BATCH_ID
     assert isinstance(test_batch.books[0], Book)
     assert test_batch.books[0].user_book_id == BOOK["user_book_id"]
-    
+
     assert test_batch.books[0].batch_id == BATCH_ID
     assert test_batch.books[0].batch.id == BATCH_ID
 
@@ -306,8 +301,8 @@ def test_readwise_batch_relationship_with_highlight(test_batch: ReadwiseBatch):
     # Relationship.
     assert len(test_batch.highlights) == 2
     assert isinstance(test_batch.highlights[0], Highlight)
-    assert test_batch.highlights[0].id == HIGHLIGHT_1["id"]  
-    
+    assert test_batch.highlights[0].id == HIGHLIGHT_1["id"]
+
     assert test_batch.highlights[0].batch_id == BATCH_ID
     assert test_batch.highlights[0].batch.id == BATCH_ID
 
@@ -316,7 +311,7 @@ def test_readwise_batch_relationship_with_highlight_tag(test_batch: ReadwiseBatc
     # Relationship.
     assert len(test_batch.highlight_tags) == 2
     assert isinstance(test_batch.highlight_tags[0], HighlightTag)
-    assert test_batch.highlight_tags[0].id == HIGHLIGHT_1_TAG_1["id"]  
+    assert test_batch.highlight_tags[0].id == HIGHLIGHT_1_TAG_1["id"]
 
     assert test_batch.highlight_tags[0].batch_id == BATCH_ID
     assert test_batch.highlight_tags[0].batch.id == BATCH_ID
@@ -442,95 +437,95 @@ def test_readwise_batch_relationship_with_highlight_tag(test_batch: ReadwiseBatc
 #             for book in fetched_books:
 #                 print(book.__dict__)
 
-    # def test_in_memory_dict(mock_book: dict):
-    #     engine = create_engine("sqlite:///:memory:", echo=True)
-    #     session = sessionmaker(engine)
-    #     with session.begin() as conn:
-    #         conn.execute(text("CREATE TABLE some_table (x int, y int)"))
-    #         conn.execute(
-    #             text(
-    #                 "INSERT INTO some_table (x, y) VALUES (:x, :y)"
-    #                 ),
-    #                 [
-    #                     {"x": 1, "y": 1}, {"x": 2, "y": 4}
-    #                 ],
-    #          )
-    #     with engine.connect() as conn:
-    #         result = conn.execute(text("SELECT * FROM some_table"))
-    #         for dict in result.mappings():
-    #             print(dict)
-    #     assert 1 == 2
+# def test_in_memory_dict(mock_book: dict):
+#     engine = create_engine("sqlite:///:memory:", echo=True)
+#     session = sessionmaker(engine)
+#     with session.begin() as conn:
+#         conn.execute(text("CREATE TABLE some_table (x int, y int)"))
+#         conn.execute(
+#             text(
+#                 "INSERT INTO some_table (x, y) VALUES (:x, :y)"
+#                 ),
+#                 [
+#                     {"x": 1, "y": 1}, {"x": 2, "y": 4}
+#                 ],
+#          )
+#     with engine.connect() as conn:
+#         result = conn.execute(text("SELECT * FROM some_table"))
+#         for dict in result.mappings():
+#             print(dict)
+#     assert 1 == 2
 
-    # def test_add_mock_book_to_book_table(mock_book: dict):
-    # book = Book(**mock_book)
-    # test_db_session.add(book)
-    # test_db_session.commit()
-    # assert book.user_book_id is not None
+# def test_add_mock_book_to_book_table(mock_book: dict):
+# book = Book(**mock_book)
+# test_db_session.add(book)
+# test_db_session.commit()
+# assert book.user_book_id is not None
 
-    # TODO: This may not be needed. Decide after adding pydantic.
-    # @pytest.fixture
-    # def empty_database(synthetic_user_config):
-    #     """ """
-    #     create_database(synthetic_user_config.DB)
-    #     session = get_session(synthetic_user_config.DB)
-    #     return session
+# TODO: This may not be needed. Decide after adding pydantic.
+# @pytest.fixture
+# def empty_database(synthetic_user_config):
+#     """ """
+#     create_database(synthetic_user_config.DB)
+#     session = get_session(synthetic_user_config.DB)
+#     return session
 
-    # TODO: This may not be needed. Decide after adding pydantic.
-    # def test_schema(empty_database):
-    # json_data = """
-    # [
-    #     {
-    #         "book_with_one_highlight": {
-    #             "user_book_id": 1,
-    #             "title": "book title",
-    #             "author": "name surname",
-    #             "readable_title": "book title",
-    #             "source": "a source",
-    #             "cover_image_url": "//link/to/image",
-    #             "unique_url": null,
-    #             "summary": null,
-    #             "book_tags": [],
-    #             "category": "books",
-    #             "document_note": null,
-    #             "readwise_url": "https://readwise.io/bookreview/1",
-    #             "source_url": null,
-    #             "asin": null,
-    #             "highlights": [
-    #                 {
-    #                     "id": 10,
-    #                     "text": "The the highlight",
-    #                     "location": 1000,
-    #                     "location_type": "location",
-    #                     "note": "",
-    #                     "color": "yellow",
-    #                     "highlighted_at": "2025-01-01T00:00:00Z",
-    #                     "created_at": "2025-01-01T00:00:00Z",
-    #                     "updated_at": "2025-01-01T00:00:00Z",
-    #                     "external_id": null,
-    #                     "end_location": null,
-    #                     "url": null,
-    #                     "book_id": 1,
-    #                     "tags": [],
-    #                     "is_favorite": false,
-    #                     "is_discard": false,
-    #                     "readwise_url": "https://readwise.io/open/10"
-    #                 }
-    #             ]
-    #         }
-    #     }
-    # ]
-    # """
-    # data = json.loads(json_data)
+# TODO: This may not be needed. Decide after adding pydantic.
+# def test_schema(empty_database):
+# json_data = """
+# [
+#     {
+#         "book_with_one_highlight": {
+#             "user_book_id": 1,
+#             "title": "book title",
+#             "author": "name surname",
+#             "readable_title": "book title",
+#             "source": "a source",
+#             "cover_image_url": "//link/to/image",
+#             "unique_url": null,
+#             "summary": null,
+#             "book_tags": [],
+#             "category": "books",
+#             "document_note": null,
+#             "readwise_url": "https://readwise.io/bookreview/1",
+#             "source_url": null,
+#             "asin": null,
+#             "highlights": [
+#                 {
+#                     "id": 10,
+#                     "text": "The the highlight",
+#                     "location": 1000,
+#                     "location_type": "location",
+#                     "note": "",
+#                     "color": "yellow",
+#                     "highlighted_at": "2025-01-01T00:00:00Z",
+#                     "created_at": "2025-01-01T00:00:00Z",
+#                     "updated_at": "2025-01-01T00:00:00Z",
+#                     "external_id": null,
+#                     "end_location": null,
+#                     "url": null,
+#                     "book_id": 1,
+#                     "tags": [],
+#                     "is_favorite": false,
+#                     "is_discard": false,
+#                     "readwise_url": "https://readwise.io/open/10"
+#                 }
+#             ]
+#         }
+#     }
+# ]
+# """
+# data = json.loads(json_data)
 
-    # with open("tests/data/real/example_books.json", "r") as file_handle:
-    #     content = json.load(file_handle)['book_with_one_highlight']
+# with open("tests/data/real/example_books.json", "r") as file_handle:
+#     content = json.load(file_handle)['book_with_one_highlight']
 
-    # start_fetch = datetime(2025, 1, 1, 1, 0)
-    # end_fetch = datetime(2025, 1, 1, 1, 1)
-    # dbp = DatabasePopulater(
-    #     session, books_and_highlights, start_fetch, end_fetch
-    # )
-    # pass
+# start_fetch = datetime(2025, 1, 1, 1, 0)
+# end_fetch = datetime(2025, 1, 1, 1, 1)
+# dbp = DatabasePopulater(
+#     session, books_and_highlights, start_fetch, end_fetch
+# )
+# pass
 
 
 # def test_convert_to_datetime_valid():

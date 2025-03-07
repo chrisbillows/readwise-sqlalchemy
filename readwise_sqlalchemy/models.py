@@ -1,36 +1,36 @@
 """
 SQLAlchemy mapped classes and associated types and validators.
 
-Readwise primary keys as used as database primary keys throughout for consistency with 
-Readwise object relationships. 
+Readwise primary keys as used as database primary keys throughout for consistency with
+Readwise object relationships.
 
-Pydantic validation is assumed, including ensuring all fields are present. Database 
-column level validation, where used, is not for validation but additional security and 
+Pydantic validation is assumed, including ensuring all fields are present. Database
+column level validation, where used, is not for validation but additional security and
 performance.
 
 Note
 ----
 Some validation may seem to occur, but doesn't:
 
-- Type hints e.g. ``Mapped[int]`` and character limits e.g. ``String(511)`` are not 
-  enforced at runtime by SQLAlchemy. The underlying database dialect may - or may not - 
-  enforce them. SQLite is particularly permissive and enforces neither datatype nor 
+- Type hints e.g. ``Mapped[int]`` and character limits e.g. ``String(511)`` are not
+  enforced at runtime by SQLAlchemy. The underlying database dialect may - or may not -
+  enforce them. SQLite is particularly permissive and enforces neither datatype nor
   character limits.
 
-- Missing fields are accepted and default to None. This only results in an error when 
-  committing to the database and only if the field is ``nullable=False``. 
+- Missing fields are accepted and default to None. This only results in an error when
+  committing to the database and only if the field is ``nullable=False``.
 
 """
-from datetime import datetime
+
 import sqlite3
-from typing import Any, List, Optional
+from datetime import datetime
+from typing import Any, List
 
 from sqlalchemy import (
     Dialect,
     Engine,
     ForeignKey,
     String,
-    Text,
     create_engine,
     event,
     inspect,
@@ -39,9 +39,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
+    Session,
     mapped_column,
     relationship,
-    Session,
 )
 from sqlalchemy.types import TypeDecorator
 
@@ -93,7 +93,7 @@ class CommaSeparatedList(TypeDecorator):
         Returns
         -------
         str
-            A single Python string representing a list of strings as comma separated 
+            A single Python string representing a list of strings as comma separated
             values.
         """
         return "" if not value else ",".join(value)
@@ -108,7 +108,7 @@ class CommaSeparatedList(TypeDecorator):
         Parameters
         ----------
         value: str
-            Data to operate upon, here a string representing a list of strings as comma 
+            Data to operate upon, here a string representing a list of strings as comma
             separated values.
 
         dialect: Dialect
@@ -125,21 +125,22 @@ class CommaSeparatedList(TypeDecorator):
 class Base(DeclarativeBase):
     """
     Subclass SQLAlchemy ``DeclarativeBase`` base class.
-    
-    All ORM Mapped classes should inherit from ``Base``. Tables can then be created 
+
+    All ORM Mapped classes should inherit from ``Base``. Tables can then be created
     with ``Base.metadata.create_all``.
     """
+
     pass
 
 
 class Book(Base):
     """
     Readwise book as a SQL Alchemy ORM Mapped class.
-    
+
     Each instance corresponds to a book dictionary from the Readwise 'Highlight EXPORT'
     endpoint. "books" are the parent objects for all highlights, even those not sourced
     from books. Examples:
-    
+
     +------------+--------------------------------------------------------------------+
     | Source     | Parent Object                                                      |
     +============+====================================================================+
@@ -155,7 +156,7 @@ class Book(Base):
     +------------+--------------------------------------------------------------------+
     | youtube    | Individual videos are treated as an article.                       |
     +------------+--------------------------------------------------------------------+
-    
+
     Attributes
     ----------
     user_book_id : int
@@ -164,14 +165,14 @@ class Book(Base):
         The book's title.
     author: str
         The book's author.
-    
+
     batch_id:
         Foreign key linking the `id` of the associated `ReadwiseBatch`.
-    
+
     highlights: list[Highlight]
         A list of highlights sourced from the book.
     batch: ReadwiseBatch
-        The batch object the book was imported in.    
+        The batch object the book was imported in.
     """
 
     __tablename__ = "books"
@@ -179,12 +180,14 @@ class Book(Base):
     user_book_id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(511), nullable=False)
     author: Mapped[str] = mapped_column(nullable=True)
-    
-    batch_id: Mapped[int] = mapped_column(ForeignKey("readwise_batches.id"), nullable=False)
+
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("readwise_batches.id"), nullable=False
+    )
 
     highlights: Mapped[List["Highlight"]] = relationship(back_populates="book")
     batch: Mapped["ReadwiseBatch"] = relationship(back_populates="books")
-    
+
     def __repr__(self) -> str:
         return (
             f"Book(user_book_id={self.user_book_id!r}, title={self.title!r}, "
@@ -197,16 +200,16 @@ class Highlight(Base):
     Readwise highlight as a SQL Alchemy ORM Mapped class.
 
     Each instance corresponds to a highlight dictionary from the Readwise 'Highlight
-    EXPORT' endpoint. Highlights are text excerpts saved by the user from books, 
+    EXPORT' endpoint. Highlights are text excerpts saved by the user from books,
     articles, or other sources.
-    
+
     Attributes
     ----------
     id : int
         Primary key. Unique identifier sourced from Readwise.
     text: str
         The actual highlighted text content.
-    
+
     user_book_id : int
         Foreign key linking the `user_book_id` of the associated `Book`.
     batch_id : int
@@ -217,16 +220,20 @@ class Highlight(Base):
     tags : list[HighlightTag]
         Tags assigned to this highlight.
     batch : ReadwiseBatch
-        The batch object the highlight was imported in.    
+        The batch object the highlight was imported in.
     """
-    
+
     __tablename__ = "highlights"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     text: Mapped[str] = mapped_column(String(8191), nullable=False)
-    
-    user_book_id: Mapped[int] = mapped_column(ForeignKey("books.user_book_id"), nullable=False)
-    batch_id: Mapped[int] = mapped_column(ForeignKey("readwise_batches.id"), nullable=False)
+
+    user_book_id: Mapped[int] = mapped_column(
+        ForeignKey("books.user_book_id"), nullable=False
+    )
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("readwise_batches.id"), nullable=False
+    )
 
     book: Mapped["Book"] = relationship(back_populates="highlights")
     tags: Mapped[list["HighlightTag"]] = relationship(back_populates="highlight")
@@ -243,9 +250,9 @@ class HighlightTag(Base):
     """
     Readwise highlight tag as a SQL Alchemy ORM Mapped class.
 
-    Each instance corresponds to a highlight tags dictionary from the Readwise 
+    Each instance corresponds to a highlight tags dictionary from the Readwise
     'Highlight EXPORT' endpoint.
-    
+
     Attributes
     ----------
     id : int
@@ -255,32 +262,36 @@ class HighlightTag(Base):
         across tags/highlights. ``id`` is always unique. E.g. Many highlights may be
         tagged ``favourite`` but each ``favourite`` tag  will be associated with its own
         unique ``id``. Group by ``name`` for this attribute.
- 
+
     highlight_id : int
         Foreign key linking the ``id`` of the associated ``Highlight``.
     batch_id : int
         Foreign key linking the `id` of the associated `ReadwiseBatch`.
-    
+
     highlight: Highlight
         The highlight object the tag is associated with.
     batch: ReadwiseBatch
-        The batch object the tag was imported in.    
+        The batch object the tag was imported in.
     """
-    
+
     __tablename__ = "highlight_tags"
-    
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str]
-    
-    highlight_id: Mapped[int] = mapped_column(ForeignKey("highlights.id"), nullable=False)
-    batch_id: Mapped[int] = mapped_column(ForeignKey("readwise_batches.id"), nullable=False)
-    
+
+    highlight_id: Mapped[int] = mapped_column(
+        ForeignKey("highlights.id"), nullable=False
+    )
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("readwise_batches.id"), nullable=False
+    )
+
     highlight: Mapped["Highlight"] = relationship(back_populates="tags")
     batch: Mapped["ReadwiseBatch"] = relationship(back_populates="highlight_tags")
-    
+
     def __repr__(self) -> str:
         return (
-            f"HighlightTag(id={self.id!r}, name={self.name!r}, " 
+            f"HighlightTag(id={self.id!r}, name={self.name!r}, "
             f"h_id={self.highlight_id!r})"
         )
 
@@ -288,7 +299,7 @@ class HighlightTag(Base):
 class ReadwiseBatch(Base):
     """
     A batch of database updates from the Readwise API.
-    
+
     Attributes
     ----------
     id : int
@@ -300,7 +311,7 @@ class ReadwiseBatch(Base):
     database_write_time : Optional[datetime]
         The time the batch was written to the database. Can be None if unset but this is
         intended only to allow this attribute to be added last.
-    
+
     books : list[Book]
         The books included in the batch.
     highlights : list[Highlight]
@@ -308,7 +319,7 @@ class ReadwiseBatch(Base):
     highlight_tags : list[HighlightTag]
         The highlight tags included in the batch.
     """
-    
+
     __tablename__ = "readwise_batches"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -319,7 +330,7 @@ class ReadwiseBatch(Base):
     books: Mapped[list["Book"]] = relationship(back_populates="batch")
     highlights: Mapped[list["Highlight"]] = relationship(back_populates="batch")
     highlight_tags: Mapped[list["HighlightTag"]] = relationship(back_populates="batch")
-    
+
     def __repr__(self) -> str:
         return (
             f"ReadwiseBatch(id={self.id!r}, start={self.start_time!r}, "
@@ -369,7 +380,6 @@ def safe_create_sqlite_engine(sqlite_database: str, echo: bool = False) -> Engin
     return engine
 
 
-
 # def convert_iso_to_datetime(date_str: Any | None) -> datetime | None:
 #     """Convert an ISO 8601 string to a datetime object."""
 #     return datetime.fromisoformat(date_str.replace("Z", "+00:00")) if date_str else None
@@ -381,19 +391,19 @@ def safe_create_sqlite_engine(sqlite_database: str, echo: bool = False) -> Engin
 
 # Cut from book in a bad decision
 
-    # readable_title: Mapped[str] = mapped_column(nullable=False)
-    # source: Mapped[str] = mapped_column(nullable=True)
-    # cover_image_url: Mapped[str] = mapped_column(nullable=True)
-    # unique_url: Mapped[str] = mapped_column(nullable=True)
-    # summary: Mapped[str] = mapped_column(nullable=True)
-    # category: Mapped[str] = mapped_column(nullable=True)
-    # document_note: Mapped[str] = mapped_column(nullable=True)
-    # readwise_url: Mapped[str] = mapped_column(nullable=True)
-    # source_url: Mapped[str] = mapped_column(nullable=True)
-    # book_tags: Mapped[list[str]] = mapped_column(CommaSeparatedList, nullable=False)
-    # asin: Mapped[Optional[str]] = mapped_column(nullable=True)
-    # book_tags: Mapped[Optional[List[str]]] = mapped_column(
-    # CommaSeparatedList, nullable=True )    
+# readable_title: Mapped[str] = mapped_column(nullable=False)
+# source: Mapped[str] = mapped_column(nullable=True)
+# cover_image_url: Mapped[str] = mapped_column(nullable=True)
+# unique_url: Mapped[str] = mapped_column(nullable=True)
+# summary: Mapped[str] = mapped_column(nullable=True)
+# category: Mapped[str] = mapped_column(nullable=True)
+# document_note: Mapped[str] = mapped_column(nullable=True)
+# readwise_url: Mapped[str] = mapped_column(nullable=True)
+# source_url: Mapped[str] = mapped_column(nullable=True)
+# book_tags: Mapped[list[str]] = mapped_column(CommaSeparatedList, nullable=False)
+# asin: Mapped[Optional[str]] = mapped_column(nullable=True)
+# book_tags: Mapped[Optional[List[str]]] = mapped_column(
+# CommaSeparatedList, nullable=True )
 
 
 # class Highlight(Base):
@@ -620,17 +630,15 @@ def safe_create_sqlite_engine(sqlite_database: str, echo: bool = False) -> Engin
 #         return None
 
 
-def query_db_tables(session: Session) -> list:
+def query_db_tables(session: Session) -> list[str] | None:
     """Test query for getting a result back."""
-    if session.bind is None:
-        raise ValueError("The session is not bound to an engine or connection.")
     inspector = inspect(session.bind)
     tables = inspector.get_table_names()
     print("Tables in the database:", tables)
     return tables
 
 
-def query_books_table(session: Session) -> list:
+def query_books_table(session: Session) -> list[Book] | None:
     """Test query for getting a result back."""
     stmt = select(Book).limit(10)
     result = session.execute(stmt).scalars().all()

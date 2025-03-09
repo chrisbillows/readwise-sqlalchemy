@@ -1,11 +1,12 @@
 """
 Logic for writing updates to the DB
 """
-from pathlib import Path
+
 import sqlite3
+from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Engine, create_engine, event, inspect, select
+from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from readwise_sqlalchemy.models import Base
@@ -238,4 +239,3 @@ def get_session(database_path: str | Path) -> Session:
 #         return result.database_write_time
 #     else:
 #         return None
-

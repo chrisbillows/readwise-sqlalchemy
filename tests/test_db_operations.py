@@ -2,13 +2,13 @@ import sqlite3
 
 import pytest
 from sqlalchemy import Column, ForeignKey, Integer
-from sqlalchemy.orm import DeclarativeBase, Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import DeclarativeBase, Session
 
 from readwise_sqlalchemy.db_operations import (
-    safe_create_sqlite_engine,
     create_database,
     get_session,
+    safe_create_sqlite_engine,
 )
 
 
@@ -272,4 +272,3 @@ def test_get_session_database_url(mock_user_config):
 #             "book_id": 46095532,
 #         }
 #         assert expected.items() <= actual.items()
-

@@ -3,9 +3,12 @@ Pydantic schema for data validation.
 
 Note
 ----
-All models pass ``extra=forbid`` which causes unexpected, undefined fields to raise an
-error. Pydantic schema accepted unexpected fields by default.
-
+- Where a schema attribute has a defined ``Field`` - e.g. ``Field(max_length=8191)``
+  this indicates there is documentation for the attribute. Many attributes are not
+  documented. (See: https://readwise.io/api_deets). Assumptions about attributes are
+  noted as inline comments.
+- All models pass ``extra=forbid`` which causes unexpected, undefined fields to raise an
+  error. Pydantic schema accepted unexpected fields by default.
 """
 
 import json
@@ -32,12 +35,10 @@ class HighlightSchema(BaseModel, extra="forbid"):
 
     Notes
     -----
-    - A defined 'Field' indicates the key is documented. Most keys are not documented.
-      See: https://readwise.io/api_deets
     - The documentation states 'text' is "technically the only field required" for a
       highlight. However, 'id' and 'book_id' are assumed to be required in practice
       which is enforced by the schema.
-    - Values allowed by the schema and commented 'undocumented' were observed in user
+    - Values defined by the schema and commented 'undocumented' were observed in user
       data.
     """
 
@@ -60,10 +61,11 @@ class HighlightSchema(BaseModel, extra="forbid"):
     book_id: int = Field(gt=0, strict=True)  # See 'user_book_id'.
     # Undocumented. Assume tags will be strings. Nulls possible, not seen in
     # user data and handled @field_validator. Pydantic accepts empty lists by default.
-    tags: Optional[list[HighlightTagsSchema]]
     is_favorite: Optional[bool] = Field(strict=True)
     is_discard: Optional[bool] = Field(strict=True)
     readwise_url: Optional[HttpUrl]
+
+    tags: Optional[list[HighlightTagsSchema]]
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -88,11 +90,6 @@ class HighlightSchema(BaseModel, extra="forbid"):
 class BookSchema(BaseModel, extra="forbid"):
     """
     Validate books output by the Readwise 'Highlight EXPORT' endpoint.
-
-    Notes
-    -----
-    A defined 'Field' indicates the key is documented. Most of the keys are not
-    documented. See: https://readwise.io/api_deets
     """
 
     user_book_id: int = Field(
@@ -116,6 +113,7 @@ class BookSchema(BaseModel, extra="forbid"):
     asin: Optional[str] = Field(
         min_length=10, max_length=10, pattern="^[A-Z0-9]{10}$"
     )  # Used Amazon Standard Identification Number.
+
     highlights: list[HighlightSchema]
 
     @field_validator("book_tags", mode="before")

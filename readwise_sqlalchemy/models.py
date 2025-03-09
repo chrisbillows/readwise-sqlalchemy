@@ -1,16 +1,17 @@
 """
 SQLAlchemy ORM models, associated types and validators.
 
-Readwise primary keys as used as database primary keys throughout for consistency with
+The models Book, Highlight, HighlightTag and ReadwiseBatch are nested and intended to
+be used in unison.
+
+Readwise primary keys are used as database primary keys throughout for consistency with
 Readwise object relationships.
 
-Pydantic validation is assumed, including ensuring all fields are present. Database
-column level validation, where used, is not for validation but additional security and
-performance.
+Readwise API responses assume and rely upon Pydantic validation.
 
-Note
-----
-Some validation may seem to occur, but doesn't:
+Note on ORM validation
+----------------------
+Mapped classes may seem to validate things that they actually don't:
 
 - Type hints e.g. ``Mapped[int]`` and character limits e.g. ``String(511)`` are not
   enforced at runtime by SQLAlchemy. The underlying database dialect may - or may not -
@@ -21,8 +22,9 @@ Some validation may seem to occur, but doesn't:
   committing to the database and only if the field is ``nullable=False``.
 
 """
+
 from datetime import datetime
-from typing import Any, List
+from typing import Optional
 
 from sqlalchemy import Dialect, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -67,10 +69,10 @@ class CommaSeparatedList(TypeDecorator):
 
         Parameters
         ----------
-        value: list[str]
+        value : list[str]
             Data to operate upon, here a list of strings.
 
-        dialect: Dialect
+        dialect : Dialect
             The SQL Dialect in use.
 
         Returns
@@ -120,6 +122,11 @@ class Book(Base):
     """
     Readwise book as a SQL Alchemy ORM Mapped class.
 
+    Validation is enforced in the Pydantic layer only. For example, the class will
+    accept null values for all fields, aside from the primary key - even those fields
+    which should never be null. Using API data directly with this class may result in
+    unexpected behaviour and it not recommended.
+
     Each instance corresponds to a book dictionary from the Readwise 'Highlight EXPORT'
     endpoint. "books" are the parent objects for all highlights, even those not sourced
     from books. Examples:
@@ -148,6 +155,27 @@ class Book(Base):
         The book's title.
     author: str
         The book's author.
+    readable_title :
+
+    source : str
+
+    cover_image_url : str
+
+    unique_url : str
+
+    summary : str
+
+    book_tags : list[str]
+
+    category : str
+
+    document_note : str
+
+    readwise_url : str
+
+    source_url : str
+
+    asin : str
 
     batch_id:
         Foreign key linking the `id` of the associated `ReadwiseBatch`.
@@ -161,14 +189,23 @@ class Book(Base):
     __tablename__ = "books"
 
     user_book_id: Mapped[int] = mapped_column(primary_key=True)
-    title: Mapped[str] = mapped_column(String(511), nullable=False)
-    author: Mapped[str] = mapped_column(nullable=True)
+    title: Mapped[Optional[str]] = mapped_column()
+    author: Mapped[Optional[str]] = mapped_column()
+    readable_title: Mapped[Optional[str]] = mapped_column()
+    source: Mapped[Optional[str]] = mapped_column()
+    cover_image_url: Mapped[Optional[str]] = mapped_column()
+    unique_url: Mapped[Optional[str]] = mapped_column()
+    summary: Mapped[Optional[str]] = mapped_column()
+    book_tags: Mapped[Optional[str]] = mapped_column(CommaSeparatedList)
+    category: Mapped[Optional[str]] = mapped_column()
+    document_note: Mapped[Optional[str]] = mapped_column()
+    readwise_url: Mapped[Optional[str]] = mapped_column()
+    source_url: Mapped[Optional[str]] = mapped_column()
+    asin: Mapped[Optional[str]] = mapped_column()
 
-    batch_id: Mapped[int] = mapped_column(
-        ForeignKey("readwise_batches.id"), nullable=False
-    )
+    batch_id: Mapped[int] = mapped_column(ForeignKey("readwise_batches.id"))
 
-    highlights: Mapped[List["Highlight"]] = relationship(back_populates="book")
+    highlights: Mapped[list["Highlight"]] = relationship(back_populates="book")
     batch: Mapped["ReadwiseBatch"] = relationship(back_populates="books")
 
     def __repr__(self) -> str:
@@ -185,6 +222,11 @@ class Highlight(Base):
     Each instance corresponds to a highlight dictionary from the Readwise 'Highlight
     EXPORT' endpoint. Highlights are text excerpts saved by the user from books,
     articles, or other sources.
+
+    Validation is enforced in the Pydantic layer only. For example, the class will
+    accept null values for all fields, aside from the primary key - even those fields
+    which should never be null. Using API data directly with this class may result in
+    unexpected behaviour and is not recommended.
 
     Attributes
     ----------
@@ -209,9 +251,22 @@ class Highlight(Base):
     __tablename__ = "highlights"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    text: Mapped[str] = mapped_column(String(8191), nullable=False)
+    text: Mapped[str] = mapped_column(String(8191))
+    location: Mapped[Optional[int]] = mapped_column()
+    location_type: Mapped[Optional[str]] = mapped_column()
+    note: Mapped[Optional[str]] = mapped_column()
+    color: Mapped[Optional[str]] = mapped_column()
+    highlighted_at: Mapped[Optional[datetime]] = mapped_column()
+    created_at: Mapped[Optional[datetime]] = mapped_column()
+    updated_at: Mapped[Optional[datetime]] = mapped_column()
+    external_id: Mapped[Optional[str]] = mapped_column()
+    end_location: Mapped[Optional[int]] = mapped_column()
+    url: Mapped[Optional[str]] = mapped_column()
+    is_favorite: Mapped[Optional[bool]] = mapped_column()
+    is_discard: Mapped[Optional[bool]] = mapped_column()
+    readwise_url: Mapped[Optional[str]] = mapped_column()
 
-    user_book_id: Mapped[int] = mapped_column(
+    book_id: Mapped[int] = mapped_column(
         ForeignKey("books.user_book_id"), nullable=False
     )
     batch_id: Mapped[int] = mapped_column(
@@ -223,10 +278,17 @@ class Highlight(Base):
     batch: Mapped["ReadwiseBatch"] = relationship(back_populates="highlights")
 
     def __repr__(self) -> str:
-        return (
-            f"Highlight(id={self.id!r}, book_id={self.user_book_id!r}, "
-            f"text={self.text!r}, book={self.book.user_book_id!r})"
-        )
+        parts = [f"Highlight(id={self.id!r}"]
+        if self.book:
+            parts.append(f"book={self.book.title!r}")
+        if self.text:
+            truncated_highlight_txt = (
+                self.text[:30] + "..." if len(self.text) > 30 else self.text
+            )
+            parts.append(f"text={truncated_highlight_txt!r}")
+        else:
+            parts.append(f"text={self.text!r}")
+        return ", ".join(parts) + ")"
 
 
 class HighlightTag(Base):
@@ -235,6 +297,11 @@ class HighlightTag(Base):
 
     Each instance corresponds to a highlight tags dictionary from the Readwise
     'Highlight EXPORT' endpoint.
+
+    Validation is enforced in the Pydantic layer only. For example, the class will
+    accept null values for all fields, aside from the primary key - even those fields
+    which should never be null. Using API data directly with this class may result in
+    unexpected behaviour and is not recommended.
 
     Attributes
     ----------
@@ -273,15 +340,14 @@ class HighlightTag(Base):
     batch: Mapped["ReadwiseBatch"] = relationship(back_populates="highlight_tags")
 
     def __repr__(self) -> str:
-        return (
-            f"HighlightTag(id={self.id!r}, name={self.name!r}, "
-            f"h_id={self.highlight_id!r})"
-        )
+        return f"HighlightTag(name={self.name!r}, id={self.id!r})"
 
 
 class ReadwiseBatch(Base):
     """
     A batch of database updates from the Readwise API.
+
+    This is not API data, therefore validation is performed here.
 
     Attributes
     ----------
@@ -315,72 +381,22 @@ class ReadwiseBatch(Base):
     highlight_tags: Mapped[list["HighlightTag"]] = relationship(back_populates="batch")
 
     def __repr__(self) -> str:
-        return (
-            f"ReadwiseBatch(id={self.id!r}, start={self.start_time!r}, "
-            f"end={self.end_time!r}, write={self.database_write_time!r})"
-        )
+        parts = [f"ReadwiseBatch(id={self.id!r}"]
+        parts.append(f"books={len(self.books)}")
+        parts.append(f"highlights={len(self.highlights)}")
+        parts.append(f"highlight_tags={len(self.highlight_tags)}")
+        if self.start_time:
+            parts.append(f"start={self.start_time.isoformat()}")
+        if self.end_time:
+            parts.append(f"end={self.end_time.isoformat()}")
+        if self.database_write_time:
+            parts.append(f"write={self.database_write_time.isoformat()}")
+        return ", ".join(parts) + ")"
 
 
 # def convert_iso_to_datetime(date_str: Any | None) -> datetime | None:
 #     """Convert an ISO 8601 string to a datetime object."""
 #     return datetime.fromisoformat(date_str.replace("Z", "+00:00")) if date_str else None
 
-
 # class Base(DeclarativeBase):
 #     __allow_unmapped__ = True
-
-
-# Cut from book in a bad decision
-
-# readable_title: Mapped[str] = mapped_column(nullable=False)
-# source: Mapped[str] = mapped_column(nullable=True)
-# cover_image_url: Mapped[str] = mapped_column(nullable=True)
-# unique_url: Mapped[str] = mapped_column(nullable=True)
-# summary: Mapped[str] = mapped_column(nullable=True)
-# category: Mapped[str] = mapped_column(nullable=True)
-# document_note: Mapped[str] = mapped_column(nullable=True)
-# readwise_url: Mapped[str] = mapped_column(nullable=True)
-# source_url: Mapped[str] = mapped_column(nullable=True)
-# book_tags: Mapped[list[str]] = mapped_column(CommaSeparatedList, nullable=False)
-# asin: Mapped[Optional[str]] = mapped_column(nullable=True)
-# book_tags: Mapped[Optional[List[str]]] = mapped_column(
-# CommaSeparatedList, nullable=True )
-
-
-# class Highlight(Base):
-#     __tablename__ = "highlights"
-
-#     id: Mapped[int] = mapped_column(primary_key=True)
-#     book_id: Mapped[int] = mapped_column(
-#         ForeignKey("books.user_book_id"), nullable=False
-#     )
-#     text: Mapped[str] = mapped_column(nullable=False)
-#     location: Mapped[Optional[int]] = mapped_column(nullable=True)
-#     location_type: Mapped[Optional[str]] = mapped_column(nullable=True)
-#     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-#     color: Mapped[Optional[str]] = mapped_column(nullable=True)
-#     highlighted_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-#     created_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-#     updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-#     external_id: Mapped[Optional[str]] = mapped_column(nullable=True)
-#     end_location: Mapped[Optional[int]] = mapped_column(nullable=True)
-#     url: Mapped[Optional[str]] = mapped_column(nullable=True)
-#     is_favorite: Mapped[bool] = mapped_column(default=False)
-#     is_discard: Mapped[bool] = mapped_column(default=False)
-#     readwise_url: Mapped[Optional[str]] = mapped_column(nullable=True)
-#     tags: Mapped[Optional[List[dict[Any, Any]]]] = mapped_column(
-#         JSONEncodedList, nullable=True
-#     )
-
-#     book: Mapped["Book"] = relationship(back_populates="highlights")
-
-
-# class ReadwiseBatch(Base):
-#     __tablename__ = "readwise_batches"
-
-#     batch_id: Mapped[int] = mapped_column(primary_key=True)
-#     start_time: Mapped[datetime] = mapped_column(nullable=False)
-#     end_time: Mapped[datetime] = mapped_column(nullable=False)
-#     database_write_time: Mapped[datetime] = mapped_column(nullable=False)
-
-

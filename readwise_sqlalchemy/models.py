@@ -122,65 +122,82 @@ class Book(Base):
     """
     Readwise book as a SQL Alchemy ORM Mapped class.
 
-    Validation is enforced in the Pydantic layer only. For example, the class will
-    accept null values for all fields, aside from the primary key - even those fields
-    which should never be null. Using API data directly with this class may result in
-    unexpected behaviour and it not recommended.
+    *WARNING* Using unvalidated API data directly with this class may result in
+    unexpected behaviour and is not recommended. Validation is enforced in the Pydantic
+    layer only. For example, this ORM class will accept null values for all fields -
+    even those fields which should never be null. (Except the primary key which will not
+    accept a null).
 
-    Each instance corresponds to a book dictionary from the Readwise 'Highlight EXPORT'
-    endpoint. "books" are the parent objects for all highlights, even those not sourced
-    from books. Examples:
+    Each class instance corresponds to a book dictionary from the Readwise
+    'Highlight EXPORT' endpoint. "books" are parent object for all highlights, even
+    those not sourced from books. Examples:
 
-    +------------+--------------------------------------------------------------------+
-    | Source     | Parent Object                                                      |
-    +============+====================================================================+
-    | book       | Book                                                               |
-    +------------+--------------------------------------------------------------------+
-    | x.post     | "Tweets from @<user>". Saved posts are highlights in that entry.   |
-    +------------+--------------------------------------------------------------------+
-    | x.thread   | Threads are parent objects. Titles are text from the first post.   |
-    +------------+--------------------------------------------------------------------+
-    | podcast    | The podcast episode.                                               |
-    +------------+--------------------------------------------------------------------+
-    | article    | The article.                                                       |
-    +------------+--------------------------------------------------------------------+
-    | youtube    | Individual videos are treated as an article.                       |
-    +------------+--------------------------------------------------------------------+
+    +----------------+----------------------------------------------------------------+
+    | Source         | Parent Object                                                  |
+    +================+================================================================+
+    | book           | book                                                           |
+    +----------------+----------------------------------------------------------------+
+    | twitter post   | A user's Tweets are considered a "book". E.g the book title    |
+    |                | will be "Tweets from @<user>". Each saved post will be a       |
+    |                | highlight in that 'book'.                                      |
+    +----------------+----------------------------------------------------------------+
+    | twitter thread | Individual threads are parents. The "book" title will be       |
+    |                | truncated text from the first post.                            |
+    +----------------+----------------------------------------------------------------+
+    | podcast        | The podcast episode. (The podcast name is the 'author' field.) |
+    +----------------+----------------------------------------------------------------+
+    | article        | The article.                                                   |
+    +----------------+----------------------------------------------------------------+
+    | youtube        | Individual videos are treated as an article. (The channel name |
+    |                | is the 'author' field).                                        |
+    +----------------+----------------------------------------------------------------+
+
+    (Twitter/X is referenced as Twitter, consistent with the Readwise API, March 2025).
 
     Attributes
     ----------
     user_book_id : int
         Primary key. Unique identifier sourced from Readwise.
     title: str
-        The book's title.
+        The title of the parent object. E.g. Book title, twitter thread first post,
+        podcast episode title etc.
     author: str
-        The book's author.
-    readable_title :
-
+        The article, tweet or article author, YouTube video creator, podcaster etc.
+    readable_title : str
+        The title, capitalized and tidied up. Reliably present (2993 out of 2993 sample
+        user records).
     source : str
-
+        A single word name for source of the object e.g ``Kindle``, ``twitter``,
+        ``api_article`` etc.
     cover_image_url : str
-
+        Link to the cover image. Set automatically by Readwise when highlighting via
+        most methods. Seems to use native links where logical (e.g. Amazon, Twitter).
     unique_url : str
-
+        Varies by input method. For example, ``"source": "web_clipper"`` may give a
+        link to the original source document (i.e. the same link as ``source_url``).
+        ``"source": "reader"`` may give the Readwise Reader link.
     summary : str
-
+        Document summaries can be added in Readwise Reader.
     book_tags : list[str]
         A list of user defined tags, applied to the parent object. These are distinct
-        from highlight tags.
+        from highlight tags. (i.e. "arch_btw" could exist separately at a book and
+        highlight level).
     category : str
-
+        A pre-defined Readwise category. Allowed values: ``books``, ``articles``,
+        ``tweets``, ``podcasts``.
     document_note : str
-        Document Notes are added in Readwise Reader via the Notebook side panel.
+        Can be added in Readwise Reader via the Notebook side panel.
     readwise_url : str
-        Readwise URL link to the parent object.
+        The Readwise URL link to the "book"/parent object.
     source_url : str
         Link to the URL of the original source, if applicable. E.g. the Twitter account
         of the author, the original article etc.
     asin : str
+        Not documented but Amazon Standard Identification Number. Only for Kindle
+        highlights.
 
     batch_id:
-        Foreign key linking the `id` of the associated `ReadwiseBatch`.
+        Foreign key linking the ``id`` of the associated ``ReadwiseBatch``.
 
     highlights : list[Highlight]
         A list of highlights sourced from the book.
@@ -221,31 +238,63 @@ class Highlight(Base):
     """
     Readwise highlight as a SQL Alchemy ORM Mapped class.
 
+    *WARNING* Using unvalidated API data directly with this class may result in
+    unexpected behaviour and is not recommended. Validation is enforced in the Pydantic
+    layer only. For example, this ORM class will accept null values for all fields -
+    even those fields which should never be null. (Except the primary key which will not
+    accept a null).
+
     Each instance corresponds to a highlight dictionary from the Readwise 'Highlight
     EXPORT' endpoint. Highlights are text excerpts saved by the user from books,
     articles, or other sources.
-
-    Validation is enforced in the Pydantic layer only. For example, the class will
-    accept null values for all fields, aside from the primary key - even those fields
-    which should never be null. Using API data directly with this class may result in
-    unexpected behaviour and is not recommended.
 
     Attributes
     ----------
     id : int
         Primary key. Unique identifier sourced from Readwise.
-    text: str
-        The actual highlighted text content.
+    text : str
+        The actual highlighted text content. Maximum length is 8191 characters.
+    location : int
+        Location if applicable. E.g. Kindle location, podcast/YouTube timestamp etc.
+    location_type : str
+        The type of location e.g. '``offset``, ``time_offset``, ``order``, ``location``,
+        ``page`` (there may be others).
+    note : str
+        User notes added to the highlight.
+    color : str
+        Highlight color. Colors seen in user data: ``yellow``, ``pink``, ``orange``,
+        ``blue``, ``purple``, ``green``.
+    highlighted_at : datetime
+        Time user made the highlight.
+    created_at : datetime
+        Time the highlight was added to the database.
+    updated_at : datetime
+        Time the highlight was edited (assumedly via the Readwise site or API).
+    external_id :
+        Seems to be the ID of highlight in the source service, where applicable.
+        E.g. Readwise, Reader, ibooks, pocket, snipd, airr etc.
+    end_location :
+        Unknown. Always null in user data samples. Docs only show it as as null.
+    url :
+        Link to the highlight in the source service, where applicable. E.g. Readwise,
+        Reader, ibooks, pocket, snipd, airr etc.
+    is_favourite :
+        User favourites highlight.
+    is_discard :
+        Is discarded by the user, presumably during "Readwise Daily Review".
+     readwise_url :
+        The Readwise URL link to the highlight.
 
-    user_book_id : int
-        Foreign key linking the `user_book_id` of the associated `Book`.
+    book_id : int
+        Foreign key linking the `user_book_id` of the associated `Book`. ``book_id`` is
+        the Readwise key name, retained for consistency with the Readwise API.
     batch_id : int
         Foreign key linking the `id` of the associated `ReadwiseBatch`.
 
     book : Book
-        The book that this highlight belongs to.
+        The book the highlight belongs to.
     tags : list[HighlightTag]
-        Tags assigned to this highlight.
+        Tags the user has assigned to this highlight.
     batch : ReadwiseBatch
         The batch object the highlight was imported in.
     """
@@ -297,13 +346,14 @@ class HighlightTag(Base):
     """
     Readwise highlight tag as a SQL Alchemy ORM Mapped class.
 
-    Each instance corresponds to a highlight tags dictionary from the Readwise
-    'Highlight EXPORT' endpoint.
+    *WARNING* Using unvalidated API data directly with this class may result in
+    unexpected behaviour and is not recommended. Validation is enforced in the Pydantic
+    layer only. For example, this ORM class will accept null values for all fields -
+    even those fields which should never be null. (Except the primary key which will not
+    accept a null).
 
-    Validation is enforced in the Pydantic layer only. For example, the class will
-    accept null values for all fields, aside from the primary key - even those fields
-    which should never be null. Using API data directly with this class may result in
-    unexpected behaviour and is not recommended.
+    Each class instance corresponds to a highlight tags dictionary from the Readwise
+    'Highlight EXPORT' endpoint.
 
     Attributes
     ----------
@@ -311,18 +361,18 @@ class HighlightTag(Base):
         Primary key. Unique identifier sourced from Readwise.
     name : str
         The name of the tag. Each tag has an id and name. ``name``s are often common
-        across tags/highlights. ``id`` is always unique. E.g. Many highlights may be
+        across tags/highlights but ``id`` is always unique. E.g. Many highlights may be
         tagged ``favourite`` but each ``favourite`` tag  will be associated with its own
-        unique ``id``. Group by ``name`` for this attribute.
+        unique ``id``. Therefore, group by ``name`` for this attribute.
 
     highlight_id : int
         Foreign key linking the ``id`` of the associated ``Highlight``.
     batch_id : int
         Foreign key linking the `id` of the associated `ReadwiseBatch`.
 
-    highlight: Highlight
+    highlight : Highlight
         The highlight object the tag is associated with.
-    batch: ReadwiseBatch
+    batch : ReadwiseBatch
         The batch object the tag was imported in.
     """
 
@@ -349,7 +399,7 @@ class ReadwiseBatch(Base):
     """
     A batch of database updates from the Readwise API.
 
-    This is not API data, therefore validation is performed here.
+    This is not API data, therefore validation is performed here in the ORM layer.
 
     Attributes
     ----------

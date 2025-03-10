@@ -166,42 +166,44 @@ class Book(Base):
     summary : str
 
     book_tags : list[str]
-
+        A list of user defined tags, applied to the parent object. These are distinct
+        from highlight tags.
     category : str
 
     document_note : str
-
+        Document Notes are added in Readwise Reader via the Notebook side panel.
     readwise_url : str
-
+        Readwise URL link to the parent object.
     source_url : str
-
+        Link to the URL of the original source, if applicable. E.g. the Twitter account
+        of the author, the original article etc.
     asin : str
 
     batch_id:
         Foreign key linking the `id` of the associated `ReadwiseBatch`.
 
-    highlights: list[Highlight]
+    highlights : list[Highlight]
         A list of highlights sourced from the book.
-    batch: ReadwiseBatch
+    batch : ReadwiseBatch
         The batch object the book was imported in.
     """
 
     __tablename__ = "books"
 
     user_book_id: Mapped[int] = mapped_column(primary_key=True)
-    title: Mapped[Optional[str]] = mapped_column()
-    author: Mapped[Optional[str]] = mapped_column()
-    readable_title: Mapped[Optional[str]] = mapped_column()
-    source: Mapped[Optional[str]] = mapped_column()
-    cover_image_url: Mapped[Optional[str]] = mapped_column()
-    unique_url: Mapped[Optional[str]] = mapped_column()
-    summary: Mapped[Optional[str]] = mapped_column()
+    title: Mapped[Optional[str]]
+    author: Mapped[Optional[str]]
+    readable_title: Mapped[Optional[str]]
+    source: Mapped[Optional[str]]
+    cover_image_url: Mapped[Optional[str]]
+    unique_url: Mapped[Optional[str]]
+    summary: Mapped[Optional[str]]
     book_tags: Mapped[Optional[str]] = mapped_column(CommaSeparatedList)
-    category: Mapped[Optional[str]] = mapped_column()
-    document_note: Mapped[Optional[str]] = mapped_column()
-    readwise_url: Mapped[Optional[str]] = mapped_column()
-    source_url: Mapped[Optional[str]] = mapped_column()
-    asin: Mapped[Optional[str]] = mapped_column()
+    category: Mapped[Optional[str]]
+    document_note: Mapped[Optional[str]]
+    readwise_url: Mapped[Optional[str]]
+    source_url: Mapped[Optional[str]]
+    asin: Mapped[Optional[str]]
 
     batch_id: Mapped[int] = mapped_column(ForeignKey("readwise_batches.id"))
 
@@ -252,19 +254,19 @@ class Highlight(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     text: Mapped[str] = mapped_column(String(8191))
-    location: Mapped[Optional[int]] = mapped_column()
-    location_type: Mapped[Optional[str]] = mapped_column()
-    note: Mapped[Optional[str]] = mapped_column()
-    color: Mapped[Optional[str]] = mapped_column()
-    highlighted_at: Mapped[Optional[datetime]] = mapped_column()
-    created_at: Mapped[Optional[datetime]] = mapped_column()
-    updated_at: Mapped[Optional[datetime]] = mapped_column()
-    external_id: Mapped[Optional[str]] = mapped_column()
-    end_location: Mapped[Optional[int]] = mapped_column()
-    url: Mapped[Optional[str]] = mapped_column()
-    is_favorite: Mapped[Optional[bool]] = mapped_column()
-    is_discard: Mapped[Optional[bool]] = mapped_column()
-    readwise_url: Mapped[Optional[str]] = mapped_column()
+    location: Mapped[Optional[int]]
+    location_type: Mapped[Optional[str]]
+    note: Mapped[Optional[str]]
+    color: Mapped[Optional[str]]
+    highlighted_at: Mapped[Optional[datetime]]
+    created_at: Mapped[Optional[datetime]]
+    updated_at: Mapped[Optional[datetime]]
+    external_id: Mapped[Optional[str]]
+    end_location: Mapped[Optional[int]]
+    url: Mapped[Optional[str]]
+    is_favorite: Mapped[Optional[bool]]
+    is_discard: Mapped[Optional[bool]]
+    readwise_url: Mapped[Optional[str]]
 
     book_id: Mapped[int] = mapped_column(
         ForeignKey("books.user_book_id"), nullable=False
@@ -327,7 +329,7 @@ class HighlightTag(Base):
     __tablename__ = "highlight_tags"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str]
+    name: Mapped[str] = mapped_column(String(512))
 
     highlight_id: Mapped[int] = mapped_column(
         ForeignKey("highlights.id"), nullable=False

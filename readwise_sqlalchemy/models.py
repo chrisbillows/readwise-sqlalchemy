@@ -115,7 +115,9 @@ class Base(DeclarativeBase):
     with ``Base.metadata.create_all``.
     """
 
-    pass
+    # This is required to avoid mypy erros. See:
+    # https://docs.sqlalchemy.org/en/20/changelog/migration_20.html#migration-to-2-0-step-six-add-allow-unmapped-to-explicitly-typed-orm-models
+    __allow_unmapped__ = True
 
 
 class Book(Base):
@@ -449,6 +451,3 @@ class ReadwiseBatch(Base):
 # def convert_iso_to_datetime(date_str: Any | None) -> datetime | None:
 #     """Convert an ISO 8601 string to a datetime object."""
 #     return datetime.fromisoformat(date_str.replace("Z", "+00:00")) if date_str else None
-
-# class Base(DeclarativeBase):
-#     __allow_unmapped__ = True

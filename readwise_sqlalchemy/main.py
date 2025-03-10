@@ -7,12 +7,11 @@ from typing import Any
 import requests
 from dotenv import load_dotenv
 
-# from readwise_sqlalchemy.sql_alchemy import (
-#     DatabasePopulater,
-#     create_database,
-#     get_session,
-#     query_get_last_fetch,
-# )
+from readwise_sqlalchemy.db_operations import (
+    create_database,
+    get_session,
+    query_get_last_fetch,
+)
 
 
 class MissingEnvironmentFile(Exception):
@@ -173,10 +172,10 @@ def main() -> None:
         "/Users/chrisbillows/Documents/CODE/MY_GITHUB_REPOS/readwise-sqlalchemy/tests/data/real/sample_updated_25th_nov_to_26th_nov.json"
     )
     end_fetch = datetime.now()
-    dbp = DatabasePopulater(session, data, start_fetch, end_fetch)
-    print(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
-    dbp.populate_database()
-    print("Database contains all Readwise highlights to date")
+    # dbp = DatabasePopulater(session, data, start_fetch, end_fetch)
+    # print(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
+    # dbp.populate_database()
+    # print("Database contains all Readwise highlights to date")
 
 
 if __name__ == "__main__":

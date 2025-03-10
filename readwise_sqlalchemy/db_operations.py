@@ -3,13 +3,14 @@ Logic for writing updates to the DB
 """
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Engine, create_engine, event
+from sqlalchemy import Engine, create_engine, desc, event, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from readwise_sqlalchemy.models import Base
+from readwise_sqlalchemy.models import Base, ReadwiseBatch
 
 
 def safe_create_sqlite_engine(sqlite_database: str, echo: bool = False) -> Engine:
@@ -229,13 +230,13 @@ def get_session(database_path: str | Path) -> Session:
 #         self.session.add(highlight_obj)
 
 
-# def query_get_last_fetch(session: Session) -> datetime | None:
-#     """Get the last fetch."""
-#     stmt = (
-#         select(ReadwiseBatch).order_by(desc(ReadwiseBatch.database_write_time)).limit(1)
-#     )
-#     result = session.execute(stmt).scalars().first()
-#     if result:
-#         return result.database_write_time
-#     else:
-#         return None
+def query_get_last_fetch(session: Session) -> datetime | None:
+    """Get the last fetch."""
+    stmt = (
+        select(ReadwiseBatch).order_by(desc(ReadwiseBatch.database_write_time)).limit(1)
+    )
+    result = session.execute(stmt).scalars().first()
+    if result:
+        return result.database_write_time
+    else:
+        return None

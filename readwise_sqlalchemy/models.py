@@ -446,8 +446,3 @@ class ReadwiseBatch(Base):
         if self.database_write_time:
             parts.append(f"write={self.database_write_time.isoformat()}")
         return ", ".join(parts) + ")"
-
-
-# def convert_iso_to_datetime(date_str: Any | None) -> datetime | None:
-#     """Convert an ISO 8601 string to a datetime object."""
-#     return datetime.fromisoformat(date_str.replace("Z", "+00:00")) if date_str else None

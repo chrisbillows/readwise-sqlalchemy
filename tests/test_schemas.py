@@ -5,43 +5,6 @@ from pydantic import ValidationError
 
 from readwise_sqlalchemy.schemas import BookSchema
 
-EXPECTED_TYPES_PER_FIELD = {
-    "book": {
-        "string": [
-            "title",
-            "author",
-            "readable_title",
-            "source",
-            "summary",
-            "document_note",
-            "cover_image_url",
-            "readwise_url",
-            "source_url",
-            "unique_url",
-        ],
-        "int": ["user_book_id"],
-        "list_of_strings": ["book_tags"],
-        "choice_category": ["category"],
-        "asin": ["asin"],
-    },
-    "highlight": {
-        "string": [
-            "text",
-            "location_type",
-            "note",
-            "external_id",
-            "url",
-            "readwise_url",
-        ],
-        "int": ["id", "location", "end_location", "book_id"],
-        "bool": ["is_favorite", "is_discard"],
-        "iso_string": ["highlighted_at", "created_at", "updated_at"],
-        "choice_color": ["color"],
-        "list_of_highlight_tags": ["tags"],
-    },
-    "highlight_tag": {"int": ["id"], "string": ["name"]},
-}
-
 
 def mock_api_response():
     """
@@ -96,13 +59,62 @@ def mock_api_response():
     ]
 
 
-def test_expected_types_per_field_vs_mock_api_fields_match_for_book():
+def expected_types_per_field() -> dict:
+    """
+    A dictionary grouping fields by expected type and by object.
+
+    Used for dynamically generating test cases. Use a function rather than a constant
+    to ensure test isolation.
+
+    Returns
+    -------
+    dict[str, dict[str, list]]
+        Nested dictionary in the form ``{"object_name": {"type": [field, field ...]}}``.
+    """
+    return {
+        "book": {
+            "string": [
+                "title",
+                "author",
+                "readable_title",
+                "source",
+                "summary",
+                "document_note",
+                "cover_image_url",
+                "readwise_url",
+                "source_url",
+                "unique_url",
+            ],
+            "int": ["user_book_id"],
+            "list_of_strings": ["book_tags"],
+            "choice_category": ["category"],
+            "asin": ["asin"],
+            "list_of_highlights": ["highlights"],
+        },
+        "highlight": {
+            "string": [
+                "text",
+                "location_type",
+                "note",
+                "external_id",
+                "url",
+                "readwise_url",
+            ],
+            "int": ["id", "location", "end_location", "book_id"],
+            "bool": ["is_favorite", "is_discard"],
+            "iso_string": ["highlighted_at", "created_at", "updated_at"],
+            "choice_color": ["color"],
+            "list_of_highlight_tags": ["tags"],
+        },
+        "highlight_tag": {"int": ["id"], "string": ["name"]},
+    }
+
+
+def test_book_fields_in_test_objects_match():
     book_fields_mock_api_response = list(mock_api_response()[0].keys())
-    # Has it's own dict in ``EXPECTED_TYPES_PER_FIELD``
-    book_fields_mock_api_response.remove("highlights")
 
     book_fields_expected_types_dict = []
-    for list_of_fields in EXPECTED_TYPES_PER_FIELD["book"].values():
+    for list_of_fields in expected_types_per_field()["book"].values():
         book_fields_expected_types_dict.extend(list_of_fields)
 
     assert sorted(book_fields_mock_api_response) == sorted(
@@ -110,16 +122,32 @@ def test_expected_types_per_field_vs_mock_api_fields_match_for_book():
     )
 
 
-def test_expected_types_per_field_vs_mock_api_fields_match_for_highlight():
-    # mock_highlight_fields = mock_api_response()[0]["highlights"][0].keys()
-    assert 1 == 1
+def test_highlight_fields_in_test_objects_match():
+    highlight_fields_mock_api_response = list(
+        mock_api_response()[0]["highlights"][0].keys()
+    )
+
+    highlight_fields_expected_types_dict = []
+    for list_of_fields in expected_types_per_field()["highlight"].values():
+        highlight_fields_expected_types_dict.extend(list_of_fields)
+
+    assert sorted(highlight_fields_mock_api_response) == sorted(
+        highlight_fields_expected_types_dict
+    )
 
 
-def test_expected_types_per_field_vs_mock_api_fields_match_for_highlight_tag():
-    # mock_highlight_tag_fields = mock_api_response()[0]["highlights"][0]["tags"][
-    #     0
-    # ].keys()
-    assert 1 == 1
+def test_highlight_tags_fields_in_test_objects_match():
+    highlight_tag_fields_mock_api_response = mock_api_response()[0]["highlights"][0][
+        "tags"
+    ][0].keys()
+
+    highlight_tag_fields_expected_types_dict = []
+    for list_of_fields in expected_types_per_field()["highlight_tag"].values():
+        highlight_tag_fields_expected_types_dict.extend(list_of_fields)
+
+    assert sorted(highlight_tag_fields_mock_api_response) == sorted(
+        highlight_tag_fields_expected_types_dict
+    )
 
 
 def test_nested_schemas_configuration_with_valid_values():
@@ -175,23 +203,14 @@ def generate_invalid_values_test_cases() -> list[tuple[str, Union[str, int], str
     invalid_values = {
         "string": [123, [123], [], ["a"], {}],
         "int": ["a", "123", [], ["a", "b"], {}],
-        "list_of_strings": [
-            [1, 2],
-            "a",
-        ],
+        "list_of_strings": [[1, 2], "a"],
         "choice_category": [],
         "asin": ["a", 1, "1a2b3c4d"],
         "choice_color": [123, [123], [], ["a"], {}],
         "iso_string": [],
-        "bool": [
-            0,
-            1,
-            "a",
-            [],
-            ["a"],
-            {},
-        ],
-        "list_of_highlight_tags": [{"a": 1, "b": 2}],
+        "bool": [0, 1, "a", [], ["a"], {}],
+        "list_of_highlight_tags": [123, "abc", [{"a": 1, "b": 2}]],
+        "list_of_highlights": [123, "abc", [{"a": 1, "b": 2}]],
     }
 
     path_to_dict = {
@@ -201,7 +220,7 @@ def generate_invalid_values_test_cases() -> list[tuple[str, Union[str, int], str
     }
 
     test_cases = []
-    for obj, field_group in EXPECTED_TYPES_PER_FIELD.items():
+    for obj, field_group in expected_types_per_field().items():
         for expected_type, fields in field_group.items():
             for field in fields:
                 for invalid_value in invalid_values[expected_type]:

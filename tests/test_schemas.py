@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Union
 
 import pytest
@@ -150,13 +151,53 @@ def test_highlight_tags_fields_in_test_objects_match():
     )
 
 
-def test_nested_schemas_configuration_with_valid_values():
+def test_valid_values_nested_schema_configuration():
     mock_book_with_hl_and_hl_tag = mock_api_response()[0]
     assert BookSchema(**mock_book_with_hl_and_hl_tag)
 
 
-def test_nested_schemas_configuration_model_dump_output():
-    pass
+def test_valid_values_nested_schema_model_dump_output():
+    mock_book_with_hl_and_hl_tag = mock_api_response()[0]
+    book_schema = BookSchema(**mock_book_with_hl_and_hl_tag)
+    model_dump = book_schema.model_dump()
+    expected = {
+        "user_book_id": 12345,
+        "title": "book title",
+        "author": "name surname",
+        "readable_title": "Book Title",
+        "source": "web_clipper",
+        "cover_image_url": "https://link/to/image",
+        "unique_url": "http://the.source.url.ai",
+        "summary": None,
+        "book_tags": ["arch_btw"],
+        "category": "books",
+        "document_note": "A note added in Readwise Reader",
+        "readwise_url": "https://readwise.io/bookreview/12345",
+        "source_url": "http://the.source.url.ai",
+        "asin": None,
+        "highlights": [
+            {
+                "id": 10,
+                "text": "The highlight text",
+                "location": 1000,
+                "location_type": "location",
+                "note": "",
+                "color": "yellow",
+                "highlighted_at": datetime(2025, 1, 1, 0, 1),
+                "created_at": datetime(2025, 1, 1, 0, 1, 10),
+                "updated_at": datetime(2025, 1, 1, 0, 1, 20),
+                "external_id": None,
+                "end_location": None,
+                "url": None,
+                "book_id": 12345,
+                "is_favorite": False,
+                "is_discard": False,
+                "readwise_url": "https://readwise.io/open/10",
+                "tags": [{"id": 97654, "name": "favourite"}],
+            }
+        ],
+    }
+    assert model_dump == expected
 
 
 def change_nested_dict_value(

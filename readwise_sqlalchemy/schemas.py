@@ -65,7 +65,7 @@ class HighlightSchema(BaseModel, extra="forbid", strict=True):
     # and handled by @field_validator. Pydantic accepts empty lists by default.
     is_favorite: Optional[bool]
     is_discard: Optional[bool]
-    readwise_url: Optional[HttpUrl]
+    readwise_url: Optional[str]
 
     tags: Optional[list[HighlightTagsSchema]]
 

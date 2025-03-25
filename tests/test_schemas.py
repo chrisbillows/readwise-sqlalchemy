@@ -19,7 +19,7 @@ PATH_TO_OBJ = {
 # ----------------
 
 
-def mock_api_response():
+def mock_api_response() -> list[dict[str, Any]]:
     """
     Mock a Readwise 'Highlight EXPORT' endpoint ``response.json()["results"]`` output.
 
@@ -28,7 +28,7 @@ def mock_api_response():
 
     Returns
     -------
-    list[dict]
+    list[dict[str, Any]]
         A list of dictionaries where each dictionary is a Readwise book with highlights.
     """
     return [
@@ -76,7 +76,7 @@ def change_nested_dict_value(
     base_dict: dict, path: list[Union[str, int]], field: str, value: Any
 ) -> dict:
     """
-    Update a nested dictionary by following a path and setting a field to a new value.
+    Update a value in a nested dictionary in place by following a given path.
 
     Parameters
     ----------
@@ -101,17 +101,18 @@ def change_nested_dict_value(
     return base_dict
 
 
-def expected_types_per_field() -> dict:
+def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
     """
-    A dictionary grouping fields by expected type and by object.
+    A dictionary grouping schema fields by expected type and by schema object.
 
     Used for dynamically generating test cases. Use a function rather than a constant
     to ensure test isolation.
 
     Returns
     -------
-    dict[str, dict[str, list]]
-        Nested dictionary in the form ``{"object_name": {"type": [field, field ...]}}``.
+    dict[str, dict[str, list[str]]]
+        Nested dictionary in the form ``{"object_name": {"expected_type": [field,
+        field ...]}}``.
     """
     return {
         "book": {
@@ -152,17 +153,17 @@ def expected_types_per_field() -> dict:
     }
 
 
-def generate_invalid_values_test_cases() -> list[tuple[str, Union[str, int], str]]:
+def generate_invalid_field_values_test_cases() -> (
+    list[tuple[str, Union[str, int], str]]
+):
     """
     Generate parametrized test cases to check the configuration of invalid values.
 
     Returns
     -------
     list[tuple[str, Union[str, int], str]]
-        A list of tuples of
-
-        (field, path_to_dict, invalid_value)
-
+        A list of test cases where each test case is a tuple in the form ``(field,
+        path_to_dict, invalid_value)``.
     """
     invalid_values = {
         "string": [123, [123], [], ["a"], {}],
@@ -178,7 +179,7 @@ def generate_invalid_values_test_cases() -> list[tuple[str, Union[str, int], str
     }
 
     test_cases = []
-    for obj, field_group in expected_types_per_field().items():
+    for obj, field_group in expected_type_per_schema_field().items():
         for expected_type, fields in field_group.items():
             for field in fields:
                 for invalid_value in invalid_values[expected_type]:
@@ -187,15 +188,15 @@ def generate_invalid_values_test_cases() -> list[tuple[str, Union[str, int], str
     return test_cases
 
 
-def generate_field_nullability_test_cases() -> dict[list[str]]:
+def generate_field_nullability_test_cases() -> dict[str, list[tuple]]:
     """
     Generate parametrized test cases to check field nullability configurations.
 
     Returns
     -------
-    dict[list[str]]
-         A dictionary with the form: ``{"object_name": ["non_nullable_field",
-         "non_nullable_field" ...]}``.
+    dict[str[list[tuple]]]
+        A dictionary with the keys ``error`` and ``pass``. The values for each are a
+        list of test cases in the form ``(field, path_to_field)``.
     """
     non_nullable_fields = {
         "book": [
@@ -232,18 +233,11 @@ def generate_field_nullability_test_cases() -> dict[list[str]]:
 # --------------------------
 
 
-def test_change_nested_dict_value():
-    test_dict = {"k1": [{"k2": [{}, {"k3": "value"}]}]}
-    path_to_v2 = ["k1", 0, "k2", 1]
-    change_nested_dict_value(test_dict, path_to_v2, "k3", "changed_value")
-    assert test_dict == {"k1": [{"k2": [{}, {"k3": "changed_value"}]}]}
-
-
 def test_book_fields_in_test_objects_match():
     book_fields_mock_api_response = list(mock_api_response()[0].keys())
 
     book_fields_expected_types_dict = []
-    for list_of_fields in expected_types_per_field()["book"].values():
+    for list_of_fields in expected_type_per_schema_field()["book"].values():
         book_fields_expected_types_dict.extend(list_of_fields)
 
     assert sorted(book_fields_mock_api_response) == sorted(
@@ -257,7 +251,7 @@ def test_highlight_fields_in_test_objects_match():
     )
 
     highlight_fields_expected_types_dict = []
-    for list_of_fields in expected_types_per_field()["highlight"].values():
+    for list_of_fields in expected_type_per_schema_field()["highlight"].values():
         highlight_fields_expected_types_dict.extend(list_of_fields)
 
     assert sorted(highlight_fields_mock_api_response) == sorted(
@@ -271,7 +265,7 @@ def test_highlight_tags_fields_in_test_objects_match():
     ][0].keys()
 
     highlight_tag_fields_expected_types_dict = []
-    for list_of_fields in expected_types_per_field()["highlight_tag"].values():
+    for list_of_fields in expected_type_per_schema_field()["highlight_tag"].values():
         highlight_tag_fields_expected_types_dict.extend(list_of_fields)
 
     assert sorted(highlight_tag_fields_mock_api_response) == sorted(
@@ -279,8 +273,15 @@ def test_highlight_tags_fields_in_test_objects_match():
     )
 
 
-def test_generate_invalid_values_test_cases():
-    test_cases = generate_invalid_values_test_cases()
+def test_change_nested_dict_value():
+    test_dict = {"k1": [{"k2": [{}, {"k3": "value"}]}]}
+    path_to_v2 = ["k1", 0, "k2", 1]
+    change_nested_dict_value(test_dict, path_to_v2, "k3", "changed_value")
+    assert test_dict == {"k1": [{"k2": [{}, {"k3": "changed_value"}]}]}
+
+
+def test_generate_invalid_field_values_test_cases():
+    test_cases = generate_invalid_field_values_test_cases()
     assert test_cases[0] == ("title", [], 123)
 
 
@@ -296,12 +297,12 @@ def test_generate_field_nullability_test_cases():
 # -----
 
 
-def test_valid_values_nested_schema_configuration():
+def test_nested_schema_configuration_with_valid_values():
     mock_book_with_hl_and_hl_tag = mock_api_response()[0]
     assert BookSchema(**mock_book_with_hl_and_hl_tag)
 
 
-def test_valid_values_nested_schema_model_dump_output():
+def test_nested_schema_model_dump_output():
     mock_book_with_hl_and_hl_tag = mock_api_response()[0]
     book_schema = BookSchema(**mock_book_with_hl_and_hl_tag)
     model_dump = book_schema.model_dump()
@@ -346,9 +347,10 @@ def test_valid_values_nested_schema_model_dump_output():
 
 
 @pytest.mark.parametrize(
-    "target_field, path_to_dict, invalid_value", generate_invalid_values_test_cases()
+    "target_field, path_to_dict, invalid_value",
+    generate_invalid_field_values_test_cases(),
 )
-def test_invalid_values_nested_schema_configuration(
+def test_nested_schema_configuration_with_invalid_values(
     target_field: str, path_to_dict: list[Union[str, int]], invalid_value: Any
 ):
     valid_mock_book_with_hl_and_hl_tag = mock_api_response()[0]
@@ -362,7 +364,9 @@ def test_invalid_values_nested_schema_configuration(
 @pytest.mark.parametrize(
     "field_to_null, path_to_dict", generate_field_nullability_test_cases()["pass"]
 )
-def test_fields_allow_null(field_to_null: str, path_to_dict: list[Union[str, int]]):
+def test_nested_schema_configuration_fields_allow_null(
+    field_to_null: str, path_to_dict: list[Union[str, int]]
+):
     valid_mock_book_with_hl_and_hl_tag = mock_api_response()[0]
     change_nested_dict_value(
         valid_mock_book_with_hl_and_hl_tag, path_to_dict, field_to_null, None
@@ -373,7 +377,9 @@ def test_fields_allow_null(field_to_null: str, path_to_dict: list[Union[str, int
 @pytest.mark.parametrize(
     "field_to_null, path_to_dict", generate_field_nullability_test_cases()["error"]
 )
-def test_fields_error_for_null(field_to_null: str, path_to_dict: list[Union[str, int]]):
+def test_nested_schema_configuration_fields_error_for_null(
+    field_to_null: str, path_to_dict: list[Union[str, int]]
+):
     valid_mock_book_with_hl_and_hl_tag = mock_api_response()[0]
     change_nested_dict_value(
         valid_mock_book_with_hl_and_hl_tag, path_to_dict, field_to_null, None
@@ -423,21 +429,21 @@ def test_additional_highlight_field_raises_error():
         BookSchema(**mock_book)
 
 
-def test_additional_highlight_tag_field_does_not_raise_error():
+def test_additional_highlight_tag_field_raises_error():
     mock_book = mock_api_response()[0]
     mock_book["highlights"][0]["tags"][0]["extra_field"] = None
     with pytest.raises(ValidationError):
         BookSchema(**mock_book)
 
 
-def test_book_field_validator_replace_null_with_empty_list():
+def test_book_field_validator_replaces_null_with_an_empty_list():
     mock_book = mock_api_response()[0]
     mock_book["book_tags"] = None
     book_schema = BookSchema(**mock_book)
     assert book_schema.book_tags == []
 
 
-def test_highlight_field_validator_replace_null_with_empty_list():
+def test_highlight_field_validator_replaces_null_with_an_empty_list():
     mock_book = mock_api_response()[0]
     mock_highlight = mock_book["highlights"][0]
     mock_highlight["tags"] = None

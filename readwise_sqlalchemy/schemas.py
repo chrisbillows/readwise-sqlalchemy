@@ -1,5 +1,13 @@
 """
-Pydantic schema for data validation.
+Pydantic schema for verifying data types.
+
+The schema defines the datatypes to expect for each field - while being permissive
+enough to accept ALL real Readwise user data. The objective is to make reliable promises
+about datatypes - not to reject "bad" data.
+
+For example, URL fields are verified as strings, not URLs. This indicates a valid URL
+cannot be guaranteed. Downstream use of the data may benefit from additional validation
+or error handling. (User data contained one record that failed URL validation).
 
 Note
 ----
@@ -17,7 +25,7 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class HighlightTagsSchema(BaseModel, extra="forbid", strict=True):

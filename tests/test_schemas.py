@@ -4,7 +4,7 @@ from typing import Any, Union
 import pytest
 from pydantic import ValidationError
 
-from readwise_sqlalchemy.schemas import BookSchema
+from readwise_sqlalchemy.schemas import BookSchema, HighlightSchema
 
 # Mutate dictionary values in place with ``change_nested_dict_value``.
 PATH_TO_OBJ = {
@@ -430,12 +430,16 @@ def test_additional_highlight_tag_field_does_not_raise_error():
         BookSchema(**mock_book)
 
 
-# def test_highlight_replace_null_with_empty_list_for_tags(mock_highlight: dict):
-#     mock_highlight["tags"] = None
-#     highlight = HighlightSchema(**mock_highlight)
-#     assert highlight.tags == []
+def test_book_field_validator_replace_null_with_empty_list():
+    mock_book = mock_api_response()[0]
+    mock_book["book_tags"] = None
+    book_schema = BookSchema(**mock_book)
+    assert book_schema.book_tags == []
 
-# def test_book_replace_null_with_empty_list_for_book_tags(mock_book: dict):
-#     mock_book["book_tags"] = None
-#     book = BookSchema(**mock_book)
-#     assert book.book_tags == []
+
+def test_highlight_field_validator_replace_null_with_empty_list():
+    mock_book = mock_api_response()[0]
+    mock_highlight = mock_book["highlights"][0]
+    mock_highlight["tags"] = None
+    highlight_schema = HighlightSchema(**mock_highlight)
+    assert highlight_schema.tags == []

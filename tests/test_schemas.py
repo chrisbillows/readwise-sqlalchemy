@@ -409,28 +409,25 @@ def test_missing_highlight_tag_fields_do_not_raise_errors(field_to_remove: str):
     BookSchema(**mock_book)
 
 
-# # Raise if any field is missing.
-# @pytest.mark.parametrize(
-#     "removed_field", [field for field in HIGHLIGHT_TAGS_SCHEMA_VARIANTS.keys()]
-# )
-# def test_highlight_tags_schema_with_missing_fields(
-#     removed_field: str, mock_highlight_tags: dict[str, Any]
-# ):
-#     del mock_highlight_tags[removed_field]
-#     # Missing fields are intended to be allowed.
-#     HighlightTagsSchema(**mock_highlight_tags)
+def test_additional_book_field_raises_error():
+    mock_book = mock_api_response()[0]
+    mock_book["extra_field"] = None
+    with pytest.raises(ValidationError):
+        BookSchema(**mock_book)
 
 
-# def test_highlight_tags_schema_config_with_unexpected_field(mock_highlight_tags: dict):
-#     mock_highlight_tags["extra_field"] = None
-#     with pytest.raises(ValidationError):
-#         HighlightTagsSchema(**mock_highlight_tags)
+def test_additional_highlight_field_raises_error():
+    mock_book = mock_api_response()[0]
+    mock_book["highlights"][0]["extra_field"] = None
+    with pytest.raises(ValidationError):
+        BookSchema(**mock_book)
 
 
-# def test_highlight_schema_config_with_unexpected_field(mock_highlight: dict):
-#     mock_highlight["extra_field"] = None
-#     with pytest.raises(ValidationError):
-#         HighlightSchema(**mock_highlight)
+def test_additional_highlight_tag_field_does_not_raise_error():
+    mock_book = mock_api_response()[0]
+    mock_book["highlights"][0]["tags"][0]["extra_field"] = None
+    with pytest.raises(ValidationError):
+        BookSchema(**mock_book)
 
 
 # def test_highlight_replace_null_with_empty_list_for_tags(mock_highlight: dict):
@@ -442,9 +439,3 @@ def test_missing_highlight_tag_fields_do_not_raise_errors(field_to_remove: str):
 #     mock_book["book_tags"] = None
 #     book = BookSchema(**mock_book)
 #     assert book.book_tags == []
-
-
-# def test_book_schema_config_with_unexpected_field(mock_book: dict):
-#     mock_book["extra_field"] = None
-#     with pytest.raises(ValidationError):
-#         HighlightSchema(**mock_book)

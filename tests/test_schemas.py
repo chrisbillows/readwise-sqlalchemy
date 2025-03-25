@@ -304,8 +304,8 @@ def test_nested_schema_configuration_with_valid_values():
 
 def test_nested_schema_model_dump_output():
     mock_book_with_hl_and_hl_tag = mock_api_response()[0]
-    book_schema = BookSchema(**mock_book_with_hl_and_hl_tag)
-    model_dump = book_schema.model_dump()
+    book_as_schema = BookSchema(**mock_book_with_hl_and_hl_tag)
+    model_dump = book_as_schema.model_dump()
     expected = {
         "user_book_id": 12345,
         "title": "book title",

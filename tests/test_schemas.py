@@ -382,6 +382,33 @@ def test_fields_error_for_null(field_to_null: str, path_to_dict: list[Union[str,
         BookSchema(**valid_mock_book_with_hl_and_hl_tag)
 
 
+@pytest.mark.parametrize("field_to_remove", mock_api_response()[0].keys())
+def test_missing_book_fields_raise_errors(field_to_remove: str):
+    mock_book = mock_api_response()[0]
+    del mock_book[field_to_remove]
+    with pytest.raises(ValidationError):
+        BookSchema(**mock_book)
+
+
+@pytest.mark.parametrize(
+    "field_to_remove", mock_api_response()[0]["highlights"][0].keys()
+)
+def test_missing_highlight_fields_raise_errors(field_to_remove: str):
+    mock_book = mock_api_response()[0]
+    del mock_book["highlights"][0][field_to_remove]
+    with pytest.raises(ValidationError):
+        BookSchema(**mock_book)
+
+
+@pytest.mark.parametrize(
+    "field_to_remove", mock_api_response()[0]["highlights"][0]["tags"][0].keys()
+)
+def test_missing_highlight_tag_fields_do_not_raise_errors(field_to_remove: str):
+    mock_book = mock_api_response()[0]
+    del mock_book["highlights"][0]["tags"][0][field_to_remove]
+    BookSchema(**mock_book)
+
+
 # # Raise if any field is missing.
 # @pytest.mark.parametrize(
 #     "removed_field", [field for field in HIGHLIGHT_TAGS_SCHEMA_VARIANTS.keys()]
@@ -400,18 +427,6 @@ def test_fields_error_for_null(field_to_null: str, path_to_dict: list[Union[str,
 #         HighlightTagsSchema(**mock_highlight_tags)
 
 
-# # Raise if any field is missing.
-# @pytest.mark.parametrize(
-#     "removed_field", [field for field in HIGHLIGHT_SCHEMA_VARIANTS.keys()]
-# )
-# def test_highlight_schema_with_missing_fields(
-#     removed_field: str, mock_highlight: dict[str, Any]
-# ):
-#     del mock_highlight[removed_field]
-#     with pytest.raises(ValidationError):
-#         HighlightSchema(**mock_highlight)
-
-
 # def test_highlight_schema_config_with_unexpected_field(mock_highlight: dict):
 #     mock_highlight["extra_field"] = None
 #     with pytest.raises(ValidationError):
@@ -423,24 +438,13 @@ def test_fields_error_for_null(field_to_null: str, path_to_dict: list[Union[str,
 #     highlight = HighlightSchema(**mock_highlight)
 #     assert highlight.tags == []
 
-
-# # Raise if any field is missing.
-# @pytest.mark.parametrize(
-#     "removed_field", [field for field in BOOK_SCHEMA_VARIANTS.keys()]
-# )
-# def test_book_schema_with_missing_fields(removed_field: str, mock_book: dict[str, Any]):
-#     del mock_book[removed_field]
-#     with pytest.raises(ValidationError):
-#         BookSchema(**mock_book)
+# def test_book_replace_null_with_empty_list_for_book_tags(mock_book: dict):
+#     mock_book["book_tags"] = None
+#     book = BookSchema(**mock_book)
+#     assert book.book_tags == []
 
 
 # def test_book_schema_config_with_unexpected_field(mock_book: dict):
 #     mock_book["extra_field"] = None
 #     with pytest.raises(ValidationError):
 #         HighlightSchema(**mock_book)
-
-
-# def test_book_replace_null_with_empty_list_for_book_tags(mock_book: dict):
-#     mock_book["book_tags"] = None
-#     book = BookSchema(**mock_book)
-#     assert book.book_tags == []

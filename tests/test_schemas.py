@@ -19,35 +19,6 @@ PATH_TO_OBJ = {
 # ----------------
 
 
-def change_nested_dict_value(
-    base_dict: dict, path: list[Union[str, int]], field: str, value: Any
-) -> dict:
-    """
-    Update a nested dictionary by following a path and setting a field to a new value.
-
-    Parameters
-    ----------
-    base_dict : dict
-        The dictionary to mutate.
-    path : list of str or int
-        Keys and/or indexes to follow to reach the target dict.
-    field : str
-        Field to update in the target dict.
-    value : Any
-        New value to assign.
-
-    Returns
-    -------
-    dict
-        The modified base_dict (mutated in place).
-    """
-    target = base_dict
-    for key in path:
-        target = target[key]
-    target[field] = value
-    return base_dict
-
-
 def mock_api_response():
     """
     Mock a Readwise 'Highlight EXPORT' endpoint ``response.json()["results"]`` output.
@@ -99,6 +70,35 @@ def mock_api_response():
             ],
         },
     ]
+
+
+def change_nested_dict_value(
+    base_dict: dict, path: list[Union[str, int]], field: str, value: Any
+) -> dict:
+    """
+    Update a nested dictionary by following a path and setting a field to a new value.
+
+    Parameters
+    ----------
+    base_dict : dict
+        The dictionary to mutate.
+    path : list of str or int
+        Keys and/or indexes to follow to reach the target dict.
+    field : str
+        Field to update in the target dict.
+    value : Any
+        New value to assign.
+
+    Returns
+    -------
+    dict
+        The modified base_dict (mutated in place).
+    """
+    target = base_dict
+    for key in path:
+        target = target[key]
+    target[field] = value
+    return base_dict
 
 
 def expected_types_per_field() -> dict:
@@ -400,52 +400,6 @@ def test_fields_error_for_null(field_to_null: str, path_to_dict: list[Union[str,
 #         HighlightTagsSchema(**mock_highlight_tags)
 
 
-# def test_highlight_schema_with_valid_values(mock_highlight: dict):
-#     assert HighlightSchema(**mock_highlight)
-
-
-# @pytest.mark.parametrize("invalid_field", HIGHLIGHT_SCHEMA_VARIANTS.keys())
-# def test_highlight_schema_with_invalid_types(
-#     invalid_field: str, mock_highlight: dict[str, Any]
-# ):
-#     mock_highlight[invalid_field] = HIGHLIGHT_SCHEMA_VARIANTS[invalid_field][
-#         "value_invalid_type"
-#     ]
-#     with pytest.raises(ValidationError):
-#         HighlightSchema(**mock_highlight)
-
-
-# @pytest.mark.parametrize(
-#     "valid_null_field",
-#     [
-#         field
-#         for field in HIGHLIGHT_SCHEMA_VARIANTS.keys()
-#         if HIGHLIGHT_SCHEMA_VARIANTS[field]["nullable"]
-#     ],
-# )
-# def test_highlight_schema_with_null_values_where_allowed(
-#     valid_null_field: str, mock_highlight: dict[str, Any]
-# ):
-#     mock_highlight[valid_null_field] = None
-#     assert HighlightSchema(**mock_highlight)
-
-
-# @pytest.mark.parametrize(
-#     "invalid_null_field",
-#     [
-#         field
-#         for field in HIGHLIGHT_SCHEMA_VARIANTS.keys()
-#         if not HIGHLIGHT_SCHEMA_VARIANTS[field]["nullable"]
-#     ],
-# )
-# def test_highlight_schema_with_null_values_where_not_allowed(
-#     invalid_null_field: str, mock_highlight: dict[str, Any]
-# ):
-#     mock_highlight[invalid_null_field] = None
-#     with pytest.raises(ValidationError):
-#         HighlightSchema(**mock_highlight)
-
-
 # # Raise if any field is missing.
 # @pytest.mark.parametrize(
 #     "removed_field", [field for field in HIGHLIGHT_SCHEMA_VARIANTS.keys()]
@@ -468,48 +422,6 @@ def test_fields_error_for_null(field_to_null: str, path_to_dict: list[Union[str,
 #     mock_highlight["tags"] = None
 #     highlight = HighlightSchema(**mock_highlight)
 #     assert highlight.tags == []
-
-
-# def test_book_schema_with_valid_values(mock_book: dict):
-#     assert BookSchema(**mock_book)
-
-
-# @pytest.mark.parametrize("invalid_field", BOOK_SCHEMA_VARIANTS.keys())
-# def test_book_schema_with_invalid_types(invalid_field: str, mock_book: dict[str, Any]):
-#     mock_book[invalid_field] = BOOK_SCHEMA_VARIANTS[invalid_field]["value_invalid_type"]
-#     with pytest.raises(ValidationError):
-#         BookSchema(**mock_book)
-
-
-# @pytest.mark.parametrize(
-#     "valid_null_field",
-#     [
-#         field
-#         for field in BOOK_SCHEMA_VARIANTS.keys()
-#         if BOOK_SCHEMA_VARIANTS[field]["nullable"]
-#     ],
-# )
-# def test_book_schema_with_null_values_where_allowed(
-#     valid_null_field: str, mock_book: dict[str, Any]
-# ):
-#     mock_book[valid_null_field] = None
-#     assert BookSchema(**mock_book)
-
-
-# @pytest.mark.parametrize(
-#     "invalid_null_field",
-#     [
-#         field
-#         for field in BOOK_SCHEMA_VARIANTS.keys()
-#         if not BOOK_SCHEMA_VARIANTS[field]["nullable"]
-#     ],
-# )
-# def test_book_schema_with_null_values_where_not_allowed(
-#     invalid_null_field: str, mock_book: dict[str, Any]
-# ):
-#     mock_book[invalid_null_field] = None
-#     with pytest.raises(ValidationError):
-#         BookSchema(**mock_book)
 
 
 # # Raise if any field is missing.

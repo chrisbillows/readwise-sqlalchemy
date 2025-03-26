@@ -3,6 +3,7 @@ from typing import Any, Callable
 
 import pytest
 from sqlalchemy import Engine, inspect, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.models import (
@@ -612,14 +613,28 @@ def test_orm_mapped_book_prevents_duplicate_user_book_ids(mem_db: DbHandle):
     MIN_BOOK["title"] = "book_2"
     book_2 = Book(**MIN_BOOK, highlights=[highlight_2_as_orm])
 
-    # Everything else about batch is correct.
     batch.books = [book_1, book_2]
     batch.highlights = [highlight_1_as_orm, highlight_2_as_orm]
-    batch.highlight_tags = [highlight_tag_1_as_orm, highlight_2_as_orm]
+    batch.highlight_tags = [highlight_tag_1_as_orm, highlight_tag_2_as_orm]
+    with pytest.raises(IntegrityError, match="UNIQUE constraint failed"):
+        with mem_db.session:
+            mem_db.session.add(batch)
+            # Flush to generate batch id which is no nullable for other objects.
+            mem_db.session.flush()
+            mem_db.session.add_all([book_1, book_2])
 
-    mem_db.session.add_all([book_1, book_2])
-    with pytest.raises(Exception):
-        mem_db.session.commit()
+
+def test_orm_mapped_highlight_prevents_a_missing_book(mem_db: DbHandle):
+    # NOTE: For a SQLite dialect DB, only a connection with foreign key enforcement
+    # explicitly enabled will pass.
+    batch = ReadwiseBatch(start_time=START_TIME, end_time=END_TIME)
+    highlight_tag_as_orm = HighlightTag(**MIN_HIGHLIGHT_1_TAG_1)
+    highlight_as_orm = Highlight(**MIN_HIGHLIGHT_1, tags=[highlight_tag_as_orm])
+    batch.highlights = [highlight_as_orm]
+    batch.highlight_tags = [highlight_tag_as_orm]
+    with pytest.raises(IntegrityError, match="FOREIGN KEY constraint failed"):
+        with mem_db.session.begin():
+            mem_db.session.add(highlight_as_orm)
 
 
 class TestCommaSeparatedList:
@@ -645,18 +660,3 @@ class TestCommaSeparatedList:
         csl = CommaSeparatedList()
         decoded = csl.process_result_value("", None)
         assert decoded == []
-
-
-# def test_mapped_highlight_prevents_a_missing_book(
-#     mock_highlight: dict[str, Any], mem_db: DbHandle
-# ):
-#     # NOTE: For a SQLite dialect DB, only a connection with foreign key enforcement
-#     # explicitly enabled will pass.
-#     mock_highlight_obj = Highlight(**mock_highlight)
-#     with pytest.raises(IntegrityError, match="FOREIGN KEY constraint failed"):
-#         with mem_db.session.begin():
-#             mem_db.session.add(mock_highlight_obj)
-
-#     fetched_books = result.scalars().all()
-#             for book in fetched_books:
-#                 print(book.__dict__)

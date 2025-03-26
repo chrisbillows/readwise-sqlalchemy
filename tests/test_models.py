@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 import pytest
-from sqlalchemy import Engine, inspect, select
+from sqlalchemy import Engine, inspect, select, text
 from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.models import (
@@ -203,6 +203,18 @@ def minimal_batch_as_orm(mem_db_containing_minimal_objects: Engine):
 # ----------------------
 
 
+def test_mem_db(mem_db: DbHandle):
+    with mem_db.engine.connect() as conn:
+        conn.execute(text("CREATE TABLE some_table (x int, y int)"))
+        conn.execute(
+            text("INSERT INTO some_table (x, y) VALUES (:x, :y)"),
+            [{"x": 1, "y": 1}, {"x": 2, "y": 4}],
+        )
+        result = conn.execute(text("SELECT * FROM some_table"))
+        rows = result.all()
+    assert rows == [(1, 1), (2, 4)]
+
+
 def test_tables_in_mem_db_containing_minimal_objects(
     mem_db_containing_minimal_objects: Engine,
 ):
@@ -335,7 +347,9 @@ def test_readwise_batch_relationship_with_book(minimal_batch_as_orm: ReadwiseBat
     assert minimal_batch_as_orm.books[0].batch.id == BATCH_ID
 
 
-def test_readwise_batch_relationship_with_highlight(minimal_batch_as_orm: ReadwiseBatch):
+def test_readwise_batch_relationship_with_highlight(
+    minimal_batch_as_orm: ReadwiseBatch,
+):
     # Relationship.
     assert len(minimal_batch_as_orm.highlights) == 2
     assert isinstance(minimal_batch_as_orm.highlights[0], Highlight)
@@ -464,7 +478,9 @@ def test_fetch_full_highlight_tag_from_db_assert_standard_field_values(
         assert getattr(fetched_highlight_tag, field) == expected
 
 
-def test_fetch_full_highlight_tag_from_db_assert_foreign_keys(mem_db_containing_full_objects: Engine):
+def test_fetch_full_highlight_tag_from_db_assert_foreign_keys(
+    mem_db_containing_full_objects: Engine,
+):
     with Session(mem_db_containing_full_objects) as clean_session:
         fetched_highlight_tag = clean_session.get(HighlightTag, 97654)
         assert fetched_highlight_tag.batch_id == 1
@@ -582,6 +598,30 @@ def test_highlight_repr_for_empty_objects(obj: type, expected: str):
     assert repr(mock_obj) == expected
 
 
+def test_orm_mapped_book_prevents_duplicate_user_book_ids(mem_db: DbHandle):
+    batch = ReadwiseBatch(start_time=START_TIME, end_time=END_TIME)
+
+    highlight_tag_1_as_orm = HighlightTag(**MIN_HIGHLIGHT_1_TAG_1)
+    highlight_1_as_orm = Highlight(**MIN_HIGHLIGHT_1, tags=[highlight_tag_1_as_orm])
+    book_1 = Book(**MIN_BOOK, highlights=[highlight_1_as_orm])
+
+    # Make different books with the same 'user_book_id'. SQL Alchemy ignores exact
+    # duplicates.
+    highlight_tag_2_as_orm = HighlightTag(**MIN_HIGHLIGHT_1_TAG_2)
+    highlight_2_as_orm = Highlight(**MIN_HIGHLIGHT_2, tags=[highlight_tag_2_as_orm])
+    MIN_BOOK["title"] = "book_2"
+    book_2 = Book(**MIN_BOOK, highlights=[highlight_2_as_orm])
+
+    # Everything else about batch is correct.
+    batch.books = [book_1, book_2]
+    batch.highlights = [highlight_1_as_orm, highlight_2_as_orm]
+    batch.highlight_tags = [highlight_tag_1_as_orm, highlight_2_as_orm]
+
+    mem_db.session.add_all([book_1, book_2])
+    with pytest.raises(Exception):
+        mem_db.session.commit()
+
+
 class TestCommaSeparatedList:
     LIST_OF_STRINGS = ["book_tag_1", "book_tag_2"]
     STRING = "book_tag_1,book_tag_2"
@@ -607,16 +647,6 @@ class TestCommaSeparatedList:
         assert decoded == []
 
 
-# def test_mapped_book_prevents_duplicate_user_book_ids(
-#     mock_book: dict[str, Any], mem_db: DbHandle
-# ):
-#     book_1 = Book(**mock_book)
-#     book_2 = Book(**mock_book)
-#     mem_db.session.add_all([book_1, book_2])
-#     with pytest.raises(IntegrityError):
-#         mem_db.session.commit()
-
-
 # def test_mapped_highlight_prevents_a_missing_book(
 #     mock_highlight: dict[str, Any], mem_db: DbHandle
 # ):
@@ -630,35 +660,3 @@ class TestCommaSeparatedList:
 #     fetched_books = result.scalars().all()
 #             for book in fetched_books:
 #                 print(book.__dict__)
-
-# def test_in_memory_dict(mock_book: dict):
-#     engine = create_engine("sqlite:///:memory:", echo=True)
-#     session = sessionmaker(engine)
-#     with session.begin() as conn:
-#         conn.execute(text("CREATE TABLE some_table (x int, y int)"))
-#         conn.execute(
-#             text(
-#                 "INSERT INTO some_table (x, y) VALUES (:x, :y)"
-#                 ),
-#                 [
-#                     {"x": 1, "y": 1}, {"x": 2, "y": 4}
-#                 ],
-#          )
-#     with engine.connect() as conn:
-#         result = conn.execute(text("SELECT * FROM some_table"))
-#         for dict in result.mappings():
-#             print(dict)
-#     assert 1 == 2
-
-
-# def test_convert_to_datetime_valid():
-#     iso_date = "2025-01-01T00:00"
-#     actual = convert_iso_to_datetime(iso_date)
-#     expected = datetime(2025, 1, 1, 0, 0)
-#     assert actual == expected
-
-
-# def test_convert_to_datetime_invalid():
-#     not_an_iso_date = "not_a_date"
-#     with pytest.raises(ValueError):
-#         convert_iso_to_datetime(not_an_iso_date)

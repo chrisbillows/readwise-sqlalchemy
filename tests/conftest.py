@@ -1,36 +1,17 @@
 """
-Pytest fixtures and reusable test data.
+Pytest fixtures and reusable test data, helpers etc.
 
-Fixtures
---------
-mock_book: dict
-    Mock a valid book dictionary returned by the Readwise 'Highlight EXPORT' endpoint.
-
-mock_highlight: dict
-    Mock a valid highlight dictionary returned by the Readwise 'Highlight EXPORT'
-    endpoint as part of a book dictionary.
-
-mock_highlight_tag: dict
-
-
-mock_user_config: UserConfig
-    Mock a valid readwise_sqlalchemy user configuration with a 'tmp_path' as user dir.
-
-Constants
----------
-Construct valid and invalid dictionaries replicating the Readwise 'Highlight EXPORT'
-endpoint.
-
-BOOK_SCHEMA_VARIANTS:
-    Construct valid and invalid mock book dictionaries.
-
-HIGHLIGHT_SCHEMA_VARIANTS:
-    Construct valid and invalid mock highlights dictionaries.
 """
 
-import pytest
+from dataclasses import dataclass
 
+import pytest
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from readwise_sqlalchemy.db_operations import safe_create_sqlite_engine
 from readwise_sqlalchemy.main import UserConfig
+from readwise_sqlalchemy.models import Base
 
 
 @pytest.fixture
@@ -47,3 +28,35 @@ def mock_user_config(tmp_path: pytest.TempPathFactory) -> UserConfig:
     temp_env_file.touch()
     temp_env_file.write_text("READWISE_API_TOKEN = 'abc123'")
     return UserConfig(temp_application_dir)
+
+
+@dataclass
+class DbHandle:
+    """Group SQL Alchemy database connection objects.
+
+    Attributes
+    ----------
+    engine: Engine
+        Engine bound to a database.
+    session: Session
+        Session bound to an engine.
+    """
+
+    engine: Engine
+    session: Session
+
+
+@pytest.fixture()
+def mem_db():
+    """
+    Create an in-memory SQLite database and return an engine and session.
+
+    Creates tables for all ORM mapped classes that inherit from Base.
+    """
+    engine = safe_create_sqlite_engine(":memory:", echo=False)
+    Base.metadata.create_all(engine)
+    # This isn't needed. It's included as a best practice example or for future use.
+    SessionMaker = sessionmaker(bind=engine)
+    session = SessionMaker()
+    yield DbHandle(engine, session)
+    session.close()

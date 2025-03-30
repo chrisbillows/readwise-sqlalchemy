@@ -3,6 +3,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+
 class MissingEnvironmentFile(Exception):
     """Custom exception if environment file not available."""
 
@@ -50,5 +51,6 @@ class UserConfig:
                 "A `.env` file is expected in the `~/readwise-sqlalchemy-application` "
                 "directory."
             )
+
 
 USER_CONFIG = UserConfig()

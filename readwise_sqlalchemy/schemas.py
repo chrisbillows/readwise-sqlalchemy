@@ -23,7 +23,7 @@ Note
 
 import json
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -79,7 +79,9 @@ class HighlightSchema(BaseModel, extra="forbid", strict=True):
 
     @field_validator("tags", mode="before")
     @classmethod
-    def replace_null_with_empty_list(cls: BaseModel, value: Optional[list]) -> list:
+    def replace_null_with_empty_list(
+        cls: type["HighlightSchema"], value: Optional[list[str]]
+    ) -> list[str]:
         """
         Replace a null value with an empty list.
 
@@ -128,7 +130,9 @@ class BookSchema(BaseModel, extra="forbid", strict=True):
 
     @field_validator("book_tags", mode="before")
     @classmethod
-    def replace_null_with_empty_list(cls: BaseModel, value: Optional[list]) -> list:
+    def replace_null_with_empty_list(
+        cls: type["BookSchema"], value: Optional[list[str]]
+    ) -> list[str]:
         """
         See duplicate method on HighlightSchema.
         """
@@ -140,7 +144,7 @@ if __name__ == "__main__":
     with open("tests/data/real/sample_all_24th_nov_1604.json", "r") as file_handle:
         data = json.load(file_handle)
     count = 0
-    gather = []
+    gather: list[Any] = []
     for book in data:
         try:
             pydantic_book = BookSchema(**book)

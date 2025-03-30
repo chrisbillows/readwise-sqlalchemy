@@ -1,7 +1,7 @@
 import json
-from pathlib import Path
 import random
-from typing import Any, Union
+from pathlib import Path
+from typing import Any
 
 import faker
 from sqlalchemy.inspection import inspect

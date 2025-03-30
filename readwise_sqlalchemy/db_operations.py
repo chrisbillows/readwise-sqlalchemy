@@ -148,7 +148,7 @@ class DatabasePopulater:
         for book in self.books:
             book_as_schema = BookSchema(**book)
             book_as_orm = Book(
-                **book_as_schema.model_dump(exclude="highlights"), batch=batch
+                **book_as_schema.model_dump(exclude={"highlights"}), batch=batch
             )
             for highlight in book_as_schema.highlights:
                 highlight_data = highlight.model_dump()

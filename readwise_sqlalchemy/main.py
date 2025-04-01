@@ -1,6 +1,4 @@
-import json
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import requests
@@ -12,24 +10,7 @@ from readwise_sqlalchemy.db_operations import (
     get_session,
     query_get_last_fetch,
 )
-
-
-class FileHandler:
-    """Handle file I/O."""
-
-    @staticmethod
-    def write_json(data: dict[Any, Any], file_path: Path) -> None:
-        """Static method to write json."""
-        with open(file_path, "w") as file_handle:
-            json.dump(data, file_handle)
-        print(f"Written to: {file_path}")
-
-    @staticmethod
-    def read_json(file_path: Path | str) -> Any:
-        """Static method to read json."""
-        with open(file_path, "r") as file_handle:
-            content = json.load(file_handle)
-        return content
+from readwise_sqlalchemy.utils import FileHandler
 
 
 def fetch_from_export_api(

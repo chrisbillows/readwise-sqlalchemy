@@ -1,0 +1,14 @@
+{
+    "workbench.editor.customLabels.enabled": true,
+    "workbench.editor.customLabels.patterns": {
+        "*/readwise_sqlalchemy/main.py": "main.py",
+        "*/readwise_sqlalchemy/pydantic.py": "2. pydantic.py",
+        "*/tests/test_pydantic.py": "3. test_pydantic.py",
+        "*/readwise_sqlalchemy/sqL_alchemy.py": "4. sqL_alchemy.py",
+        "*/tests/test_sql_alchemy.py": "5. test_sql_alchemy.py",
+        "*/tests/conftest.py": "conftest.py"
+    },
+    "cSpell.words": [
+        "iban"
+    ]
+}

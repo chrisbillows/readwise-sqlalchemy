@@ -153,9 +153,9 @@ def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
     }
 
 
-def generate_invalid_field_values_test_cases() -> (
-    list[tuple[str, Union[str, int], str]]
-):
+def generate_invalid_field_values_test_cases() -> list[
+    tuple[str, Union[str, int], str]
+]:
     """
     Generate parametrized test cases to check the configuration of invalid values.
 

@@ -6,8 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "readwise-sqlalchemy"
 version = "0.1.0"
 dependencies = [
+    "faker",
     "mypy",
     "pre-commit",
+    "pydantic",
     "pytest",
     "pytest-cov",
     "python-dotenv",
@@ -22,7 +24,13 @@ dependencies = [
 rw = "readwise_sqlalchemy.main:main"
 
 [tool.mypy]
+# See: https://docs.pydantic.dev/latest/integrations/mypy/
+plugins = ['pydantic.mypy']
 strict = true
+
+[[tool.mypy.overrides]]
+module = ["faker.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

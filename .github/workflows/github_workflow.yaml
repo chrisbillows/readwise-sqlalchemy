@@ -33,6 +33,12 @@ jobs:
       if: matrix.install-method == 'wheel' || matrix.install-method == 'sdist'
       run: python -m build
 
+    - name: Create mock .env file
+      run: |
+        mkdir -p $HOME/readwise-sqlalchemy-application
+        echo "READWISE_API_TOKEN=abc123" > $HOME/readwise-sqlalchemy-application/.env
+        cat $HOME/readwise-sqlalchemy-application/.env
+
     - name: Install the package
       run: |
         if [[ "${{ matrix.install-method }}" == "wheel" ]]; then

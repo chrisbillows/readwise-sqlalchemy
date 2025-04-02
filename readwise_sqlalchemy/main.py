@@ -1,89 +1,20 @@
-import json
-import os
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import requests
-from dotenv import load_dotenv
 
-from readwise_sqlalchemy.sql_alchemy import (
+from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
+from readwise_sqlalchemy.db_operations import (
     DatabasePopulater,
     create_database,
     get_session,
     query_get_last_fetch,
 )
-
-
-class MissingEnvironmentFile(Exception):
-    """Custom exception if environment file not available."""
-
-    pass
-
-
-class UserConfig:
-    """Object containing user configuration information."""
-
-    def __init__(
-        self, application_dir: Path = Path.home() / "readwise-sqlalchemy-application"
-    ):
-        """
-        Initialise object.
-
-        Attributes
-        ----------
-        APPLICATION_DIR: pathlib.Path
-
-        ENV_FILE: pathlib.Path
-
-        READWISE_API_TOKEN: str
-
-        """
-        self.APPLICATION_DIR: Path = application_dir
-        self.APPLICATION_DIR.mkdir(exist_ok=True)
-        self.ENV_FILE: Path = self.APPLICATION_DIR / ".env"
-        self.load_environment_variables_file()
-        self.READWISE_API_TOKEN: str | None = os.getenv("READWISE_API_TOKEN")
-        self.DB: Path = self.APPLICATION_DIR / "readwise.db"
-
-    def load_environment_variables_file(self) -> None:
-        """
-        Load the `.env` file.
-
-        Raises
-        ------
-        MissingEnvironmentFile
-            If the .env file is not in the expected location.
-        """
-        if self.ENV_FILE.exists():
-            load_dotenv(self.ENV_FILE)
-        else:
-            raise MissingEnvironmentFile(
-                "A `.env` file is expected in the `~/readwise-sqlalchemy-application` "
-                "directory."
-            )
-
-
-class FileHandler:
-    """Handle file I/O."""
-
-    @staticmethod
-    def write_json(data: dict[Any, Any], file_path: Path) -> None:
-        """Static method to write json."""
-        with open(file_path, "w") as file_handle:
-            json.dump(data, file_handle)
-        print(f"Written to: {file_path}")
-
-    @staticmethod
-    def read_json(file_path: Path | str) -> Any:
-        """Static method to read json."""
-        with open(file_path, "r") as file_handle:
-            content = json.load(file_handle)
-        return content
+from readwise_sqlalchemy.utils import FileHandler
 
 
 def fetch_from_export_api(
-    user_config: UserConfig, updated_after: None | str = None
+    user_config: UserConfig = USER_CONFIG, updated_after: None | str = None
 ) -> list[dict[Any, Any]]:
     """Fetch highlights from the Readwise 'Highlight EXPORT' endpoint.
 
@@ -153,24 +84,23 @@ def main() -> None:
     Create a database and populate it with all readwise data or, if the database already
     exists, fetch all data since the last fetch.
     """
-    user_config = UserConfig()
-    session = get_session(user_config.DB)
+    session = get_session(USER_CONFIG.DB)
     last_fetch = None
 
-    if user_config.DB.exists():
+    if USER_CONFIG.DB.exists():
         print("Database exists")
         last_fetch = query_get_last_fetch(session)
         print("Last fetch:", last_fetch)
     else:
         print("Creating database")
-        create_database(user_config.DB)
+        create_database(USER_CONFIG.DB)
 
     print("Updating database")
     start_fetch = datetime.now()
     # data = fetch_from_export_api()
     # TODO: Replace with real API call
     data = FileHandler.read_json(
-        "/Users/chrisbillows/Documents/CODE/MY_GITHUB_REPOS/readwise-sqlalchemy/tests/data/real/sample_updated_25th_nov_to_26th_nov.json"
+        "/Users/cbillows/Documents/CODE/MY_GITHUB_REPOS/readwise-sqlalchemy/tests/data/real/sample_updated_25th_nov_to_26th_nov.json"
     )
     end_fetch = datetime.now()
     dbp = DatabasePopulater(session, data, start_fetch, end_fetch)

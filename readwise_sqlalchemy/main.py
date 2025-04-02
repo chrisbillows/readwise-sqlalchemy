@@ -78,35 +78,39 @@ def fetch_from_export_api(
     return full_data
 
 
-def main() -> None:
+def main(user_config: UserConfig = USER_CONFIG) -> None:
     """Main function ran with `rw` entry point.
 
     Create a database and populate it with all readwise data or, if the database already
     exists, fetch all data since the last fetch.
     """
-    session = get_session(USER_CONFIG.DB)
+    session = get_session(user_config.DB)
     last_fetch = None
 
-    if USER_CONFIG.DB.exists():
+    if user_config.DB.exists():
         print("Database exists")
         last_fetch = query_get_last_fetch(session)
         print("Last fetch:", last_fetch)
     else:
         print("Creating database")
-        create_database(USER_CONFIG.DB)
+        create_database(user_config.DB)
 
     print("Updating database")
     start_fetch = datetime.now()
-    # data = fetch_from_export_api()
-    # TODO: Replace with real API call
-    data = FileHandler.read_json(
-        "/Users/cbillows/Documents/CODE/MY_GITHUB_REPOS/readwise-sqlalchemy/tests/data/real/sample_updated_25th_nov_to_26th_nov.json"
-    )
+    data = fetch_from_export_api()   
     end_fetch = datetime.now()
     dbp = DatabasePopulater(session, data, start_fetch, end_fetch)
     print(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
     dbp.populate_database()
     print("Database contains all Readwise highlights to date")
+
+
+def set_name():
+    return "John"
+
+def hello_name():
+    name = set_name()
+    return f"Hello {name}"
 
 
 if __name__ == "__main__":

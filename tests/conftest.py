@@ -9,8 +9,8 @@ import pytest
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from readwise_sqlalchemy.config import UserConfig
 from readwise_sqlalchemy.db_operations import safe_create_sqlite_engine
-from readwise_sqlalchemy.main import UserConfig
 from readwise_sqlalchemy.models import Base
 
 

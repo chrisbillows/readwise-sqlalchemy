@@ -10,7 +10,6 @@ from readwise_sqlalchemy.db_operations import (
     get_session,
     query_get_last_fetch,
 )
-from readwise_sqlalchemy.utils import FileHandler
 
 
 def fetch_from_export_api(
@@ -97,20 +96,12 @@ def main(user_config: UserConfig = USER_CONFIG) -> None:
 
     print("Updating database")
     start_fetch = datetime.now()
-    data = fetch_from_export_api()   
+    data = fetch_from_export_api()
     end_fetch = datetime.now()
     dbp = DatabasePopulater(session, data, start_fetch, end_fetch)
     print(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
     dbp.populate_database()
     print("Database contains all Readwise highlights to date")
-
-
-def set_name():
-    return "John"
-
-def hello_name():
-    name = set_name()
-    return f"Hello {name}"
 
 
 if __name__ == "__main__":

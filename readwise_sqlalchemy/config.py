@@ -13,9 +13,7 @@ class MissingEnvironmentFile(Exception):
 class UserConfig:
     """Object containing user configuration information."""
 
-    def __init__(
-        self, application_dir: Path = Path.home() / "readwise-sqlalchemy-application"
-    ):
+    def __init__(self, application_dir: Path = Path.home() / "readwise-sqlalchemy"):
         """
         Initialise object.
 
@@ -34,6 +32,7 @@ class UserConfig:
         self.load_environment_variables_file()
         self.READWISE_API_TOKEN: str | None = os.getenv("READWISE_API_TOKEN")
         self.DB: Path = self.APPLICATION_DIR / "readwise.db"
+        self.log_path = Path.home() / "readwise-sqlalchemy" / "logs" / "app.log"
 
     def load_environment_variables_file(self) -> None:
         """

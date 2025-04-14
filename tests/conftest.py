@@ -21,7 +21,7 @@ def mock_user_config(tmp_path: pytest.TempPathFactory) -> UserConfig:
     Use a `tmp_path` as the User's home directory. Create the directory and create the
     required .env file with required synthetic data.
     """
-    temp_application_dir = tmp_path / "readwise-sqlalchemy-application"
+    temp_application_dir = tmp_path / "readwise-sqlalchemy"
     temp_application_dir.mkdir()
 
     temp_env_file = temp_application_dir / ".env"

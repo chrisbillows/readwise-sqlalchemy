@@ -35,9 +35,9 @@ jobs:
 
     - name: Create mock .env file
       run: |
-        mkdir -p $HOME/readwise-sqlalchemy-application
-        echo "READWISE_API_TOKEN=abc123" > $HOME/readwise-sqlalchemy-application/.env
-        cat $HOME/readwise-sqlalchemy-application/.env
+        mkdir -p $HOME/readwise-sqlalchemy
+        echo "READWISE_API_TOKEN=abc123" > $HOME/readwise-sqlalchemy/.env
+        cat $HOME/readwise-sqlalchemy/.env
 
     - name: Install the package
       run: |

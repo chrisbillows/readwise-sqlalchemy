@@ -2,6 +2,7 @@
 Logic for writing updates to the DB
 """
 
+import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,8 @@ from readwise_sqlalchemy.models import (
     ReadwiseBatch,
 )
 from readwise_sqlalchemy.schemas import BookSchema
+
+logger = logging.getLogger(__name__)
 
 
 def safe_create_sqlite_engine(
@@ -162,11 +165,11 @@ class DatabasePopulater:
                 book_as_orm.highlights.append(highlight_as_orm)
             self.session.add(book_as_orm)
         try:
-            print("Committing session")
+            logging.info("Committing session")
             self.session.commit()
         except Exception as e:
             self.session.rollback()
-            print(f"Error occurred: {e}")
+            logging.info(f"Error occurred: {e}")
 
     def _process_book(self, book: dict[Any, Any]) -> Book:
         """Process a book.
@@ -180,21 +183,23 @@ class DatabasePopulater:
             The book object that either already exists in the database or has been
             added to the session.
         """
-        print("Book title:", book["title"])
+        logging.info("Book title:", book["title"])
         existing_book = (
             self.session.query(Book)
             .filter_by(user_book_id=book["user_book_id"])
             .first()
         )
         if not existing_book:
-            print("Book not in database")
+            logging.info("Book not in database")
             new_book = Book(**book)
             self.session.add(new_book)
             self.session.flush()
-            print(f"Added new book: {book['title']}, ID: {new_book.user_book_id}")
+            logging.info(
+                f"Added new book: {book['title']}, ID: {new_book.user_book_id}"
+            )
             return new_book
         else:
-            print(f"Book with ID {book['user_book_id']} already exists")
+            logging.info(f"Book with ID {book['user_book_id']} already exists")
             return existing_book
 
     def _validate_book_id(self, highlight: dict[Any, Any], book: Book) -> None:
@@ -246,7 +251,7 @@ class DatabasePopulater:
         Perform validation checks, field processing and add the highlight to the
         session.
         """
-        print(f"Highlight: {highlight['text'][:20]}")
+        logging.info(f"Highlight: {highlight['text'][:20]}")
         self._validate_book_id(highlight, book)
         self._validate_highlight_id(highlight, book)
 

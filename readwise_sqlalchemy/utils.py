@@ -1,4 +1,5 @@
 import json
+import logging
 import random
 from pathlib import Path
 from typing import Any
@@ -6,6 +7,8 @@ from typing import Any
 import faker
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import DeclarativeBase
+
+logger = logging.getLogger(__name__)
 
 
 class FileHandler:
@@ -16,7 +19,7 @@ class FileHandler:
         """Static method to write json."""
         with open(file_path, "w") as file_handle:
             json.dump(data, file_handle)
-        print(f"Written to: {file_path}")
+        logging.info(f"Written to: {file_path}")
 
     @staticmethod
     def read_json(file_path: Path | str) -> Any:

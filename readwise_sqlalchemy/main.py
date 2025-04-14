@@ -81,33 +81,62 @@ def fetch_from_export_api(
     return full_data
 
 
-def main(user_config: UserConfig = USER_CONFIG) -> None:
+
+def configure_database(user_config: UserConfig = USER_CONFIG, session):
+    """
+
+
+    """
+    if USER_CONFIG.DB.exists():
+        logger.info("Database exists")
+        last_fetch = query_get_last_fetch(session)
+        logger.info(f"Last fetch: {last_fetch}")
+        return last_fetch
+    else:
+        logger.info("Creating database")
+        create_database(USER_CONFIG.DB)
+        return None
+
+
+def fetch_highlights(last_fetch: None | str):
+    start_fetch = datetime.now()
+    data = fetch_from_export_api()
+    end_fetch = datetime.now()
+    logger.info(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
+    return (data, start_fetch, end_fetch)
+
+
+def update_database(session, data, start_fetch, end_fetch):
+    """
+    Update the database.
+
+    Parameters
+    ----------
+    session
+
+
+
+    """
+    logger.info("Updating database")
+    dbp = DatabasePopulater(session, data, start_fetch, end_fetch)
+    dbp.populate_database()
+    logger.info("Database contains all Readwise highlights to date")
+
+
+def main() -> None:
     """Main function ran with `rw` entry point.
 
     Create a database and populate it with all readwise data or, if the database already
     exists, fetch all data since the last fetch.
     """
     setup_logging()
-
     session = get_session(USER_CONFIG.DB)
-    last_fetch = None
+    last_fetch = configure_database()
+    data = fetch_highlights()
 
-    if USER_CONFIG.DB.exists():
-        logger.info("Database exists")
-        last_fetch = query_get_last_fetch(session)
-        logger.info(f"Last fetch: {last_fetch}")
-    else:
-        logger.info("Creating database")
-        create_database(USER_CONFIG.DB)
 
-    logger.info("Updating database")
-    start_fetch = datetime.now()
-    data = fetch_from_export_api()
-    end_fetch = datetime.now()
-    dbp = DatabasePopulater(session, data, start_fetch, end_fetch)
-    logger.info(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
-    dbp.populate_database()
-    logger.info("Database contains all Readwise highlights to date")
+
+
 
 
 if __name__ == "__main__":

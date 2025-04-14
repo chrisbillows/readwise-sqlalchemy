@@ -28,11 +28,11 @@ class UserConfig:
         """
         self.APPLICATION_DIR: Path = application_dir
         self.APPLICATION_DIR.mkdir(exist_ok=True)
+        self.log_path = self.APPLICATION_DIR / "logs" / "app.log"
         self.ENV_FILE: Path = self.APPLICATION_DIR / ".env"
         self.load_environment_variables_file()
         self.READWISE_API_TOKEN: str | None = os.getenv("READWISE_API_TOKEN")
         self.DB: Path = self.APPLICATION_DIR / "readwise.db"
-        self.log_path = Path.home() / "readwise-sqlalchemy" / "logs" / "app.log"
 
     def load_environment_variables_file(self) -> None:
         """

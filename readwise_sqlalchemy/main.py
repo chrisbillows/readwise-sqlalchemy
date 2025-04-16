@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any
 
 import requests
+from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
 from readwise_sqlalchemy.configure_logging import setup_logging
@@ -12,27 +13,39 @@ from readwise_sqlalchemy.db_operations import (
     get_session,
     query_get_last_fetch,
 )
-from readwise_sqlalchemy.utils import FileHandler
+from readwise_sqlalchemy.types import (
+    CheckDBFn,
+    FetchFn,
+    LogSetupFn,
+    SessionFn,
+    UpdateFn,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def fetch_from_export_api(
-    user_config: UserConfig = USER_CONFIG, updated_after: None | str = None
-) -> list[dict[Any, Any]]:
-    """Fetch highlights from the Readwise 'Highlight EXPORT' endpoint.
+    last_fetch: None | str = None,
+    user_config: UserConfig = USER_CONFIG,
+) -> list[dict[str, Any]]:
+    """
+    Fetch highlights from the Readwise Highlight EXPORT endpoint.
 
     Code is per the documentation. See: https://readwise.io/api_deets
 
     Parameters
     ----------
-    updated_after: str = None
-        An ISO formatted datetime E.g. '2024-11-09T10:15:38.428687'
+    last_fetch: str, default = None
+        An ISO formatted datetime string E.g. '2024-11-09T10:15:38.428687' indicating
+        the time highlights have previously been fetched up to.
+    user_config: UserConfig, default = USER_CONFIG
+        A User Configuration object.
 
     Returns
     -------
-    list[dict]
-    A list of dicts where each dict represents a "book".
+    list[dict[str, Any]]
+        A list of dicts where each dict represents a "book". (Highlights are always
+        exported within a book).
 
     Notes
     -----
@@ -65,8 +78,8 @@ def fetch_from_export_api(
         params = {}
         if next_page_cursor:
             params["pageCursor"] = next_page_cursor
-        if updated_after:
-            params["updatedAfter"] = updated_after
+        if last_fetch:
+            params["updatedAfter"] = last_fetch
         logger.info("Making export api request with params " + str(params) + "...")
         response = requests.get(
             url="https://readwise.io/api/v2/export/",
@@ -82,37 +95,165 @@ def fetch_from_export_api(
     return full_data
 
 
-def main() -> None:
-    """Main function ran with `rw` entry point.
-
-    Create a database and populate it with all readwise data or, if the database already
-    exists, fetch all data since the last fetch.
+def check_database(
+    session: Session, user_config: UserConfig = USER_CONFIG
+) -> None | datetime:
     """
-    setup_logging()
+    If the db exists, return the last fetch time, otherwise create the db.
 
-    session = get_session(USER_CONFIG.DB)
-    last_fetch = None
+    Parameters
+    ----------
+    session: Session
+        A SQL alchemy session connected to a database.
+    user_config: UserConfig, default = USER_CONFIG
+        A User Config object.
 
-    if USER_CONFIG.DB.exists():
+    Returns
+    -------
+    None | datetime
+        None if the database doesn't exist. If the database exists, the time the last
+        fetch was completed as a datetime object.
+    """
+    if user_config.DB.exists():
         logger.info("Database exists")
         last_fetch = query_get_last_fetch(session)
         logger.info(f"Last fetch: {last_fetch}")
+        return last_fetch
     else:
         logger.info("Creating database")
-        create_database(USER_CONFIG.DB)
+        create_database(user_config.DB)
+        return None
 
-    logger.info("Updating database")
-    start_fetch = datetime.now()
-    # data = fetch_from_export_api()
-    # TODO: Replace with real API call
-    data = FileHandler.read_json(
-        "/Users/cbillows/Documents/CODE/MY_GITHUB_REPOS/readwise-sqlalchemy/tests/data/real/sample_updated_25th_nov_to_26th_nov.json"
-    )
-    end_fetch = datetime.now()
-    dbp = DatabasePopulater(session, data, start_fetch, end_fetch)
+
+def datetime_to_isoformat_str(datetime: datetime) -> str:
+    """
+    Convert a datetime object to an ISO 8601 string.
+
+    This functions wraps the Pathlib method call for testability and to easily assess
+    compatibility with Readwise Highlight Export API.
+
+    Parameters
+    ----------
+    datetime: datetime
+        A valid datetime object.
+
+    Returns
+    -------
+    str
+        An ISO 8601 formatted datetime string E.g. '2024-11-09T10:15:38.428687'.
+    """
+    return datetime.isoformat()
+
+
+def fetch_highlights(
+    last_fetch: None | datetime,
+) -> tuple[list[dict[str, Any]], datetime, datetime]:
+    """
+    Runner for fetching Readwise Highlights from the Readwise API.
+
+    Parameters
+    ----------
+    last_fetch: None | datetime
+        A datetime object indicating the time highlights have previously been fetched
+        up to.
+
+    Returns
+    -------
+    tuple[list[dict[str, Any]], datetime, datetime]
+        A tuple consisting of:
+            - data: a list of dictionaries where each item is a book with highlights
+            - start_new_fetch: start of the most recent fetch as a datetime
+            - end_new_fetch: end of the most recent fetch as a datetime
+    """
+    last_fetch_str: str | None = None
+
+    if last_fetch:
+        last_fetch_str = datetime_to_isoformat_str(last_fetch)
+
+    start_new_fetch = datetime.now()
+    data = fetch_from_export_api(last_fetch_str)
+    end_new_fetch = datetime.now()
     logger.info(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
+    return (data, start_new_fetch, end_new_fetch)
+
+
+def update_database(
+    session: Session,
+    data: list[dict[str, Any]],
+    start_fetch: datetime,
+    end_fetch: datetime,
+) -> None:
+    """
+    Update the database.
+
+    Parameters
+    ----------
+    session: Session
+        A SQL alchemy session connected to a database.
+    data: list[dict[str, Any]]
+        A list of books with highlights fetched from the Readwise Highlight EXPORT
+        endpoint.
+    start_fetch: datetime
+        The time the fetch was called.
+    end_fetch: datetime
+        The time the fetch was completed.
+    """
+    logger.info("Updating database")
+    dbp = DatabasePopulater(session, data, start_fetch, end_fetch)
     dbp.populate_database()
     logger.info("Database contains all Readwise highlights to date")
+
+
+def run_pipeline(
+    user_config: UserConfig = USER_CONFIG,
+    setup_logging_func: LogSetupFn = setup_logging,
+    get_session_func: SessionFn = get_session,
+    check_db_func: CheckDBFn = check_database,
+    fetch_func: FetchFn = fetch_highlights,
+    update_db_func: UpdateFn = update_database,
+) -> None:
+    """
+    Orchestrate the end-to-end Readwise data sync process.
+
+    Creates a new database and fetches all highlights, or gets the last fetch datetime
+    and fetches only new highlights.
+
+    Use dependency injection for functions for simplified testing.
+
+    Parameters
+    ----------
+    user_config : UserConfig, optional, default = USER_CONFIG
+        Configuration object.
+    setup_logging_func: LogSetupFn, optional, default = setup_logging()
+        A function that sets up application logging.
+    get_session_func: SessionFn, optional, get_session()
+        A function that returns a SQLAlchemy database Session.
+    check_db_func: CheckDBFn, optional, default = check_database()
+        A function that creates the database or returns the last fetch datetime (or
+        None if it just creates the db).
+    fetch_func: FetchFn, optional, default = fetch_highlights()
+        Function that fetches highlights and returns them as a tuple with the start
+        and end times of the fetch as datetimes.
+    update_func: UpdateFn, optional, default = update_database()
+        Function that populates the database with fetched highlights.
+    """
+    setup_logging_func()
+    session = get_session_func(user_config.DB)
+    last_fetch = check_db_func(session, user_config)
+    data, start_fetch, end_fetch = fetch_func(last_fetch)
+    update_db_func(session, data, start_fetch, end_fetch)
+
+
+def main(user_config: UserConfig = USER_CONFIG) -> None:
+    """
+    Main function that runs with the entry point.
+
+    Parameters
+    ----------
+    user_config
+        A UserConfig object.
+    """
+    run_pipeline(user_config)
 
 
 if __name__ == "__main__":

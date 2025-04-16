@@ -145,7 +145,7 @@ def datetime_to_isoformat_str(datetime: datetime) -> str:
     return datetime.isoformat()
 
 
-def fetch_highlights(
+def fetch_books_with_highlights(
     last_fetch: None | datetime,
 ) -> tuple[list[dict[str, Any]], datetime, datetime]:
     """
@@ -175,6 +175,38 @@ def fetch_highlights(
     end_new_fetch = datetime.now()
     logger.info(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
     return (data, start_new_fetch, end_new_fetch)
+
+
+# def validate_books(
+#     raw_books: list[dict],
+# ) -> tuple[list[BookSchema], list[tuple[dict, str]]]:
+#     """
+#     Attempt to convert raw book dicts to Pydantic BookSchema models.
+
+#     Parameters
+#     ----------
+#     raw_books : list[dict]
+#         A list of raw dicts from the Readwise API.
+
+#     Returns
+#     -------
+#     tuple
+#         - A list of successfully validated BookSchema instances.
+#         - A list of tuples containing (invalid dict, error message).
+#     """
+#     valid_books = []
+#     failed_books = []
+
+#     for raw_book in raw_books:
+#         try:
+#             book = BookSchema(**raw_book)
+#             valid_books.append(book)
+#         except ValidationError as e:
+#             error_msg = str(e)
+#             failed_books.append((raw_book, error_msg))
+#             logging.warning(f"Validation failed for book with title '{raw_book.get('title', '[no title]')}'. Error: {error_msg}")
+
+#     return valid_books, failed_books
 
 
 def update_database(
@@ -209,7 +241,8 @@ def run_pipeline(
     setup_logging_func: LogSetupFn = setup_logging,
     get_session_func: SessionFn = get_session,
     check_db_func: CheckDBFn = check_database,
-    fetch_func: FetchFn = fetch_highlights,
+    fetch_func: FetchFn = fetch_books_with_highlights,
+    # validatation_func: ValidateFn = validate_books,
     update_db_func: UpdateFn = update_database,
 ) -> None:
     """
@@ -231,7 +264,7 @@ def run_pipeline(
     check_db_func: CheckDBFn, optional, default = check_database()
         A function that creates the database or returns the last fetch datetime (or
         None if it just creates the db).
-    fetch_func: FetchFn, optional, default = fetch_highlights()
+    fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
         Function that fetches highlights and returns them as a tuple with the start
         and end times of the fetch as datetimes.
     update_func: UpdateFn, optional, default = update_database()

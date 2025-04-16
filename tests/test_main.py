@@ -8,8 +8,8 @@ from readwise_sqlalchemy.config import UserConfig
 from readwise_sqlalchemy.main import (
     check_database,
     datetime_to_isoformat_str,
+    fetch_books_with_highlights,
     fetch_from_export_api,
-    fetch_highlights,
     main,
     run_pipeline,
     update_database,
@@ -22,7 +22,9 @@ def mock_run_pipeline() -> tuple[dict, Any]:
         "mock_setup_logging": MagicMock(),
         "mock_get_session": MagicMock(return_value="session"),
         "mock_check_database": MagicMock(return_value="last_fetch"),
-        "mock_fetch_highlights": MagicMock(return_value=("data", "start", "end")),
+        "mock_fetch_books_with_highlights": MagicMock(
+            return_value=("data", "start", "end")
+        ),
         "mock_update_database": MagicMock(),
     }
     actual = run_pipeline(
@@ -30,7 +32,7 @@ def mock_run_pipeline() -> tuple[dict, Any]:
         setup_logging_func=mocks["mock_setup_logging"],
         get_session_func=mocks["mock_get_session"],
         check_db_func=mocks["mock_check_database"],
-        fetch_func=mocks["mock_fetch_highlights"],
+        fetch_func=mocks["mock_fetch_books_with_highlights"],
         update_db_func=mocks["mock_update_database"],
     )
     return mocks, actual
@@ -120,7 +122,7 @@ def test_str_to_iso_format():
 @patch("readwise_sqlalchemy.main.datetime")
 @patch("readwise_sqlalchemy.main.fetch_from_export_api")
 @patch("readwise_sqlalchemy.main.datetime_to_isoformat_str")
-def test_fetch_highlights_no_last_fetch(
+def test_fetch_books_with_highlights_no_last_fetch(
     mock_str_to_iso_format: MagicMock,
     mock_fetch_from_export_api: MagicMock,
     mock_datetime: MagicMock,
@@ -133,7 +135,7 @@ def test_fetch_highlights_no_last_fetch(
     mock_datetime.now.side_effect = [mock_start_new_fetch, mock_end_new_fetch]
 
     last_fetch = None
-    actual = fetch_highlights(last_fetch)
+    actual = fetch_books_with_highlights(last_fetch)
 
     mock_str_to_iso_format.assert_not_called()
     mock_datetime.now.assert_called()
@@ -143,7 +145,7 @@ def test_fetch_highlights_no_last_fetch(
 
 @patch("readwise_sqlalchemy.main.datetime")
 @patch("readwise_sqlalchemy.main.fetch_from_export_api")
-def test_fetch_highlights_last_fetch_exists(
+def test_fetch_books_with_highlights_last_fetch_exists(
     mock_fetch_from_export_api: MagicMock,
     mock_datetime: MagicMock,
 ):
@@ -157,7 +159,7 @@ def test_fetch_highlights_last_fetch_exists(
     last_fetch = datetime(2025, 1, 1, 1, 1, 1)
     last_fetch_iso_string = "2025-01-01T01:01:01"
 
-    actual = fetch_highlights(last_fetch)
+    actual = fetch_books_with_highlights(last_fetch)
 
     mock_datetime.now.assert_called()
     mock_fetch_from_export_api.assert_called_once_with(last_fetch_iso_string)
@@ -182,7 +184,10 @@ def test_update_database(mock_db_populater: MagicMock):
         ("mock_get_session", lambda m: m.assert_called_once()),
         # `Any` avoids passing in mock_user_config from mock_run_pipeline fixture.
         ("mock_check_database", lambda m: m.assert_called_once_with("session", ANY)),
-        ("mock_fetch_highlights", lambda m: m.assert_called_once_with("last_fetch")),
+        (
+            "mock_fetch_books_with_highlights",
+            lambda m: m.assert_called_once_with("last_fetch"),
+        ),
         (
             "mock_update_database",
             lambda m: m.assert_called_once_with("session", "data", "start", "end"),

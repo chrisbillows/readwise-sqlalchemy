@@ -83,12 +83,12 @@ def test_check_database_when_database_doesnt_exist(
 ):
     mock_session = Mock()
     actual = check_database(mock_session, mock_user_config)
-    mock_create_database.assert_called_once_with(mock_user_config.DB)
+    mock_create_database.assert_called_once_with(mock_user_config.db_path)
     assert actual is None
 
 
 @patch("readwise_sqlalchemy.main.create_database")
-@patch("readwise_sqlalchemy.main.query_get_last_fetch")
+@patch("readwise_sqlalchemy.main.get_last_fetch")
 def test_check_database_when_database_exists(
     mock_query_last_fetch: MagicMock,
     mock_create_database: MagicMock,
@@ -97,14 +97,14 @@ def test_check_database_when_database_exists(
 
     mock_user_config = MagicMock()
     # Mock the database existing.
-    mock_user_config.DB.exists.return_value = True
+    mock_user_config.db_path.exists.return_value = True
 
     mock_last_fetch = datetime(2025, 1, 1, 1, 1, 1)
     mock_query_last_fetch.return_value = mock_last_fetch
 
     result = check_database(mock_session, mock_user_config)
 
-    mock_user_config.DB.exists.assert_called_once()
+    mock_user_config.db_path.exists.assert_called_once()
     mock_query_last_fetch.assert_called_once_with(mock_session)
     mock_create_database.assert_not_called()
     assert result == mock_last_fetch

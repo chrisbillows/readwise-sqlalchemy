@@ -74,14 +74,14 @@ def test_safe_create_sqlite_engine_raises_for_a_missing_foreign_key():
 
 
 def test_get_session_returns_a_session_object(mock_user_config: UserConfig):
-    actual = get_session(mock_user_config.DB)
+    actual = get_session(mock_user_config.db_path)
     assert isinstance(actual, Session)
 
 
 def test_tables_created_by_create_database(mock_user_config: UserConfig):
-    create_database(mock_user_config.DB)
+    create_database(mock_user_config.db_path)
     expected = [("readwise_batches",), ("books",), ("highlights",), ("highlight_tags",)]
-    connection = sqlite3.connect(mock_user_config.DB)
+    connection = sqlite3.connect(mock_user_config.db_path)
     cursor = connection.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     actual = cursor.fetchall()
@@ -91,7 +91,7 @@ def test_tables_created_by_create_database(mock_user_config: UserConfig):
 
 def test_get_session_attaches_to_a_database_url(mock_user_config: UserConfig):
     """Test the Session database url has the correct file name."""
-    session = get_session(mock_user_config.DB)
+    session = get_session(mock_user_config.db_path)
     database_url: str = session.bind.url
     actual = str(database_url).split("/")[-1]
     assert actual == "readwise.db"

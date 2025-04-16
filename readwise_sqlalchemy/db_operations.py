@@ -268,7 +268,7 @@ class DatabasePopulater:
         self.session.add(highlight_obj)
 
 
-def query_get_last_fetch(session: Session) -> datetime | None:
+def get_last_fetch(session: Session) -> datetime | None:
     """
     Get the time of the last Readwise API fetch from the database.
 

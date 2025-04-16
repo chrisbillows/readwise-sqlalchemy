@@ -10,8 +10,8 @@ from readwise_sqlalchemy.configure_logging import setup_logging
 from readwise_sqlalchemy.db_operations import (
     DatabasePopulater,
     create_database,
+    get_last_fetch,
     get_session,
-    query_get_last_fetch,
 )
 from readwise_sqlalchemy.types import (
     CheckDBFn,
@@ -85,7 +85,7 @@ def fetch_from_export_api(
             url="https://readwise.io/api/v2/export/",
             params=params,
             # Readwise Docs specify `verify=False`. `True` used to suppress warnings.
-            headers={"Authorization": f"Token {user_config.READWISE_API_TOKEN}"},
+            headers={"Authorization": f"Token {user_config.readwise_api_token}"},
             verify=True,
         )
         full_data.extend(response.json()["results"])
@@ -114,14 +114,14 @@ def check_database(
         None if the database doesn't exist. If the database exists, the time the last
         fetch was completed as a datetime object.
     """
-    if user_config.DB.exists():
+    if user_config.db_path.exists():
         logger.info("Database exists")
-        last_fetch = query_get_last_fetch(session)
+        last_fetch = get_last_fetch(session)
         logger.info(f"Last fetch: {last_fetch}")
         return last_fetch
     else:
         logger.info("Creating database")
-        create_database(user_config.DB)
+        create_database(user_config.db_path)
         return None
 
 
@@ -238,7 +238,7 @@ def run_pipeline(
         Function that populates the database with fetched highlights.
     """
     setup_logging_func()
-    session = get_session_func(user_config.DB)
+    session = get_session_func(user_config.db_path)
     last_fetch = check_db_func(session, user_config)
     data, start_fetch, end_fetch = fetch_func(last_fetch)
     update_db_func(session, data, start_fetch, end_fetch)

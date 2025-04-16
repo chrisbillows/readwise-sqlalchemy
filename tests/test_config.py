@@ -10,9 +10,9 @@ class TestUserConfig:
     @pytest.mark.parametrize(
         "expected_is_true",
         [
-            ("APPLICATION_DIR", lambda obj: obj.APPLICATION_DIR.is_dir()),
-            ("ENV_FILE", lambda obj: obj.ENV_FILE.exists()),
-            ("READWISE_API_TOKEN", lambda obj: obj.READWISE_API_TOKEN == "abc123"),
+            ("app_dir", lambda obj: obj.APPLICATION_DIR.is_dir()),
+            ("env_file", lambda obj: obj.ENV_FILE.exists()),
+            ("readwise_api_token", lambda obj: obj.READWISE_API_TOKEN == "abc123"),
         ],
     )
     def test_init(self, expected_is_true):

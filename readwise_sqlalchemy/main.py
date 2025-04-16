@@ -10,8 +10,8 @@ from readwise_sqlalchemy.configure_logging import setup_logging
 from readwise_sqlalchemy.db_operations import (
     DatabasePopulater,
     create_database,
+    get_last_fetch,
     get_session,
-    query_get_last_fetch,
 )
 from readwise_sqlalchemy.types import (
     CheckDBFn,
@@ -116,7 +116,7 @@ def check_database(
     """
     if user_config.db_path.exists():
         logger.info("Database exists")
-        last_fetch = query_get_last_fetch(session)
+        last_fetch = get_last_fetch(session)
         logger.info(f"Last fetch: {last_fetch}")
         return last_fetch
     else:

@@ -88,7 +88,7 @@ def test_check_database_when_database_doesnt_exist(
 
 
 @patch("readwise_sqlalchemy.main.create_database")
-@patch("readwise_sqlalchemy.main.query_get_last_fetch")
+@patch("readwise_sqlalchemy.main.get_last_fetch")
 def test_check_database_when_database_exists(
     mock_query_last_fetch: MagicMock,
     mock_create_database: MagicMock,

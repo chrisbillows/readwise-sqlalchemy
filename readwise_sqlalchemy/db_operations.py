@@ -1,5 +1,5 @@
 """
-Logic for writing updates to the DB
+Logic for interacting with the database.
 """
 
 import logging
@@ -104,7 +104,7 @@ class DatabasePopulater:
     def __init__(
         self,
         session: Session,
-        books: list[dict[Any, Any]],
+        books: list[dict[str, Any]],
         start_fetch: datetime,
         end_fetch: datetime,
     ):
@@ -269,10 +269,23 @@ class DatabasePopulater:
 
 
 def query_get_last_fetch(session: Session) -> datetime | None:
-    """Get the last fetch."""
-    stmt = (
-        select(ReadwiseBatch).order_by(desc(ReadwiseBatch.database_write_time)).limit(1)
-    )
+    """
+    Get the last fetch.
+
+    Use start time to allow small overlap. (Would a new highlight during
+    a fetch be added to the end of the fetch?)
+
+    Parameters
+    ----------
+    session: Session
+        A SQL alchemy session connected to a database.
+
+    Returns
+    -------
+    datetime | None
+        A datetime object for the start time of the last fetch, or None.
+    """
+    stmt = select(ReadwiseBatch).order_by(desc(ReadwiseBatch.start_time)).limit(1)
     result = session.execute(stmt).scalars().first()
     if result:
         return result.database_write_time

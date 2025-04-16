@@ -43,7 +43,7 @@ def fetch_from_export_api(
 
     Returns
     -------
-    list[dict]
+    list[dict[str, Any]]
         A list of dicts where each dict represents a "book". (Highlights are always
         exported within a book).
 
@@ -99,7 +99,7 @@ def check_database(
     session: Session, user_config: UserConfig = USER_CONFIG
 ) -> None | datetime:
     """
-    If the db exists, return the time last fetch time, otherwise create the db.
+    If the db exists, return the last fetch time, otherwise create the db.
 
     Parameters
     ----------
@@ -112,7 +112,7 @@ def check_database(
     -------
     None | datetime
         None if the database doesn't exist. If the database exists, the time the last
-        fetch was completed as.
+        fetch was completed as a datetime object.
     """
     if user_config.DB.exists():
         logger.info("Database exists")
@@ -127,10 +127,10 @@ def check_database(
 
 def datetime_to_isoformat_str(datetime: datetime) -> str:
     """
-    Convert a datetime object to an ISO format string.
+    Convert a datetime object to an ISO 8601 string.
 
-    Function used for testability and to easily assess compatibility with Readwise
-    Highlight Export API.
+    This functions wraps the Pathlib method call for testability and to easily assess
+    compatibility with Readwise Highlight Export API.
 
     Parameters
     ----------
@@ -140,7 +140,7 @@ def datetime_to_isoformat_str(datetime: datetime) -> str:
     Returns
     -------
     str
-        An ISO formatted datetime string E.g. '2024-11-09T10:15:38.428687'
+        An ISO 8601 formatted datetime string E.g. '2024-11-09T10:15:38.428687'.
     """
     return datetime.isoformat()
 
@@ -149,7 +149,7 @@ def fetch_highlights(
     last_fetch: None | datetime,
 ) -> tuple[list[dict[str, Any]], datetime, datetime]:
     """
-    Runner for fetching Readwise Highlights.
+    Runner for fetching Readwise Highlights from the Readwise API.
 
     Parameters
     ----------
@@ -159,7 +159,7 @@ def fetch_highlights(
 
     Returns
     -------
-    tuple[list[dict], datetime, datetime]
+    tuple[list[dict[str, Any]], datetime, datetime]
         A tuple consisting of:
             - data: a list of dictionaries where each item is a book with highlights
             - start_new_fetch: start of the most recent fetch as a datetime
@@ -190,7 +190,7 @@ def update_database(
     ----------
     session: Session
         A SQL alchemy session connected to a database.
-    data: list[dict]
+    data: list[dict[str, Any]]
         A list of books with highlights fetched from the Readwise Highlight EXPORT
         endpoint.
     start_fetch: datetime
@@ -222,20 +222,19 @@ def run_pipeline(
 
     Parameters
     ----------
-    user_config : UserConfig, optional
+    user_config : UserConfig, optional, default = USER_CONFIG
         Configuration object.
-    setup_logging_func: Callable, optional
+    setup_logging_func: LogSetupFn, optional, default = setup_logging()
         A function that sets up application logging.
-    get_session_func: Callable, optional
+    get_session_func: SessionFn, optional, get_session()
         A function that returns a SQLAlchemy database Session.
-    configure_db_func: Callable, optional
-        Function that checks for the database and returns the last fetch datetime or
-        None.
-    fetch_func: Callable, optional
+    check_db_func: CheckDBFn, optional, default = check_database()
+        A function that creates the database or returns the last fetch datetime (or
+        None if it just creates the db).
+    fetch_func: FetchFn, optional, default = fetch_highlights()
         Function that fetches highlights and returns them as a tuple with the start
-        and end fetch times as datetimes (or None if no previous fetch has been
-        made).
-    update_func: Callable, optional
+        and end times of the fetch as datetimes.
+    update_func: UpdateFn, optional, default = update_database()
         Function that populates the database with fetched highlights.
     """
     setup_logging_func()
@@ -247,7 +246,7 @@ def run_pipeline(
 
 def main(user_config: UserConfig = USER_CONFIG) -> None:
     """
-    Main function ran with `rw` entry point.
+    Main function that runs with the entry point.
 
     Parameters
     ----------

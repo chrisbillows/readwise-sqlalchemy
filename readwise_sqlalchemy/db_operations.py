@@ -270,10 +270,10 @@ class DatabasePopulater:
 
 def query_get_last_fetch(session: Session) -> datetime | None:
     """
-    Get the last fetch.
+    Get the time of the last Readwise API fetch from the database.
 
-    Use start time to allow small overlap. (Would a new highlight during
-    a fetch be added to the end of the fetch?)
+    The 'last fetch' uses the *start* time of the previous fetch, to allow for an
+    overlap. Validation removes duplicated book ids/highlights.
 
     Parameters
     ----------
@@ -283,7 +283,7 @@ def query_get_last_fetch(session: Session) -> datetime | None:
     Returns
     -------
     datetime | None
-        A datetime object for the start time of the last fetch, or None.
+        A datetime object representing the start time of the last fetch, or None.
     """
     stmt = select(ReadwiseBatch).order_by(desc(ReadwiseBatch.start_time)).limit(1)
     result = session.execute(stmt).scalars().first()

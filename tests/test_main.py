@@ -13,7 +13,10 @@ from readwise_sqlalchemy.main import (
     main,
     run_pipeline,
     update_database,
+    validate_books_with_highlights,
 )
+from readwise_sqlalchemy.schemas import BookSchema
+from tests.test_schemas import mock_api_response
 
 
 @pytest.fixture()
@@ -25,6 +28,9 @@ def mock_run_pipeline() -> tuple[dict, Any]:
         "mock_fetch_books_with_highlights": MagicMock(
             return_value=("data", "start", "end")
         ),
+        "mock_validate_books_with_highlights": MagicMock(
+            return_value=("valid_books", "invalid_books")
+        ),
         "mock_update_database": MagicMock(),
     }
     actual = run_pipeline(
@@ -33,6 +39,7 @@ def mock_run_pipeline() -> tuple[dict, Any]:
         get_session_func=mocks["mock_get_session"],
         check_db_func=mocks["mock_check_database"],
         fetch_func=mocks["mock_fetch_books_with_highlights"],
+        validate_func=mocks["mock_validate_books_with_highlights"],
         update_db_func=mocks["mock_update_database"],
     )
     return mocks, actual
@@ -167,6 +174,35 @@ def test_fetch_books_with_highlights_last_fetch_exists(
     assert actual == (mock_api_response, mock_start_new_fetch, mock_end_new_fetch)
 
 
+def test_validate_books_and_highlights_valid_book():
+    mock_valid_book = mock_api_response()[0]
+
+    mock_invalid_book = mock_api_response()[0]
+    mock_invalid_book["user_book_id"] = "banana"
+
+    mock_list_of_book_dicts = [mock_valid_book, mock_invalid_book]
+
+    actual_valid, actual_failed = validate_books_with_highlights(
+        mock_list_of_book_dicts
+    )
+
+    assert len(actual_valid) == 1
+    assert len(actual_failed) == 1
+
+    assert isinstance(actual_valid[0], BookSchema)
+    assert getattr(actual_valid[0], "user_book_id") == mock_valid_book["user_book_id"]
+
+    assert isinstance(actual_failed[0], tuple)
+    failed_dict, failed_error = actual_failed[0]
+
+    assert failed_dict["user_book_id"] == mock_invalid_book["user_book_id"]
+    assert failed_error == (
+        "1 validation error for BookSchema\nuser_book_id\n  Input should be a valid "
+        "integer [type=int_type, input_value='banana', input_type=str]\n    "
+        "For further information visit https://errors.pydantic.dev/2.11/v/int_type"
+    )
+
+
 @patch("readwise_sqlalchemy.main.DatabasePopulater")
 def test_update_database(mock_db_populater: MagicMock):
     mock_instance = mock_db_populater.return_value
@@ -187,6 +223,10 @@ def test_update_database(mock_db_populater: MagicMock):
         (
             "mock_fetch_books_with_highlights",
             lambda m: m.assert_called_once_with("last_fetch"),
+        ),
+        (
+            "mock_validate_books_with_highlights",
+            lambda m: m.assert_called_once_with("data"),
         ),
         (
             "mock_update_database",

@@ -12,4 +12,6 @@ FetchFn = Callable[[datetime | None], tuple[list[dict[str, Any]], datetime, date
 LogSetupFn = Callable[[], None]
 SessionFn = Callable[[str | Path], Session]
 UpdateFn = Callable[[Session, list[dict[str, Any]], Any, Any], None]
-ValidateFetchFn = Callable[[list[dict[str, Any]]], list[BookSchema]]
+ValidateFetchFn = Callable[
+    [list[dict[str, Any]]], tuple[list[BookSchema], list[tuple[dict[str, Any], str]]]
+]

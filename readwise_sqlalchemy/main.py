@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any
 
 import requests
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
@@ -13,12 +14,14 @@ from readwise_sqlalchemy.db_operations import (
     get_last_fetch,
     get_session,
 )
+from readwise_sqlalchemy.schemas import BookSchema
 from readwise_sqlalchemy.types import (
     CheckDBFn,
     FetchFn,
     LogSetupFn,
     SessionFn,
     UpdateFn,
+    ValidateFetchFn,
 )
 
 logger = logging.getLogger(__name__)
@@ -177,36 +180,39 @@ def fetch_books_with_highlights(
     return (data, start_new_fetch, end_new_fetch)
 
 
-# def validate_books(
-#     raw_books: list[dict],
-# ) -> tuple[list[BookSchema], list[tuple[dict, str]]]:
-#     """
-#     Attempt to convert raw book dicts to Pydantic BookSchema models.
+def validate_books_with_highlights(
+    raw_books: list[dict[str, Any]],
+) -> tuple[list[BookSchema], list[tuple[dict[str, Any], str]]]:
+    """
+    Attempt to convert raw book dicts to Pydantic BookSchema models.
 
-#     Parameters
-#     ----------
-#     raw_books : list[dict]
-#         A list of raw dicts from the Readwise API.
+    Parameters
+    ----------
+    raw_books : list[dict]
+        A list of raw dicts from the Readwise API.
 
-#     Returns
-#     -------
-#     tuple
-#         - A list of successfully validated BookSchema instances.
-#         - A list of tuples containing (invalid dict, error message).
-#     """
-#     valid_books = []
-#     failed_books = []
+    Returns
+    -------
+    tuple
+        - A list of successfully validated BookSchema instances.
+        - A list of tuples containing (invalid dict, error message).
+    """
+    valid_books = []
+    failed_books = []
 
-#     for raw_book in raw_books:
-#         try:
-#             book = BookSchema(**raw_book)
-#             valid_books.append(book)
-#         except ValidationError as e:
-#             error_msg = str(e)
-#             failed_books.append((raw_book, error_msg))
-#             logging.warning(f"Validation failed for book with title '{raw_book.get('title', '[no title]')}'. Error: {error_msg}")
+    for raw_book in raw_books:
+        try:
+            book_as_schema = BookSchema(**raw_book)
+            valid_books.append(book_as_schema)
+        except ValidationError as err:
+            error_msg = str(err)
+            failed_books.append((raw_book, error_msg))
+            logging.warning(
+                "Validation failed for book with title '"
+                f"{raw_book.get('title', '[no title]')}'. Error: {error_msg}"
+            )
 
-#     return valid_books, failed_books
+    return valid_books, failed_books
 
 
 def update_database(
@@ -242,7 +248,7 @@ def run_pipeline(
     get_session_func: SessionFn = get_session,
     check_db_func: CheckDBFn = check_database,
     fetch_func: FetchFn = fetch_books_with_highlights,
-    # validatation_func: ValidateFn = validate_books,
+    validate_func: ValidateFetchFn = validate_books_with_highlights,
     update_db_func: UpdateFn = update_database,
 ) -> None:
     """
@@ -267,6 +273,9 @@ def run_pipeline(
     fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
         Function that fetches highlights and returns them as a tuple with the start
         and end times of the fetch as datetimes.
+    validate_func: ValidateFetchFn, default = validate_books_with_highlights()
+        A function that validates an API response, returning lists of valid and failed
+        items.
     update_func: UpdateFn, optional, default = update_database()
         Function that populates the database with fetched highlights.
     """
@@ -274,6 +283,7 @@ def run_pipeline(
     session = get_session_func(user_config.db_path)
     last_fetch = check_db_func(session, user_config)
     data, start_fetch, end_fetch = fetch_func(last_fetch)
+    valid_books, failed_books = validate_func(data)
     update_db_func(session, data, start_fetch, end_fetch)
 
 

@@ -73,6 +73,7 @@ class HighlightSchema(BaseModel, extra="forbid", strict=True):
     # and handled by @field_validator. Pydantic accepts empty lists by default.
     is_favorite: Optional[bool]
     is_discard: Optional[bool]
+    is_deleted: Optional[bool]
     readwise_url: Optional[str]
 
     tags: Optional[list[HighlightTagsSchema]]
@@ -108,6 +109,7 @@ class BookSchema(BaseModel, extra="forbid", strict=True):
         gt=0, strict=True
     )  # Undocumented. Assume negative nums will be disallowed.
     title: str = Field(max_length=511)
+    is_deleted: Optional[bool]
     author: Optional[str] = Field(max_length=1024)
     readable_title: str = Field(max_length=511)  # Used same as 'title'.
     source: Optional[str] = Field(min_length=3, max_length=64)  # Used 'source_type'.

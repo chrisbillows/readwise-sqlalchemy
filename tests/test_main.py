@@ -8,12 +8,15 @@ from readwise_sqlalchemy.config import UserConfig
 from readwise_sqlalchemy.main import (
     check_database,
     datetime_to_isoformat_str,
+    fetch_books_with_highlights,
     fetch_from_export_api,
-    fetch_highlights,
     main,
     run_pipeline,
     update_database,
+    validate_books_with_highlights,
 )
+from readwise_sqlalchemy.schemas import BookSchema
+from tests.test_schemas import mock_api_response
 
 
 @pytest.fixture()
@@ -22,7 +25,12 @@ def mock_run_pipeline() -> tuple[dict, Any]:
         "mock_setup_logging": MagicMock(),
         "mock_get_session": MagicMock(return_value="session"),
         "mock_check_database": MagicMock(return_value="last_fetch"),
-        "mock_fetch_highlights": MagicMock(return_value=("data", "start", "end")),
+        "mock_fetch_books_with_highlights": MagicMock(
+            return_value=("data", "start", "end")
+        ),
+        "mock_validate_books_with_highlights": MagicMock(
+            return_value=("valid_books", "invalid_books")
+        ),
         "mock_update_database": MagicMock(),
     }
     actual = run_pipeline(
@@ -30,7 +38,8 @@ def mock_run_pipeline() -> tuple[dict, Any]:
         setup_logging_func=mocks["mock_setup_logging"],
         get_session_func=mocks["mock_get_session"],
         check_db_func=mocks["mock_check_database"],
-        fetch_func=mocks["mock_fetch_highlights"],
+        fetch_func=mocks["mock_fetch_books_with_highlights"],
+        validate_func=mocks["mock_validate_books_with_highlights"],
         update_db_func=mocks["mock_update_database"],
     )
     return mocks, actual
@@ -120,7 +129,7 @@ def test_str_to_iso_format():
 @patch("readwise_sqlalchemy.main.datetime")
 @patch("readwise_sqlalchemy.main.fetch_from_export_api")
 @patch("readwise_sqlalchemy.main.datetime_to_isoformat_str")
-def test_fetch_highlights_no_last_fetch(
+def test_fetch_books_with_highlights_no_last_fetch(
     mock_str_to_iso_format: MagicMock,
     mock_fetch_from_export_api: MagicMock,
     mock_datetime: MagicMock,
@@ -133,7 +142,7 @@ def test_fetch_highlights_no_last_fetch(
     mock_datetime.now.side_effect = [mock_start_new_fetch, mock_end_new_fetch]
 
     last_fetch = None
-    actual = fetch_highlights(last_fetch)
+    actual = fetch_books_with_highlights(last_fetch)
 
     mock_str_to_iso_format.assert_not_called()
     mock_datetime.now.assert_called()
@@ -143,7 +152,7 @@ def test_fetch_highlights_no_last_fetch(
 
 @patch("readwise_sqlalchemy.main.datetime")
 @patch("readwise_sqlalchemy.main.fetch_from_export_api")
-def test_fetch_highlights_last_fetch_exists(
+def test_fetch_books_with_highlights_last_fetch_exists(
     mock_fetch_from_export_api: MagicMock,
     mock_datetime: MagicMock,
 ):
@@ -157,12 +166,41 @@ def test_fetch_highlights_last_fetch_exists(
     last_fetch = datetime(2025, 1, 1, 1, 1, 1)
     last_fetch_iso_string = "2025-01-01T01:01:01"
 
-    actual = fetch_highlights(last_fetch)
+    actual = fetch_books_with_highlights(last_fetch)
 
     mock_datetime.now.assert_called()
     mock_fetch_from_export_api.assert_called_once_with(last_fetch_iso_string)
 
     assert actual == (mock_api_response, mock_start_new_fetch, mock_end_new_fetch)
+
+
+def test_validate_books_and_highlights_valid_book():
+    mock_valid_book = mock_api_response()[0]
+
+    mock_invalid_book = mock_api_response()[0]
+    mock_invalid_book["user_book_id"] = "banana"
+
+    mock_list_of_book_dicts = [mock_valid_book, mock_invalid_book]
+
+    actual_valid, actual_failed = validate_books_with_highlights(
+        mock_list_of_book_dicts
+    )
+
+    assert len(actual_valid) == 1
+    assert len(actual_failed) == 1
+
+    assert isinstance(actual_valid[0], BookSchema)
+    assert getattr(actual_valid[0], "user_book_id") == mock_valid_book["user_book_id"]
+
+    assert isinstance(actual_failed[0], tuple)
+    failed_dict, failed_error = actual_failed[0]
+
+    assert failed_dict["user_book_id"] == mock_invalid_book["user_book_id"]
+    assert failed_error == (
+        "1 validation error for BookSchema\nuser_book_id\n  Input should be a valid "
+        "integer [type=int_type, input_value='banana', input_type=str]\n    "
+        "For further information visit https://errors.pydantic.dev/2.11/v/int_type"
+    )
 
 
 @patch("readwise_sqlalchemy.main.DatabasePopulater")
@@ -182,10 +220,19 @@ def test_update_database(mock_db_populater: MagicMock):
         ("mock_get_session", lambda m: m.assert_called_once()),
         # `Any` avoids passing in mock_user_config from mock_run_pipeline fixture.
         ("mock_check_database", lambda m: m.assert_called_once_with("session", ANY)),
-        ("mock_fetch_highlights", lambda m: m.assert_called_once_with("last_fetch")),
+        (
+            "mock_fetch_books_with_highlights",
+            lambda m: m.assert_called_once_with("last_fetch"),
+        ),
+        (
+            "mock_validate_books_with_highlights",
+            lambda m: m.assert_called_once_with("data"),
+        ),
         (
             "mock_update_database",
-            lambda m: m.assert_called_once_with("session", "data", "start", "end"),
+            lambda m: m.assert_called_once_with(
+                "session", "valid_books", "start", "end"
+            ),
         ),
     ],
 )

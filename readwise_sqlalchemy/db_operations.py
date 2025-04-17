@@ -87,19 +87,6 @@ def create_database(database_path: str | Path) -> None:
     Base.metadata.create_all(engine)
 
 
-# TODO: Do we need this.
-class ReadwiseAPIValidator:
-    """
-    Validate Readwise API responses.
-
-    Pydantic validation layer for the Readwise API 'Highlight EXPORT' endpoint.
-
-    """
-
-    def __init__(self, api_response: list[dict[str, str | int | datetime]]):
-        self.api_response = api_response
-
-
 class DatabasePopulater:
     def __init__(
         self,
@@ -201,49 +188,6 @@ class DatabasePopulater:
             logging.info(f"Book with ID {book['user_book_id']} already exists")
             return existing_book
 
-    def _validate_book_id(self, highlight: dict[Any, Any], book: Book) -> None:
-        """Validate a highlight's 'book_id'.
-
-        Check the highlight 'book_id' matches the book 'user_book_id'. A previous step
-        is presumed to have confirmed the book appears in the database or session.
-
-        Raises
-        ------
-        ValueError
-            If the 'book_id' and 'user_book_id' don't match.
-        KeyError
-            If 'book_id' not present in a highlight; all highlights should this key.
-        """
-        if highlight["book_id"] != book.user_book_id:
-            raise ValueError(
-                f"Mismatch in book IDs: Highlight 'book_id'={highlight['book_id']} "
-                f"does not match Book 'user_book_id'={book.user_book_id}"
-            )
-
-    def _validate_highlight_id(self, highlight: dict[Any, Any], book: Book) -> None:
-        """Validate a highlights 'id'.
-
-        Check if the highlight 'id' already exists in the database.
-
-        Note
-        ----
-        Book is passed to create a more helpful error message.
-
-        Raises
-        ------
-        ValueError
-            If the highlight 'id' already exists in the database. This should not be
-            possible since API fetches should only contain new highlights.
-        """
-        existing_highlight = (
-            self.session.query(Highlight).filter_by(id=highlight["id"]).first()
-        )
-        if existing_highlight:
-            raise ValueError(
-                f"Highlight ID already in database: Highlight 'id'={highlight['id']},  "
-                f"Book 'user_book_id'={book.user_book_id}"
-            )
-
     def _process_highlight(self, highlight: dict[Any, Any], book: Book) -> None:
         """Process a highlight and add it to the session.
 
@@ -251,8 +195,6 @@ class DatabasePopulater:
         session.
         """
         logging.info(f"Highlight: {highlight['text'][:20]}")
-        self._validate_book_id(highlight, book)
-        self._validate_highlight_id(highlight, book)
 
         # highlight["highlighted_at"] = convert_iso_to_datetime(
         #     highlight.get("highlighted_at")

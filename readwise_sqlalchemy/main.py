@@ -217,7 +217,7 @@ def validate_books_with_highlights(
 
 def update_database(
     session: Session,
-    data: list[dict[str, Any]],
+    validated_books: list[BookSchema],
     start_fetch: datetime,
     end_fetch: datetime,
 ) -> None:
@@ -228,7 +228,7 @@ def update_database(
     ----------
     session: Session
         A SQL alchemy session connected to a database.
-    data: list[dict[str, Any]]
+    validated_books: list[BookSchema]
         A list of books with highlights fetched from the Readwise Highlight EXPORT
         endpoint.
     start_fetch: datetime
@@ -237,7 +237,7 @@ def update_database(
         The time the fetch was completed.
     """
     logger.info("Updating database")
-    dbp = DatabasePopulater(session, data, start_fetch, end_fetch)
+    dbp = DatabasePopulater(session, validated_books, start_fetch, end_fetch)
     dbp.populate_database()
     logger.info("Database contains all Readwise highlights to date")
 
@@ -284,7 +284,7 @@ def run_pipeline(
     last_fetch = check_db_func(session, user_config)
     data, start_fetch, end_fetch = fetch_func(last_fetch)
     valid_books, failed_books = validate_func(data)
-    update_db_func(session, data, start_fetch, end_fetch)
+    update_db_func(session, valid_books, start_fetch, end_fetch)
 
 
 def main(user_config: UserConfig = USER_CONFIG) -> None:

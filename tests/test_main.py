@@ -230,7 +230,9 @@ def test_update_database(mock_db_populater: MagicMock):
         ),
         (
             "mock_update_database",
-            lambda m: m.assert_called_once_with("session", "data", "start", "end"),
+            lambda m: m.assert_called_once_with(
+                "session", "valid_books", "start", "end"
+            ),
         ),
     ],
 )

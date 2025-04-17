@@ -15,6 +15,7 @@ from readwise_sqlalchemy.db_operations import (
 )
 from readwise_sqlalchemy.main import UserConfig
 from readwise_sqlalchemy.models import Book, Highlight, HighlightTag
+from readwise_sqlalchemy.schemas import BookSchema
 from tests.conftest import DbHandle
 from tests.test_schemas import mock_api_response
 
@@ -24,7 +25,7 @@ END_FETCH = datetime(2025, 1, 1, 1, 0)
 
 def generate_list_of_objects_with_expected_fields_and_values(mock_api_response: dict):
     """
-    Create test scenarios from a mock (or real) Readwise HIGHLIGHT endpoint API response.
+    Create test scenarios from mock (or real) Readwise HIGHLIGHT endpoint API response.
 
     """
     params = []
@@ -103,7 +104,7 @@ def test_database_populater_instantiates_with_expected_attrs(mem_db: DbHandle):
     )
     assert list(database_populater.__dict__.keys()) == [
         "session",
-        "books",
+        "validated_books",
         "start_fetch",
         "end_fetch",
     ]
@@ -136,8 +137,9 @@ def test_db_populater_populate_database(
     target_field: str,
     expected_value: Union[str, int],
 ):
+    validated_books = [BookSchema(**book) for book in mock_api_response()]
     database_populater = DatabasePopulater(
-        mem_db.session, mock_api_response(), START_FETCH, END_FETCH
+        mem_db.session, validated_books, START_FETCH, END_FETCH
     )
     database_populater.populate_database()
     with Session(mem_db.engine) as clean_session:

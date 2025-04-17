@@ -104,7 +104,7 @@ class DatabasePopulater:
     def __init__(
         self,
         session: Session,
-        books: list[dict[str, Any]],
+        validated_books: list[BookSchema],
         start_fetch: datetime,
         end_fetch: datetime,
     ):
@@ -114,7 +114,7 @@ class DatabasePopulater:
         ----------
         session: Session
             An SQL Alchemy session.
-        books: list[dict[Any, Any]]
+        validated_books: list[BookSchema]
             A list of Books and their highlights, expected to come from the Readwise
             Export API.
         start_fetch: datetime
@@ -123,7 +123,7 @@ class DatabasePopulater:
             The time when the API fetch was completed.
         """
         self.session = session
-        self.books = books
+        self.validated_books = validated_books
         self.start_fetch = start_fetch
         self.end_fetch = end_fetch
 
@@ -148,8 +148,7 @@ class DatabasePopulater:
         )
         self.session.add(batch)
 
-        for book in self.books:
-            book_as_schema = BookSchema(**book)
+        for book_as_schema in self.validated_books:
             book_as_orm = Book(
                 **book_as_schema.model_dump(exclude={"highlights"}), batch=batch
             )

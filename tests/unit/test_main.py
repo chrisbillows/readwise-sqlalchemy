@@ -16,7 +16,7 @@ from readwise_sqlalchemy.main import (
     validate_books_with_highlights,
 )
 from readwise_sqlalchemy.schemas import BookSchema
-from tests.test_schemas import mock_api_response
+from tests.unit.test_schemas import mock_api_response
 
 
 @pytest.fixture()

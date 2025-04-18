@@ -173,6 +173,11 @@ class Book(Base):
     title: str
         The title of the parent object. E.g. Book title, twitter thread first post,
         podcast episode title etc.
+    is_ deleted :
+        User deleted book. Currently deleted books are stored with non-deleted books:
+        handle downstream. No automation alters *highlights* of deleted books - it's
+        assumed a deleted book's highlights will be fetched as "updated", with the
+        highlights own 'is_deleted' status changed.
     author: str
         The article, tweet or article author, YouTube video creator, podcaster etc.
     readable_title : str
@@ -221,6 +226,7 @@ class Book(Base):
 
     user_book_id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[Optional[str]]
+    is_deleted: Mapped[Optional[bool]]
     author: Mapped[Optional[str]]
     readable_title: Mapped[Optional[str]]
     source: Mapped[Optional[str]]
@@ -290,11 +296,14 @@ class Highlight(Base):
     url :
         Link to the highlight in the source service, where applicable. E.g. Readwise,
         Reader, ibooks, pocket, snipd, airr etc.
-    is_favourite :
+    is_favourite : bool
         User favourites highlight.
-    is_discard :
+    is_discard : bool
         Is discarded by the user, presumably during "Readwise Daily Review".
-     readwise_url :
+    is_ deleted : bool
+        User deleted highlight. Currently deleted highlights are stored with non-deleted
+        highlights. Handle downstream.
+    readwise_url :
         The Readwise URL link to the highlight.
 
     book_id : int
@@ -327,6 +336,7 @@ class Highlight(Base):
     url: Mapped[Optional[str]]
     is_favorite: Mapped[Optional[bool]]
     is_discard: Mapped[Optional[bool]]
+    is_deleted: Mapped[Optional[bool]]
     readwise_url: Mapped[Optional[str]]
 
     book_id: Mapped[int] = mapped_column(

@@ -49,6 +49,7 @@ def mock_pydantic_model_dump():
         {
             "user_book_id": 12345,
             "title": "book title",
+            "is_deleted": False,
             "author": "name surname",
             "readable_title": "book title",
             "source": "a source",
@@ -79,6 +80,7 @@ def mock_pydantic_model_dump():
                     "tags": [{"id": 97654, "name": "favourite"}],
                     "is_favorite": False,
                     "is_discard": False,
+                    "is_deleted": False,
                     "readwise_url": "https://readwise.io/open/10",
                 }
             ],

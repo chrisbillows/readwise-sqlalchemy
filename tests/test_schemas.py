@@ -35,6 +35,7 @@ def mock_api_response() -> list[dict[str, Any]]:
         {
             "user_book_id": 12345,
             "title": "book title",
+            "is_deleted": False,
             "author": "name surname",
             "readable_title": "Book Title",
             "source": "web_clipper",
@@ -65,6 +66,7 @@ def mock_api_response() -> list[dict[str, Any]]:
                     "tags": [{"id": 97654, "name": "favorite"}],
                     "is_favorite": False,
                     "is_discard": True,
+                    "is_deleted": False,
                     "readwise_url": "https://readwise.io/open/10",
                 }
             ],
@@ -133,6 +135,7 @@ def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
             "choice_category": ["category"],
             "asin": ["asin"],
             "list_of_highlights": ["highlights"],
+            "bool": ["is_deleted"],
         },
         "highlight": {
             "string": [
@@ -144,7 +147,7 @@ def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
                 "readwise_url",
             ],
             "int": ["id", "location", "end_location", "book_id"],
-            "bool": ["is_favorite", "is_discard"],
+            "bool": ["is_favorite", "is_discard", "is_deleted"],
             "iso_string": ["highlighted_at", "created_at", "updated_at"],
             "choice_color": ["color"],
             "list_of_highlight_tags": ["tags"],
@@ -288,7 +291,8 @@ def test_generate_invalid_field_values_test_cases():
 def test_generate_field_nullability_test_cases():
     test_cases = generate_field_nullability_test_cases()
     assert list(test_cases.keys()) == ["pass", "error"]
-    assert test_cases["pass"][0] == ("author", [])
+    assert test_cases["pass"][0] == ("is_deleted", [])
+    assert test_cases["pass"][1] == ("author", [])
     assert test_cases["error"][0] == ("user_book_id", [])
 
 
@@ -309,6 +313,7 @@ def test_nested_schema_model_dump_output():
     expected = {
         "user_book_id": 12345,
         "title": "book title",
+        "is_deleted": False,
         "author": "name surname",
         "readable_title": "Book Title",
         "source": "web_clipper",
@@ -338,6 +343,7 @@ def test_nested_schema_model_dump_output():
                 "book_id": 12345,
                 "is_favorite": False,
                 "is_discard": True,
+                "is_deleted": False,
                 "readwise_url": "https://readwise.io/open/10",
                 "tags": [{"id": 97654, "name": "favorite"}],
             }

@@ -1,9 +1,6 @@
 import pytest
 
-from readwise_sqlalchemy.utils import (
-    generate_random_number,
-    get_columns_and_values,
-)
+from readwise_sqlalchemy.utils import get_columns_and_values
 
 
 @pytest.mark.skip("To complete implementation")
@@ -27,14 +24,3 @@ def test_get_columns_and_values(minimal_book_as_orm):
         "batch_id": 1,
     }
     assert actual == expected
-
-
-def test_generate_random_number():
-    actual = generate_random_number(5)
-    assert isinstance(actual, int)
-    assert len(str(actual)) == 5
-
-
-@pytest.mark.skip("To implement")
-def test_generate_api_response_data_readwise_highlight_export_endpoint():
-    pass

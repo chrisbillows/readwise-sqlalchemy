@@ -1,6 +1,5 @@
 import json
 import logging
-import random
 from pathlib import Path
 from typing import Any
 
@@ -41,19 +40,3 @@ def get_columns_and_values(orm_mapped_obj: DeclarativeBase) -> dict[str, Any]:
         column.key: getattr(orm_mapped_obj, column.key)
         for column in inspect(orm_mapped_obj).mapper.column_attrs
     }
-
-
-def generate_random_number(num_of_digits: int) -> int:
-    """
-    Generate a random number n digits long.
-
-    Parameters
-    ----------
-
-
-    """
-    if num_of_digits < 0:
-        raise ValueError("Number of digits must be greater than zero")
-    lower = 10 ** (num_of_digits - 1)
-    upper = 10**num_of_digits - 1
-    return random.randint(lower, upper)

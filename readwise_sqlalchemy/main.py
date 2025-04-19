@@ -123,7 +123,7 @@ def check_database(
         logger.info(f"Last fetch: {last_fetch}")
         return last_fetch
     else:
-        logger.info("Creating database")
+        logger.info(f"Creating database at {user_config.db_path}")
         create_database(user_config.db_path)
         return None
 

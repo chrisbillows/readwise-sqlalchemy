@@ -16,7 +16,10 @@ from readwise_sqlalchemy.models import Base
 
 @pytest.fixture
 def mock_user_config(tmp_path: pytest.TempPathFactory) -> UserConfig:
-    """Return a temporary readwise-sqlalchemy user configuration.
+    """
+    Return a temporary readwise-sqlalchemy user configuration.
+
+    This is function scoped version.
 
     Use a `tmp_path` as the User's home directory. Create the directory and create the
     required .env file with required synthetic data.
@@ -27,7 +30,27 @@ def mock_user_config(tmp_path: pytest.TempPathFactory) -> UserConfig:
     temp_env_file = temp_application_dir / ".env"
     temp_env_file.touch()
     temp_env_file.write_text("READWISE_API_TOKEN = 'abc123'")
-    return UserConfig(temp_application_dir)
+    user_config = UserConfig(temp_application_dir)
+    return user_config
+
+
+@pytest.fixture(scope="module")
+def mock_user_config_module_scoped(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> UserConfig:
+    """
+    Return a temporary readwise-sqlalchemy user configuration.
+
+    Use a `tmp_path` as the User's home directory. Create the directory and create the
+    required .env file with required synthetic data.
+    """
+    temp_application_dir = tmp_path_factory.mktemp("readwise-sqlalchemy")
+
+    temp_env_file = temp_application_dir / ".env"
+    temp_env_file.touch()
+    temp_env_file.write_text("READWISE_API_TOKEN = 'abc123'")
+    user_config = UserConfig(temp_application_dir)
+    return user_config
 
 
 @dataclass

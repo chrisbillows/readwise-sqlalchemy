@@ -44,7 +44,7 @@ class UserConfig:
             If the .env file is not in the expected location.
         """
         if self.env_file.exists():
-            load_dotenv(self.env_file)
+            load_dotenv(self.env_file, override=True)
         else:
             raise MissingEnvironmentFile(
                 "A `.env` file is expected in the `~/readwise-sqlalchemy-application` "

@@ -1,12 +1,13 @@
 import json
 import logging
-import random
 from pathlib import Path
 from typing import Any
 
-import faker
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import DeclarativeBase
+
+from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
+from readwise_sqlalchemy.main import fetch_from_export_api
 
 logger = logging.getLogger(__name__)
 
@@ -15,11 +16,13 @@ class FileHandler:
     """Handle file I/O."""
 
     @staticmethod
-    def write_json(data: dict[Any, Any], file_path: Path) -> None:
+    def write_json(
+        data: dict[Any, Any] | list[dict[Any, Any]], file_path: Path
+    ) -> None:
         """Static method to write json."""
         with open(file_path, "w") as file_handle:
             json.dump(data, file_handle)
-        logging.info(f"Written to: {file_path}")
+        logger.info(f"Written to: '{file_path}'")
 
     @staticmethod
     def read_json(file_path: Path | str) -> Any:
@@ -44,117 +47,48 @@ def get_columns_and_values(orm_mapped_obj: DeclarativeBase) -> dict[str, Any]:
     }
 
 
-def generate_random_number(num_of_digits: int) -> int:
+def create_real_user_data_json_for_end_to_end_testing(
+    user_config: UserConfig = USER_CONFIG,
+) -> None:
     """
-    Generate a random number n digits long.
+    Fetch your real Readwise highlights and store locally as test data.
+
+    FOR DEVELOPERS: This function fetches all your Readwise books and highlights and
+    saves it as JSON for end-to-end testing.
+
+    *THE FUNCTION MUST BE INVOKED BY YOU. YOUR DATA NEVER LEAVES YOUR MACHINE*
+
+    Your data is saved locally as `~/readwise-sqlalchemy/my_readwise_highlights.json`.
+    When pytest is invoked, if `my_readwise_highlights.json` exists, an end-to-end test
+    is run. See the test at `tests/e2e/test_main.py`.
+
+    To create `my_readwise_highlights.json` so the e2e tests runs, navigate to
+    the project directory in your CLI and run:
+
+    ```
+    python3 -m readwise_sqlalchemy.utils
+    ```
+
+    This runs the `if __name__ == "__main__"` block at the bottom of this file.
 
     Parameters
     ----------
-
-
+    user_config: UserConfig, default = USER_CONFIG
+        A UserConfig object.
     """
-    if num_of_digits < 0:
-        raise ValueError("Number of digits must be greater than zero")
-    lower = 10 ** (num_of_digits - 1)
-    upper = 10**num_of_digits - 1
-    return random.randint(lower, upper)
+    target_file_path = user_config.app_dir / "my_readwise_highlights.json"
+
+    logger.info(
+        "Hello Developer! Fetching your Readwise highlights and writing to JSON."
+    )
+    api_content = fetch_from_export_api(last_fetch=None, user_config=user_config)
+    FileHandler.write_json(api_content, target_file_path)
+
+    logger.info(
+        "When you next run pytest, the e2e test should run automatically. P.S.YOUR "
+        "DATA NEVER LEAVES YOUR MACHINE."
+    )
 
 
-def generate_api_response_data_readwise_highlight_export_endpoint(
-    num_of_books: int, max_highlights: int = 20
-) -> list[dict[str, Any]]:
-    """
-    Dynamically generate a mock Readwise 'Highlight EXPORT' endpoint response.
-
-    Generates a book with mock values and a random number of mock highlights. Generates
-    the API response as if already loaded into Python with the JSON module.
-
-    Create test data as required.
-
-    Parameters
-    ----------
-    num_of_books : int
-        The number of mock books to include in the mock API response.
-    max_highlights : int
-        The max number of mock highlights to include per book. Defaults to 20. Minimum
-        is one highlight per book.
-    """
-    fake = faker.Faker()
-    mock_api_response = []
-    for _ in range(num_of_books):
-        # Declare type for mypy
-        book: dict[str, Any]
-        book = {
-            "user_book_id": generate_random_number(8),
-            "title": fake.sentence(nb_words=6),
-            "author": fake.name(),
-            "source": random.choice(
-                [
-                    "reader",
-                    "snipd",
-                    "twitter",
-                    "ibooks",
-                    "kindle",
-                    "web_clipper",
-                    "pdf",
-                    "api_article",
-                    "pocket",
-                    "airr",
-                    "podcast",
-                    "hypothesis",
-                ]
-            ),
-            "cover_image_url": fake.image_url(),
-            "unique_url": fake.url() if random.random() < 0.2 else None,
-            "summary": fake.text(max_nb_chars=200) if random.random() < 0.2 else None,
-            "book_tags": fake.words(
-                random.choices([0, 1, 2, 3], weights=[3, 1, 1, 1])[0]
-            ),
-            "category": random.choice(["books", "articles", "tweets", "podcasts"]),
-            "document_note": fake.sentence() if random.choice([True, False]) else "",
-            "asin": fake.isbn10(),
-            "highlights": [],
-        }
-        book["readable_title"] = book["title"].title()
-        book["source_url"] = "" if book["category"] == "books" else fake.url()
-        book["readwise_url"] = f"https://readwise.io/bookreview/{book['user_book_id']}"
-
-        for _ in range(random.randint(1, max_highlights)):
-            highlight = {
-                "id": generate_random_number(10),
-                "text": fake.paragraph(30),
-                "location": random.randint(-10000, 10000),
-                "location_type": random.choice(
-                    ["offset", "time_offset", "order", "location", "page"]
-                ),
-                "note": fake.paragraph(30) if random.random() < 0.2 else "",
-                "color": random.choice(
-                    ["yellow", "pink", "orange", "blue", "purple", "green"]
-                ),
-                "highlighted_at": fake.iso8601(),
-                "created_at": fake.iso8601(),
-                "updated_at": fake.iso8601(),
-                "external_id": random.choice(
-                    [
-                        fake.safe_hex_color(),  # Random selection of ref numbers.
-                        fake.uuid4(),
-                        fake.swift8(),
-                        fake.iban(),
-                    ]
-                )
-                if random.random() < 0.2
-                else None,
-                "end_location": None,
-                "url": fake.url(),
-                "book_id": book["user_book_id"],
-                "tags": [
-                    {"id": generate_random_number(6), "name": "yellow"},
-                    {"id": 456, "name": "green"},
-                ],
-                "is_favorite": random.choice([True, False]),
-                "is_discard": random.choice([True, False]),
-            }
-            highlight["readwise_url"] = f"https://readwise.io/open/{highlight['id']}"
-            book["highlights"].append(highlight)
-        mock_api_response.append(book)
-    return mock_api_response
+if __name__ == "__main__":
+    create_real_user_data_json_for_end_to_end_testing()

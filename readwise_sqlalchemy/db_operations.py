@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from readwise_sqlalchemy.models import (
     Base,
     Book,
+    BookTag,
     Highlight,
     HighlightTag,
     ReadwiseBatch,
@@ -137,8 +138,10 @@ class DatabasePopulater:
 
         for book_as_schema in self.validated_books:
             book_as_orm = Book(
-                **book_as_schema.model_dump(exclude={"highlights"}), batch=batch
+                **book_as_schema.model_dump(exclude={"highlights", "book_tags"}),
+                batch=batch,
             )
+
             for highlight in book_as_schema.highlights:
                 highlight_data = highlight.model_dump()
                 highlight_tags = [
@@ -147,8 +150,13 @@ class DatabasePopulater:
                 ]
                 highlight_as_orm = Highlight(**highlight_data, batch=batch)
                 highlight_as_orm.tags.extend(highlight_tags)
-                # highlight_as_orm.book = book_as_orm
                 book_as_orm.highlights.append(highlight_as_orm)
+
+            for book_tag in book_as_schema.book_tags:
+                book_tag_data = book_tag.model_dump()
+                book_tag_as_orm = BookTag(**book_tag_data, batch=batch)
+                book_as_orm.book_tags.append(book_tag_as_orm)
+
             self.session.add(book_as_orm)
         try:
             logging.info("Committing session")

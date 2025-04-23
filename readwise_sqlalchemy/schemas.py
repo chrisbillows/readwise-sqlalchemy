@@ -28,15 +28,31 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
-class HighlightTagsSchema(BaseModel, extra="forbid", strict=True):
+class TagSchemaBase(BaseModel):
     """
-    Validate 'tags' fields in a HighlightSchema highlight.
+    Base class for validate 'tags' schemas.
     """
 
     # Undocumented. Seems likely not null in practice but won't enforce. Default to
     # None in case they aren't both required?
     id: Optional[int] = None
     name: Optional[str] = None
+
+
+class HighlightTagsSchema(TagSchemaBase, extra="forbid", strict=True):
+    """
+    Validate highlight tags aka 'tags' in a HighlightSchema highlight.
+    """
+
+    pass
+
+
+class BookTagsSchema(TagSchemaBase, extra="forbid", strict=True):
+    """
+    Validate 'book_tags' in a BookSchema highlight.
+    """
+
+    pass
 
 
 class HighlightSchema(BaseModel, extra="forbid", strict=True):
@@ -116,9 +132,6 @@ class BookSchema(BaseModel, extra="forbid", strict=True):
     cover_image_url: Optional[str] = Field(max_length=2047)  # Mirror RW. No URL checks.
     unique_url: Optional[str]  # Mirror RW. No URL checks.
     summary: Optional[str]
-    # Undocumented. Assume book_tags will be strings. Nulls possible, not seen in
-    # user data and handled @field_validator.
-    book_tags: list[str]
     category: str = Field(pattern="^(books|articles|tweets|podcasts)$")
     # Undocumented but user data is always null. Docs use "" in examples.
     document_note: Optional[str]
@@ -128,6 +141,7 @@ class BookSchema(BaseModel, extra="forbid", strict=True):
         min_length=10, max_length=10, pattern="^[A-Z0-9]{10}$"
     )  # Used Amazon Standard Identification Number.
 
+    book_tags: list[BookTagsSchema]
     highlights: list[HighlightSchema]
 
     @field_validator("book_tags", mode="before")

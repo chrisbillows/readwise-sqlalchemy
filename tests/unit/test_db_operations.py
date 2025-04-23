@@ -14,7 +14,7 @@ from readwise_sqlalchemy.db_operations import (
     safe_create_sqlite_engine,
 )
 from readwise_sqlalchemy.main import UserConfig
-from readwise_sqlalchemy.models import Book, Highlight, HighlightTag
+from readwise_sqlalchemy.models import Book, BookTag, Highlight, HighlightTag
 from readwise_sqlalchemy.schemas import BookSchema
 from tests.conftest import DbHandle
 from tests.unit.test_schemas import mock_api_response
@@ -30,9 +30,10 @@ def generate_list_of_objects_with_expected_fields_and_values(mock_api_response: 
     """
     params = []
     test_cases = [
-        (Book, lambda x: x[0].items(), "highlights"),
-        (Highlight, lambda x: x[0]["highlights"][0].items(), "tags"),
-        (HighlightTag, lambda x: x[0]["highlights"][0]["tags"][0].items(), None),
+        (Book, lambda x: x[0].items(), ["highlights", "book_tags"]),
+        (BookTag, lambda x: x[0]["book_tags"][0].items(), []),
+        (Highlight, lambda x: x[0]["highlights"][0].items(), ["tags"]),
+        (HighlightTag, lambda x: x[0]["highlights"][0]["tags"][0].items(), []),
     ]
 
     # The following fields will be cast to datetime objects on schema verification.
@@ -42,11 +43,11 @@ def generate_list_of_objects_with_expected_fields_and_values(mock_api_response: 
     highlight["created_at"] = datetime(2025, 1, 1, 0, 1, 10)
     highlight["updated_at"] = datetime(2025, 1, 1, 0, 1, 20)
 
-    for orm_obj, extract_expected_fields_and_values, field_to_ignore in test_cases:
+    for orm_obj, extract_expected_fields_and_values, fields_to_ignore in test_cases:
         expected_items = [
             (orm_obj, field, value)
             for field, value in extract_expected_fields_and_values(mock_api_response)
-            if field != field_to_ignore
+            if field not in fields_to_ignore
         ]
         params.extend(expected_items)
     return params
@@ -81,7 +82,13 @@ def test_get_session_returns_a_session_object(mock_user_config: UserConfig):
 
 def test_tables_created_by_create_database(mock_user_config: UserConfig):
     create_database(mock_user_config.db_path)
-    expected = [("readwise_batches",), ("books",), ("highlights",), ("highlight_tags",)]
+    expected = [
+        ("readwise_batches",),
+        ("books",),
+        ("book_tags",),
+        ("highlights",),
+        ("highlight_tags",),
+    ]
     connection = sqlite3.connect(mock_user_config.db_path)
     cursor = connection.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")

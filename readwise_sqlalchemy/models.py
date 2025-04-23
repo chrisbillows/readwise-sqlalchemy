@@ -241,7 +241,7 @@ class Book(Base):
 
     batch_id: Mapped[int] = mapped_column(ForeignKey("readwise_batches.id"))
 
-    book_tags: Mapped[Optional[list["BookTag"]]] = relationship(back_populates="book")
+    book_tags: Mapped[list["BookTag"]] = relationship(back_populates="book")
     highlights: Mapped[list["Highlight"]] = relationship(back_populates="book")
     batch: Mapped["ReadwiseBatch"] = relationship(back_populates="books")
 

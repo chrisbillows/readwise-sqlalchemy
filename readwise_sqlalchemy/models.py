@@ -24,97 +24,10 @@ Mapped classes may seem to validate things that they actually don't:
 """
 
 from datetime import datetime
-from typing import Any, Optional, cast
+from typing import Optional
 
-from sqlalchemy import Dialect, ForeignKey, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.types import TypeDecorator
-
-
-class CommaSeparatedList(TypeDecorator[list[str]]):
-    """
-    Convert to/from a list of strings/a comma separated list as a single string.
-
-    A custom SQLAlchemy type extending the SQL String type via TypeDecorator to store a
-    list of strings as a comma separated list, rendered as a single str. (SQLite has no
-    list types). The custom behaviour is provided by overriding the TypeDecorator
-    methods ``process_bind_param`` and  ``process_result_value``.
-
-                list[str]                                   str^
-                    |                                        |
-                    |                                        |
-                write to db                             read from db
-                    |                                        |
-                    |                                        |
-                    v                                        V
-                   str^                                   list[str]
-
-    ^The str is a comma separated list rendered as a single string.
-
-    See:
-    https://docs.sqlalchemy.org/en/20/core/custom_types.html#augmenting-existing-types
-    """
-
-    impl = String
-    # Safe to cache as the same values will always give the same results.
-    cache_ok = True
-
-    def process_bind_param(self, value: Any, dialect: Dialect) -> str:
-        """
-        Receive a bound parameter of type ``list[str]`` and convert to ``str``.
-
-        Override the TypeDecorator method. The method is called at statement execution
-        time and is passed the literal Python data value which is to be associated with
-        a bound parameter in the statement.
-
-        Notes
-        -----
-        Although this method must accept any type for compatibility with the SQLAlchemy
-        `TypeDecorator` interface, it expects `value` to be a `list[str]`.
-
-        Parameters
-        ----------
-        value : Any
-            Data to operate upon. Must be a `list[str]` or coercible to one.
-
-        dialect : Dialect
-            The SQL Dialect in use.
-
-        Returns
-        -------
-        str
-            A single Python string representing a list of strings as comma separated
-            values.
-        """
-        return "" if not value else ",".join(cast(list[str], value))
-
-    def process_result_value(self, value: Any, dialect: Dialect) -> list[str]:
-        """
-        Receive a result-row column value of type ``str` and convert to ``list[str]``.
-
-        This method is called at result fetching time and is passed the literal Python
-        data value extracted from a database result row.
-
-        Notes
-        -----
-        Although this method must accept any type for compatibility with the SQLAlchemy
-        ``TypeDecorator`` interface, it expects ``value`` to be a `str`.
-
-        Parameters
-        ----------
-        value: str
-            Data to operate upon, here a string representing a list of strings as comma
-            separated values.
-
-        dialect: Dialect
-            The SQL Dialect in use.
-
-        Returns
-        -------
-        list[str]
-            A list of strings.
-        """
-        return [] if value == "" else cast(str, value).split(",")
 
 
 class Base(DeclarativeBase):

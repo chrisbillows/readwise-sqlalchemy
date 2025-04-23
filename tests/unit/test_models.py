@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from readwise_sqlalchemy.models import (
     Book,
     BookTag,
-    CommaSeparatedList,
     Highlight,
     HighlightTag,
     ReadwiseBatch,
@@ -751,28 +750,3 @@ def test_orm_mapped_highlight_prevents_a_missing_book(mem_db: DbHandle):
     with pytest.raises(IntegrityError, match="FOREIGN KEY constraint failed"):
         with mem_db.session.begin():
             mem_db.session.add(highlight_as_orm)
-
-
-class TestCommaSeparatedList:
-    LIST_OF_STRINGS = ["book_tag_1", "book_tag_2"]
-    STRING = "book_tag_1,book_tag_2"
-
-    def test_process_bind_param_list_of_strings(self):
-        csl = CommaSeparatedList()
-        actual = csl.process_bind_param(self.LIST_OF_STRINGS, None)
-        assert actual == self.STRING
-
-    def test_process_bind_param_empty_list(self):
-        csl = CommaSeparatedList()
-        actual = csl.process_bind_param([], None)
-        assert actual == ""
-
-    def test_process_result_value_list_of_strings(self):
-        csl = CommaSeparatedList()
-        decoded = csl.process_result_value(self.STRING, None)
-        assert decoded == self.LIST_OF_STRINGS
-
-    def test_process_result_value_empty_list(self):
-        csl = CommaSeparatedList()
-        decoded = csl.process_result_value("", None)
-        assert decoded == []

@@ -24,97 +24,10 @@ Mapped classes may seem to validate things that they actually don't:
 """
 
 from datetime import datetime
-from typing import Any, Optional, cast
+from typing import Optional
 
-from sqlalchemy import Dialect, ForeignKey, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.types import TypeDecorator
-
-
-class CommaSeparatedList(TypeDecorator[list[str]]):
-    """
-    Convert to/from a list of strings/a comma separated list as a single string.
-
-    A custom SQLAlchemy type extending the SQL String type via TypeDecorator to store a
-    list of strings as a comma separated list, rendered as a single str. (SQLite has no
-    list types). The custom behaviour is provided by overriding the TypeDecorator
-    methods ``process_bind_param`` and  ``process_result_value``.
-
-                list[str]                                   str^
-                    |                                        |
-                    |                                        |
-                write to db                             read from db
-                    |                                        |
-                    |                                        |
-                    v                                        V
-                   str^                                   list[str]
-
-    ^The str is a comma separated list rendered as a single string.
-
-    See:
-    https://docs.sqlalchemy.org/en/20/core/custom_types.html#augmenting-existing-types
-    """
-
-    impl = String
-    # Safe to cache as the same values will always give the same results.
-    cache_ok = True
-
-    def process_bind_param(self, value: Any, dialect: Dialect) -> str:
-        """
-        Receive a bound parameter of type ``list[str]`` and convert to ``str``.
-
-        Override the TypeDecorator method. The method is called at statement execution
-        time and is passed the literal Python data value which is to be associated with
-        a bound parameter in the statement.
-
-        Notes
-        -----
-        Although this method must accept any type for compatibility with the SQLAlchemy
-        `TypeDecorator` interface, it expects `value` to be a `list[str]`.
-
-        Parameters
-        ----------
-        value : Any
-            Data to operate upon. Must be a `list[str]` or coercible to one.
-
-        dialect : Dialect
-            The SQL Dialect in use.
-
-        Returns
-        -------
-        str
-            A single Python string representing a list of strings as comma separated
-            values.
-        """
-        return "" if not value else ",".join(cast(list[str], value))
-
-    def process_result_value(self, value: Any, dialect: Dialect) -> list[str]:
-        """
-        Receive a result-row column value of type ``str` and convert to ``list[str]``.
-
-        This method is called at result fetching time and is passed the literal Python
-        data value extracted from a database result row.
-
-        Notes
-        -----
-        Although this method must accept any type for compatibility with the SQLAlchemy
-        ``TypeDecorator`` interface, it expects ``value`` to be a `str`.
-
-        Parameters
-        ----------
-        value: str
-            Data to operate upon, here a string representing a list of strings as comma
-            separated values.
-
-        dialect: Dialect
-            The SQL Dialect in use.
-
-        Returns
-        -------
-        list[str]
-            A list of strings.
-        """
-        return [] if value == "" else cast(str, value).split(",")
 
 
 class Base(DeclarativeBase):
@@ -195,10 +108,6 @@ class Book(Base):
         ``"source": "reader"`` may give the Readwise Reader link.
     summary : str
         Document summaries can be added in Readwise Reader.
-    book_tags : list[str]
-        A list of user defined tags, applied to the parent object. These are distinct
-        from highlight tags. (i.e. "arch_btw" could exist separately at a book and
-        highlight level).
     category : str
         A pre-defined Readwise category. Allowed values: ``books``, ``articles``,
         ``tweets``, ``podcasts``.
@@ -216,6 +125,10 @@ class Book(Base):
     batch_id:
         Foreign key linking the ``id`` of the associated ``ReadwiseBatch``.
 
+    book_tags : list[BookTag]
+        A list of user defined tags, applied to the parent object. These are distinct
+        from highlight tags. (i.e. "arch_btw" could exist separately at a book and
+        highlight level).
     highlights : list[Highlight]
         A list of highlights sourced from the book.
     batch : ReadwiseBatch
@@ -233,7 +146,6 @@ class Book(Base):
     cover_image_url: Mapped[Optional[str]]
     unique_url: Mapped[Optional[str]]
     summary: Mapped[Optional[str]]
-    book_tags: Mapped[Optional[str]] = mapped_column(CommaSeparatedList)
     category: Mapped[Optional[str]]
     document_note: Mapped[Optional[str]]
     readwise_url: Mapped[Optional[str]]
@@ -242,6 +154,7 @@ class Book(Base):
 
     batch_id: Mapped[int] = mapped_column(ForeignKey("readwise_batches.id"))
 
+    book_tags: Mapped[list["BookTag"]] = relationship(back_populates="book")
     highlights: Mapped[list["Highlight"]] = relationship(back_populates="book")
     batch: Mapped["ReadwiseBatch"] = relationship(back_populates="books")
 
@@ -250,6 +163,59 @@ class Book(Base):
             f"Book(user_book_id={self.user_book_id!r}, title={self.title!r}, "
             f"highlights={len(self.highlights)})"
         )
+
+
+class BookTag(Base):
+    """
+    Readwise book tag as a SQL Alchemy ORM Mapped class.
+
+    *WARNING* Using unvalidated API data directly with this class may result in
+    unexpected behaviour and is not recommended. Validation is enforced in the Pydantic
+    layer only. For example, this ORM class will accept null values for all fields -
+    even those fields which should never be null. (Except the primary key which will not
+    accept a null).
+
+    Each class instance corresponds to a book tags dictionary from the Readwise
+    'Highlight EXPORT' endpoint.
+
+    Attributes
+    ----------
+    id : int
+        Primary key. Unique identifier sourced from Readwise.
+    name : str
+        The name of the tag. Each tag has an id and name. ``name``s are often common
+        across tags/highlights but ``id`` is always unique. E.g. Many highlights may be
+        tagged ``favourite`` but each ``favourite`` tag  will be associated with its own
+        unique ``id``. Therefore, group by ``name`` for this attribute.
+
+    book_id : int
+        Foreign key linking the ``id`` of the associated ``Book``.
+    batch_id : int
+        Foreign key linking the `id` of the associated ``ReadwiseBatch``.
+
+    book : Book
+        The highlight object the tag is associated with.
+    batch : ReadwiseBatch
+        The batch object the tag was imported in.
+    """
+
+    __tablename__ = "book_tags"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(512))
+
+    user_book_id: Mapped[int] = mapped_column(
+        ForeignKey("books.user_book_id"), nullable=False
+    )
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("readwise_batches.id"), nullable=False
+    )
+
+    book: Mapped["Book"] = relationship(back_populates="book_tags")
+    batch: Mapped["ReadwiseBatch"] = relationship(back_populates="book_tags")
+
+    def __repr__(self) -> str:
+        return f"BookTag(name={self.name!r}, id={self.id!r})"
 
 
 class Highlight(Base):
@@ -451,6 +417,7 @@ class ReadwiseBatch(Base):
     database_write_time: Mapped[datetime] = mapped_column(nullable=True)
 
     books: Mapped[list["Book"]] = relationship(back_populates="batch")
+    book_tags: Mapped[list["BookTag"]] = relationship(back_populates="batch")
     highlights: Mapped[list["Highlight"]] = relationship(back_populates="batch")
     highlight_tags: Mapped[list["HighlightTag"]] = relationship(back_populates="batch")
 
@@ -458,6 +425,7 @@ class ReadwiseBatch(Base):
         parts = [f"ReadwiseBatch(id={self.id!r}"]
         parts.append(f"books={len(self.books)}")
         parts.append(f"highlights={len(self.highlights)}")
+        parts.append(f"book_tags={len(self.book_tags)}")
         parts.append(f"highlight_tags={len(self.highlight_tags)}")
         if self.start_time:
             parts.append(f"start={self.start_time.isoformat()}")

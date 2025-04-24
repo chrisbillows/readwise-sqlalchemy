@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.models import (
     Book,
-    CommaSeparatedList,
+    BookTag,
     Highlight,
     HighlightTag,
     ReadwiseBatch,
@@ -21,6 +21,9 @@ MIN_HIGHLIGHT_1_TAG_2 = {"id": 5556, "name": "blue"}
 
 MIN_HIGHLIGHT_1 = {"id": 111, "book_id": 99, "text": "highlight_1"}
 MIN_HIGHLIGHT_2 = {"id": 222, "book_id": 99, "text": "highlight_2"}
+
+MIN_BOOK_TAG_1 = {"id": 9990, "name": "book_tag_1"}
+MIN_BOOK_TAG_2 = {"id": 9991, "name": "book_tag_2"}
 
 MIN_BOOK = {"user_book_id": 99, "title": "book_1"}
 
@@ -56,7 +59,7 @@ def mock_pydantic_model_dump():
             "cover_image_url": "//link/to/image",
             "unique_url": None,
             "summary": None,
-            "book_tags": [],
+            "book_tags": [{"id": 4041, "name": "book_tag"}],
             "category": "books",
             "document_note": None,
             "readwise_url": "https://readwise.io/bookreview/1",
@@ -104,14 +107,17 @@ def mem_db_containing_full_objects(mem_db: DbHandle):
     """
     batch = ReadwiseBatch(start_time=START_TIME, end_time=END_TIME)
     book_data = mock_pydantic_model_dump()[0]
+    book_tag = book_data.pop("book_tags")[0]
     highlight = book_data.pop("highlights")[0]
     tag = highlight.pop("tags")[0]
 
     book_as_orm = Book(**book_data, batch=batch)
+    book_tag_as_orm = BookTag(**book_tag, batch=batch)
     highlight_as_orm = Highlight(**highlight, batch=batch)
     highlight_tag_as_orm = HighlightTag(**tag, batch=batch)
 
     highlight_as_orm.tags = [highlight_tag_as_orm]
+    book_as_orm.book_tags = [book_tag_as_orm]
     book_as_orm.highlights = [highlight_as_orm]
 
     with mem_db.session.begin():
@@ -144,6 +150,8 @@ def mem_db_containing_minimal_objects(mem_db: DbHandle):
     batch = ReadwiseBatch(start_time=START_TIME, end_time=END_TIME)
 
     book_as_orm = Book(**MIN_BOOK)
+    book_tag_1 = BookTag(**MIN_BOOK_TAG_1)
+    book_tag_2 = BookTag(**MIN_BOOK_TAG_2)
     highlight_1 = Highlight(**MIN_HIGHLIGHT_1)
     highlight_2 = Highlight(**MIN_HIGHLIGHT_2)
     highlight_1_tag_1 = HighlightTag(**MIN_HIGHLIGHT_1_TAG_1)
@@ -151,8 +159,10 @@ def mem_db_containing_minimal_objects(mem_db: DbHandle):
 
     highlight_1.tags = [highlight_1_tag_1, highlight_1_tag_2]
     book_as_orm.highlights = [highlight_1, highlight_2]
+    book_as_orm.book_tags = [book_tag_1, book_tag_2]
 
     batch.books = [book_as_orm]
+    batch.book_tags = [book_tag_1, book_tag_2]
     batch.highlights = [highlight_1, highlight_2]
     batch.highlight_tags = [highlight_1_tag_1, highlight_1_tag_2]
 
@@ -172,6 +182,15 @@ def minimal_book_as_orm(mem_db_containing_minimal_objects: Engine):
         fetched_books = clean_session.scalars(select(Book)).all()
         test_book = fetched_books[0]
         yield test_book
+
+
+@pytest.fixture()
+def minimal_book_tag_as_orm(mem_db_containing_minimal_objects: Engine):
+    """A minimal ``BookTag`` fetched from the minimal object database."""
+    with Session(mem_db_containing_minimal_objects) as clean_session:
+        fetched_book_tags = clean_session.scalars(select(BookTag)).all()
+        test_book_tag = fetched_book_tags[0]
+        yield test_book_tag
 
 
 @pytest.fixture()
@@ -224,12 +243,25 @@ def test_tables_in_mem_db_containing_minimal_objects(
     with Session(mem_db_containing_minimal_objects) as clean_session:
         inspector = inspect(clean_session.bind)
         tables = inspector.get_table_names()
-        assert tables == ["books", "highlight_tags", "highlights", "readwise_batches"]
+        assert tables == [
+            "book_tags",
+            "books",
+            "highlight_tags",
+            "highlights",
+            "readwise_batches",
+        ]
 
 
 def test_minimal_book_as_orm_read_from_db_correctly(minimal_book_as_orm: Book):
     assert minimal_book_as_orm.user_book_id == MIN_BOOK["user_book_id"]
     assert minimal_book_as_orm.title == MIN_BOOK["title"]
+
+
+def test_minimal_book_tag_as_orm_read_from_db_correctly(
+    minimal_book_tag_as_orm: BookTag,
+):
+    assert minimal_book_tag_as_orm.id == MIN_BOOK_TAG_1["id"]
+    assert minimal_book_tag_as_orm.name == MIN_BOOK_TAG_1["name"]
 
 
 def test_minimal_highlight_as_orm_read_from_db_correctly(
@@ -259,6 +291,12 @@ def test_minimal_readwise_batch_read_from_db_correctly(
 # -------
 
 
+def test_book_relationship_with_book_tags(minimal_book_as_orm: Book):
+    # Relationship
+    assert len(minimal_book_as_orm.book_tags) == 2
+    assert isinstance(minimal_book_as_orm.book_tags[0], BookTag)
+
+
 def test_book_relationship_with_highlights(minimal_book_as_orm: Book):
     # Relationship.
     assert len(minimal_book_as_orm.highlights) == 2
@@ -280,6 +318,24 @@ def test_book_relationship_with_batch(minimal_book_as_orm: Book):
     assert minimal_book_as_orm.batch.start_time == START_TIME
 
     assert minimal_book_as_orm.batch.books[0].user_book_id == MIN_BOOK["user_book_id"]
+
+
+def test_book_tag_relationship_with_book(minimal_book_tag_as_orm: BookTag):
+    # Foreign key.
+    assert minimal_book_tag_as_orm.user_book_id == MIN_BOOK["user_book_id"]
+    # Relationship.
+    assert isinstance(minimal_book_tag_as_orm.book, Book)
+    assert minimal_book_tag_as_orm.book.user_book_id == MIN_BOOK["user_book_id"]
+    assert minimal_book_tag_as_orm.book.title == MIN_BOOK["title"]
+
+
+def test_book_tag_relationship_with_batch(minimal_book_tag_as_orm: BookTag):
+    # Foreign key.
+    assert minimal_book_tag_as_orm.batch_id == BATCH_ID
+    # Relationship.
+    assert isinstance(minimal_book_tag_as_orm.batch, ReadwiseBatch)
+    assert minimal_book_tag_as_orm.batch.id == BATCH_ID
+    assert minimal_book_tag_as_orm.batch.start_time == START_TIME
 
 
 def test_highlight_relationship_with_book(minimal_highlight_as_orm: Highlight):
@@ -350,6 +406,13 @@ def test_readwise_batch_relationship_with_book(minimal_batch_as_orm: ReadwiseBat
     assert minimal_batch_as_orm.books[0].batch.id == BATCH_ID
 
 
+def test_readwise_batch_relationship_with_book_tag(minimal_batch_as_orm: ReadwiseBatch):
+    # Relationship.
+    assert len(minimal_batch_as_orm.book_tags) == 2
+    assert isinstance(minimal_batch_as_orm.book_tags[0], BookTag)
+    assert minimal_batch_as_orm.book_tags[0].id == MIN_BOOK_TAG_1["id"]
+
+
 def test_readwise_batch_relationship_with_highlight(
     minimal_batch_as_orm: ReadwiseBatch,
 ):
@@ -379,7 +442,7 @@ def test_readwise_batch_relationship_with_highlight_tag(
     [
         (field, value)
         for field, value in mock_pydantic_model_dump()[0].items()
-        if field != "highlights"
+        if field not in {"highlights", "book_tags"}
     ],
 )
 def test_fetch_full_book_from_db_assert_standard_field_values(
@@ -404,6 +467,7 @@ def test_fetch_full_book_from_db_assert_foreign_key_values(
     [
         (lambda book: book.highlights[0], Highlight),
         (lambda book: book.batch, ReadwiseBatch),
+        (lambda book: book.book_tags[0], BookTag),
     ],
 )
 def test_fetch_full_book_from_db_assert_mapped_objects(
@@ -414,6 +478,52 @@ def test_fetch_full_book_from_db_assert_mapped_objects(
     with Session(mem_db_containing_full_objects) as clean_session:
         fetched_book = clean_session.get(Book, 12345)
         object_to_test = extract_obj_lambda(fetched_book)
+        assert isinstance(object_to_test, expected_type)
+
+
+@pytest.mark.parametrize(
+    "field, expected",
+    [
+        (field, value)
+        for field, value in mock_pydantic_model_dump()[0]["book_tags"][0].items()
+    ],
+)
+def test_fetch_full_book_tag_from_db_assert_standard_field_values(
+    mem_db_containing_full_objects: Engine, field: str, expected: Any
+):
+    with Session(mem_db_containing_full_objects) as clean_session:
+        fetched_book_tag = clean_session.get(BookTag, 4041)
+        actual = getattr(fetched_book_tag, field)
+        assert actual == expected
+
+
+def test_fetch_full_book_tag_from_db_assert_foreign_key_values(
+    mem_db_containing_full_objects: Engine,
+):
+    with Session(mem_db_containing_full_objects) as clean_session:
+        fetched_book_tag = clean_session.get(BookTag, 4041)
+        assert (
+            fetched_book_tag.user_book_id
+            == mock_pydantic_model_dump()[0]["user_book_id"]
+        )
+        assert fetched_book_tag.batch_id == 1
+
+
+@pytest.mark.parametrize(
+    "extract_obj_lambda, expected_type",
+    [
+        (lambda book_tag: book_tag.book, Book),
+        (lambda book_tag: book_tag.batch, ReadwiseBatch),
+    ],
+)
+def test_fetch_full_book_tag_from_db_assert_mapped_objects(
+    mem_db_containing_full_objects: Engine,
+    extract_obj_lambda: Callable,
+    expected_type: type,
+):
+    with Session(mem_db_containing_full_objects) as clean_session:
+        fetched_book_tag = clean_session.get(BookTag, 4041)
+        object_to_test = extract_obj_lambda(fetched_book_tag)
         assert isinstance(object_to_test, expected_type)
 
 
@@ -531,6 +641,7 @@ def test_fetch_full_readwise_batch_from_db_assert_standard_field_values(
     "extract_obj_lambda, expected_type",
     [
         (lambda batch: batch.books[0], Book),
+        (lambda batch: batch.book_tags[0], BookTag),
         (lambda batch: batch.highlights[0], Highlight),
         (lambda batch: batch.highlight_tags[0], HighlightTag),
     ],
@@ -559,7 +670,7 @@ def test_fetch_full_readwise_batch_from_db_assert_mapped_objects(
         (
             ReadwiseBatch,
             1,
-            "ReadwiseBatch(id=1, books=1, highlights=1, highlight_tags=1, "
+            "ReadwiseBatch(id=1, books=1, highlights=1, book_tags=1, highlight_tags=1, "
             "start=2025-01-01T10:10:10, end=2025-01-01T10:10:20, "
             "write=2025-01-01T10:10:22)",
         ),
@@ -588,15 +699,17 @@ def test_highlight_repr_for_long_highlights(mem_db_containing_full_objects: Engi
     "obj, expected",
     [
         (Book, "Book(user_book_id=None, title=None, highlights=0)"),
+        (BookTag, "BookTag(name=None, id=None)"),
         (Highlight, "Highlight(id=None, text=None)"),
         (HighlightTag, "HighlightTag(name=None, id=None)"),
         (
             ReadwiseBatch,
-            "ReadwiseBatch(id=None, books=0, highlights=0, highlight_tags=0)",
+            "ReadwiseBatch(id=None, books=0, highlights=0, book_tags=0, "
+            "highlight_tags=0)",
         ),
     ],
 )
-def test_highlight_repr_for_empty_objects(obj: type, expected: str):
+def test_repr_for_empty_objects(obj: type, expected: str):
     mock_obj = obj()
     assert repr(mock_obj) == expected
 
@@ -637,28 +750,3 @@ def test_orm_mapped_highlight_prevents_a_missing_book(mem_db: DbHandle):
     with pytest.raises(IntegrityError, match="FOREIGN KEY constraint failed"):
         with mem_db.session.begin():
             mem_db.session.add(highlight_as_orm)
-
-
-class TestCommaSeparatedList:
-    LIST_OF_STRINGS = ["book_tag_1", "book_tag_2"]
-    STRING = "book_tag_1,book_tag_2"
-
-    def test_process_bind_param_list_of_strings(self):
-        csl = CommaSeparatedList()
-        actual = csl.process_bind_param(self.LIST_OF_STRINGS, None)
-        assert actual == self.STRING
-
-    def test_process_bind_param_empty_list(self):
-        csl = CommaSeparatedList()
-        actual = csl.process_bind_param([], None)
-        assert actual == ""
-
-    def test_process_result_value_list_of_strings(self):
-        csl = CommaSeparatedList()
-        decoded = csl.process_result_value(self.STRING, None)
-        assert decoded == self.LIST_OF_STRINGS
-
-    def test_process_result_value_empty_list(self):
-        csl = CommaSeparatedList()
-        decoded = csl.process_result_value("", None)
-        assert decoded == []

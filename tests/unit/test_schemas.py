@@ -9,6 +9,7 @@ from readwise_sqlalchemy.schemas import BookSchema, HighlightSchema
 # Mutate dictionary values in place with ``change_nested_dict_value``.
 PATH_TO_OBJ = {
     "book": [],
+    "book_tag": ["book_tags", 0],
     "highlight": ["highlights", 0],
     "highlight_tag": ["highlights", 0, "tags", 0],
 }
@@ -42,7 +43,7 @@ def mock_api_response() -> list[dict[str, Any]]:
             "cover_image_url": "https://link/to/image",
             "unique_url": "http://the.source.url.ai",
             "summary": None,
-            "book_tags": ["arch_btw"],
+            "book_tags": [{"id": 6969, "name": "arch_btw"}],
             "category": "books",
             "document_note": "A note added in Readwise Reader",
             "readwise_url": "https://readwise.io/bookreview/12345",
@@ -131,7 +132,7 @@ def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
                 "unique_url",
             ],
             "int": ["user_book_id"],
-            "list_of_strings": ["book_tags"],
+            "list_of_tags": ["book_tags"],
             "choice_category": ["category"],
             "asin": ["asin"],
             "list_of_highlights": ["highlights"],
@@ -150,8 +151,9 @@ def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
             "bool": ["is_favorite", "is_discard", "is_deleted"],
             "iso_string": ["highlighted_at", "created_at", "updated_at"],
             "choice_color": ["color"],
-            "list_of_highlight_tags": ["tags"],
+            "list_of_tags": ["tags"],
         },
+        "book_tag": {"int": ["id"], "string": ["name"]},
         "highlight_tag": {"int": ["id"], "string": ["name"]},
     }
 
@@ -171,13 +173,12 @@ def generate_invalid_field_values_test_cases() -> list[
     invalid_values = {
         "string": [123, [123], [], ["a"], {}],
         "int": ["a", "123", [], ["a", "b"], {}],
-        "list_of_strings": [[1, 2], "a"],
         "choice_category": [],
         "asin": ["a", 1, "1a2b3c4d"],
         "choice_color": [123, [123], [], ["a"], {}],
         "iso_string": [],
         "bool": [0, 1, "a", [], ["a"], {}],
-        "list_of_highlight_tags": [123, "abc", [{"a": 1, "b": 2}]],
+        "list_of_tags": [123, "abc", [{"a": 1, "b": 2}]],
         "list_of_highlights": [123, "abc", [{"a": 1, "b": 2}]],
     }
 
@@ -212,11 +213,13 @@ def generate_field_nullability_test_cases() -> dict[str, list[tuple]]:
         ],
         "highlight": ["id", "text", "book_id"],
         "highlight_tag": [],
+        "book_tag": [],
     }
 
     mock_book = mock_api_response()[0]
     object_fields = {
         "book": mock_book.keys(),
+        "book_tag": mock_book["book_tags"][0].keys(),
         "highlight": mock_book["highlights"][0].keys(),
         "highlight_tag": mock_book["highlights"][0]["tags"][0].keys(),
     }
@@ -245,6 +248,18 @@ def test_book_fields_in_test_objects_match():
 
     assert sorted(book_fields_mock_api_response) == sorted(
         book_fields_expected_types_dict
+    )
+
+
+def test_book_tag_fields_in_test_objects_match():
+    book_tags_fields_mock_api_response = mock_api_response()[0]["book_tags"][0].keys()
+
+    book_tag_fields_expected_types_dict = []
+    for list_of_fields in expected_type_per_schema_field()["book_tag"].values():
+        book_tag_fields_expected_types_dict.extend(list_of_fields)
+
+    assert sorted(book_tags_fields_mock_api_response) == sorted(
+        book_tag_fields_expected_types_dict
     )
 
 
@@ -302,13 +317,13 @@ def test_generate_field_nullability_test_cases():
 
 
 def test_nested_schema_configuration_with_valid_values():
-    mock_book_with_hl_and_hl_tag = mock_api_response()[0]
-    assert BookSchema(**mock_book_with_hl_and_hl_tag)
+    mock_book_with_book_tag_hl_and_hl_tag = mock_api_response()[0]
+    assert BookSchema(**mock_book_with_book_tag_hl_and_hl_tag)
 
 
 def test_nested_schema_model_dump_output():
-    mock_book_with_hl_and_hl_tag = mock_api_response()[0]
-    book_as_schema = BookSchema(**mock_book_with_hl_and_hl_tag)
+    mock_book_with_book_tag_hl_and_hl_tag = mock_api_response()[0]
+    book_as_schema = BookSchema(**mock_book_with_book_tag_hl_and_hl_tag)
     model_dump = book_as_schema.model_dump()
     expected = {
         "user_book_id": 12345,
@@ -320,7 +335,7 @@ def test_nested_schema_model_dump_output():
         "cover_image_url": "https://link/to/image",
         "unique_url": "http://the.source.url.ai",
         "summary": None,
-        "book_tags": ["arch_btw"],
+        "book_tags": [{"id": 6969, "name": "arch_btw"}],
         "category": "books",
         "document_note": "A note added in Readwise Reader",
         "readwise_url": "https://readwise.io/bookreview/12345",
@@ -359,12 +374,15 @@ def test_nested_schema_model_dump_output():
 def test_nested_schema_configuration_with_invalid_values(
     target_field: str, path_to_dict: list[Union[str, int]], invalid_value: Any
 ):
-    valid_mock_book_with_hl_and_hl_tag = mock_api_response()[0]
+    valid_mock_book_with_book_tag_hl_and_hl_tag = mock_api_response()[0]
     change_nested_dict_value(
-        valid_mock_book_with_hl_and_hl_tag, path_to_dict, target_field, invalid_value
+        valid_mock_book_with_book_tag_hl_and_hl_tag,
+        path_to_dict,
+        target_field,
+        invalid_value,
     )
     with pytest.raises(ValidationError):
-        BookSchema(**valid_mock_book_with_hl_and_hl_tag)
+        BookSchema(**valid_mock_book_with_book_tag_hl_and_hl_tag)
 
 
 @pytest.mark.parametrize(
@@ -413,6 +431,15 @@ def test_missing_highlight_fields_raise_errors(field_to_remove: str):
 
 
 @pytest.mark.parametrize(
+    "field_to_remove", mock_api_response()[0]["book_tags"][0].keys()
+)
+def test_missing_book_tag_fields_do_not_raise_errors(field_to_remove: str):
+    mock_book = mock_api_response()[0]
+    del mock_book["book_tags"][0][field_to_remove]
+    BookSchema(**mock_book)
+
+
+@pytest.mark.parametrize(
     "field_to_remove", mock_api_response()[0]["highlights"][0]["tags"][0].keys()
 )
 def test_missing_highlight_tag_fields_do_not_raise_errors(field_to_remove: str):
@@ -424,6 +451,13 @@ def test_missing_highlight_tag_fields_do_not_raise_errors(field_to_remove: str):
 def test_additional_book_field_raises_error():
     mock_book = mock_api_response()[0]
     mock_book["extra_field"] = None
+    with pytest.raises(ValidationError):
+        BookSchema(**mock_book)
+
+
+def test_additional_book_tag_field_raises_error():
+    mock_book = mock_api_response()[0]
+    mock_book["book_tags"][0]["extra_field"] = None
     with pytest.raises(ValidationError):
         BookSchema(**mock_book)
 

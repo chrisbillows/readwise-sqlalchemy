@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Callable
-from unittest.mock import ANY, MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, Mock, patch, call
 
 import pytest
 
@@ -12,6 +12,7 @@ from readwise_sqlalchemy.main import (
     fetch_from_export_api,
     main,
     run_pipeline,
+    run_pipeline_flatten,
     update_database,
     validate_books_with_highlights,
 )
@@ -40,6 +41,42 @@ def mock_run_pipeline() -> tuple[dict, Any]:
         check_db_func=mocks["mock_check_database"],
         fetch_func=mocks["mock_fetch_books_with_highlights"],
         validate_func=mocks["mock_validate_books_with_highlights"],
+        update_db_func=mocks["mock_update_database"],
+    )
+    return mocks, actual
+
+
+@pytest.fixture()
+def mock_run_pipeline_flatten() -> tuple[dict, Any]:
+    # Strings are used as simplified return values. They are not the real return types.
+    mocks = {
+        "mock_setup_logging": MagicMock(),
+        "mock_get_session": MagicMock(return_value="session"),
+        "mock_check_database": MagicMock(return_value="last_fetch"),
+        "mock_fetch_books_with_highlights": MagicMock(
+            return_value=("raw_data", "start", "end")
+        ),
+        "mock_flatten_books_with_highlights": MagicMock(
+            return_value={
+                "books": "book_data_dicts", 
+                "book_tags": "book_tags_dicts",
+                "highlights": "highlights_dicts",
+                "highlight_tags": "highlight_tags_dicts"
+            }
+        ),
+        "mock_validate_flat_api_data_by_object": MagicMock(
+            return_value=("valid_objs", "invalid_objs")
+        ),
+        "mock_update_database": MagicMock(),
+    }
+    actual = run_pipeline_flatten(
+        user_config=MagicMock(DB="db"),
+        setup_logging_func=mocks["mock_setup_logging"],
+        get_session_func=mocks["mock_get_session"],
+        check_db_func=mocks["mock_check_database"],
+        fetch_func=mocks["mock_fetch_books_with_highlights"],
+        flatten_func=mocks["mock_flatten_books_with_highlights"]
+        validate_func=mocks["mock_validate_flat_api_data_by_object"],
         update_db_func=mocks["mock_update_database"],
     )
     return mocks, actual
@@ -243,6 +280,47 @@ def test_run_pipeline_function_calls(
 ):
     mocks, run_pipeline_return_value = mock_run_pipeline
     assertion(mocks[mock_name])
+
+
+@pytest.mark.parametrize(
+    "mock_name, assertion",
+    [
+        ("mock_setup_logging", lambda m: m.assert_called_once_with()),
+        ("mock_get_session", lambda m: m.assert_called_once()),
+        # `Any` avoids passing in mock_user_config from mock_run_pipeline fixture.
+        ("mock_check_database", lambda m: m.assert_called_once_with("session", ANY)),
+        (
+            "mock_fetch_books_with_highlights",
+            lambda m: m.assert_called_once_with("last_fetch"),
+        ),
+        (
+            "mock_flatten_books_with_highlights",
+            lambda m: m.assert_called_once_with("raw_data"),
+        )
+        # (
+        #     "mock_validate_flat_api_data_by_object",
+        #     lambda m: m.assert_has_calls(
+        #         [
+        #             call()
+        #         ]
+        #     ),
+        # ),
+        (
+            "mock_update_database",
+            lambda m: m.assert_called_once_with(
+                "session", "valid_books", "start", "end"
+            ),
+        ),
+    ],
+)
+def test_run_pipeline_flatten_function_calls(
+    mock_name: str,
+    assertion: Callable,
+    mock_run_pipeline_flatten: tuple[dict, Any],
+):
+    mocks, run_pipeline_return_value = mock_run_pipeline_flatten
+    assertion(mocks[mock_name])
+
 
 
 def test_run_pipeline_return_value(mock_run_pipeline: tuple[dict, Any]):

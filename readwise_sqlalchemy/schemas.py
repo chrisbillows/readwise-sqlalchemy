@@ -21,9 +21,8 @@ Note
       accept unexpected fields by default.
 """
 
-import json
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -153,21 +152,3 @@ class BookSchema(BaseModel, extra="forbid", strict=True):
         See duplicate method on HighlightSchema.
         """
         return value if value else []
-
-
-if __name__ == "__main__":
-    # Placeholder for development testing.
-    with open("tests/data/real/sample_all_24th_nov_1604.json", "r") as file_handle:
-        data = json.load(file_handle)
-    count = 0
-    gather: list[Any] = []
-    for book in data:
-        try:
-            pydantic_book = BookSchema(**book)
-            count += 1
-        except ValueError as err:
-            print(f"🚨 Validation error {err} for {book['title']}")
-            book.pop("highlights")
-            print(book)
-    print(gather)
-    print(f"Validated {count} books")

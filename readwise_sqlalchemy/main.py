@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 import requests
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
@@ -14,7 +14,12 @@ from readwise_sqlalchemy.db_operations import (
     get_last_fetch,
     get_session,
 )
-from readwise_sqlalchemy.schemas import BookSchema
+from readwise_sqlalchemy.schemas import (
+    BookSchema,
+    BookTagsSchema,
+    HighlightSchema,
+    HighlightTagsSchema,
+)
 from readwise_sqlalchemy.types import (
     CheckDBFn,
     FetchFn,
@@ -25,6 +30,14 @@ from readwise_sqlalchemy.types import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+SCHEMAS_BY_OBJECT: dict[str, type[BaseModel]] = {
+    "books": BookSchema,
+    "book_tags": BookTagsSchema,
+    "highlights": HighlightSchema,
+    "highlight_tags": HighlightTagsSchema,
+}
 
 
 def fetch_from_export_api(
@@ -213,6 +226,93 @@ def validate_books_with_highlights(
             )
 
     return valid_books, failed_books
+
+
+def validate_flat_api_data_by_object_type(
+    flattened_api_data: dict[str, list[dict[str, Any]]],
+    schemas: dict[str, type[BaseModel]] = SCHEMAS_BY_OBJECT,
+) -> dict[str, list[dict[str, Any]]]:
+    """
+    Add a validated field to Readwise objects, by object type.
+
+    Validate by casting an object dict to a Pydantic schema. "validated" is either True
+    or, if invalid, a dict of fields and errors. E.g.
+
+    ```python
+    "validated" {
+         'asin': 'String should have at least 10 characters',
+         'author': 'Field required',
+        ...
+    }
+    ```
+
+    Parameters
+    ----------
+    flattened_api_data: dict[str, list[dict[str, Any]]]
+        The flattened API data in the form:
+            `{"books": [{book_1}, {book_2}], "book_tags": [{book_tag_a}, {book_tag_b}]}`
+
+    Returns
+    -------
+    dict[str, list[dict[str, Any]]]
+        The flattened API data in it's original form, with each individual object -
+        book, book tag, highlight, highlight_tag - given a "validated" field.
+    """
+    processed_objects_by_type = {}
+    for object_type, objects in flattened_api_data.items():
+        processed_objects = []
+        for item in objects:
+            try:
+                schema = schemas[object_type]
+                item_as_schema = schema(**item)
+                # Capture any data integrity transformation's done by the schema.
+                validated_item = item_as_schema.model_dump()
+                validated_item["validated"] = True
+                processed_objects.append(validated_item)
+            except ValidationError as err:
+                field_errors = {
+                    ".".join(str(part) for part in e["loc"]): e["msg"]
+                    for e in err.errors()
+                }
+                item["validated"] = field_errors
+                processed_objects.append(item)
+        processed_objects_by_type[object_type] = processed_objects
+    return processed_objects_by_type
+
+
+# TODO: Remove
+# --- Expected structure of 'flattened_api_data' ---
+# return {
+#     "books": books,
+#     "book_tags": book_tags,
+#     "highlights": highlights,
+#     "highlight_tags": highlight_tags,
+# }
+
+# TODO: Remove
+# --- Original design ---
+
+# def validate_objects() -> tuple[list[dict[str, Any]], list[tuple[dict[str, Any], dict[str, str]]]]:
+#     valid = []
+#     invalid = []
+#     for obj in objs:
+#         try:
+#             schema_class(**obj)  # Validate
+#             valid.append(obj)
+#         except ValidationError as err:
+#             field_errors = {".".join(e['loc']): e['msg'] for e in err.errors()}
+#             invalid.append((obj, field_errors))
+#     return valid, invalid
+
+# def mark_validated(valid_objs: list[dict[str, Any]], invalid_objs: list[tuple[dict[str, Any], dict[str, str]]]) -> list[dict[str, Any]]:
+#     results = []
+#     for obj in valid_objs:
+#         obj['validated'] = True
+#         results.append(obj)
+#     for obj, error_fields in invalid_objs:
+#         obj['validated'] = error_fields
+#         results.append(obj)
+#     return results
 
 
 def update_database(

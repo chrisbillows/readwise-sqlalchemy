@@ -3,6 +3,7 @@ from typing import Any, Callable
 from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from readwise_sqlalchemy.config import UserConfig
 from readwise_sqlalchemy.main import (
@@ -14,6 +15,7 @@ from readwise_sqlalchemy.main import (
     run_pipeline,
     update_database,
     validate_books_with_highlights,
+    validate_flat_api_data_by_object_type,
 )
 from readwise_sqlalchemy.schemas import BookSchema
 from tests.unit.test_schemas import mock_api_response
@@ -174,6 +176,7 @@ def test_fetch_books_with_highlights_last_fetch_exists(
     assert actual == (mock_api_response, mock_start_new_fetch, mock_end_new_fetch)
 
 
+# TODO: Delete as part of issue #38.
 def test_validate_books_and_highlights_valid_book():
     mock_valid_book = mock_api_response()[0]
 
@@ -201,6 +204,29 @@ def test_validate_books_and_highlights_valid_book():
         "integer [type=int_type, input_value='banana', input_type=str]\n    "
         "For further information visit https://errors.pydantic.dev/2.11/v/int_type"
     )
+
+
+def test_validate_flat_api_data_by_object_type_mock_schema():
+    mock_schema_instance = MagicMock()
+    mock_schema_instance.model_dump.return_value = {"title": "valid_book_model_dump"}
+
+    validation_error = ValidationError.from_exception_data("mock_error", [])
+    mock_schema = MagicMock()
+    mock_schema.side_effect = [mock_schema_instance, validation_error]
+
+    schemas = {"mock_obj": mock_schema}
+
+    mock_flattened_api_data = {
+        "mock_obj": [{"title": "valid_obj"}, {"title": "invalid_obj"}]
+    }
+    actual = validate_flat_api_data_by_object_type(mock_flattened_api_data, schemas)
+    expected = {
+        "mock_obj": [
+            {"title": "valid_book_model_dump", "validated": True},
+            {"title": "invalid_obj", "validated": {}},
+        ]
+    }
+    assert actual == expected
 
 
 @patch("readwise_sqlalchemy.main.DatabasePopulater")

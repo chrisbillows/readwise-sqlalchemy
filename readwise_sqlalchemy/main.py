@@ -227,10 +227,6 @@ def skeleton_validate_flat_api_data_by_object() -> None:
     raise NotImplementedError("To be implemented as part of issue #38.")
 
 
-def skeleton_compute_books_children_valid() -> None:
-    raise NotImplementedError("To be implemented as part of issue #38.")
-
-
 def update_database(
     session: Session,
     validated_books: list[BookSchema],
@@ -266,7 +262,6 @@ def run_pipeline_flatten(  # type: ignore[no-untyped-def]
     fetch_func: FetchFn = fetch_books_with_highlights,
     flatten_func=skeleton_flatten_books_with_highlights,
     validate_func=skeleton_validate_flat_api_data_by_object,
-    validate_books_children=skeleton_compute_books_children_valid,
     update_db_func: UpdateFn = update_database,
 ) -> None:
     """
@@ -303,13 +298,9 @@ def run_pipeline_flatten(  # type: ignore[no-untyped-def]
     last_fetch = check_db_func(session, user_config)
     raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
 
-    flat_data = flatten_func(raw_books)
-
     # Should validate just return `final_flat_data`?
+    flat_data = flatten_func(raw_books)
     valid_and_invalid_objs = skeleton_validate_flat_api_data_by_object(flat_data)  # type: ignore[call-arg, func-returns-value]
-    valid_and_invalid_objs = skeleton_compute_books_children_valid(  # type: ignore[call-arg, func-returns-value]
-        valid_and_invalid_objs
-    )
     update_db_func(session, valid_and_invalid_objs, start_fetch, end_fetch)
 
 

@@ -10,6 +10,7 @@ from readwise_sqlalchemy.main import (
     datetime_to_isoformat_str,
     fetch_books_with_highlights,
     fetch_from_export_api,
+    flatten_books_with_highlights,
     main,
     run_pipeline,
     update_database,
@@ -148,6 +149,55 @@ def test_fetch_books_with_highlights_no_last_fetch(
     mock_datetime.now.assert_called()
     mock_fetch_from_export_api.assert_called_once_with(last_fetch)
     assert actual == (mock_api_response, mock_start_new_fetch, mock_end_new_fetch)
+
+
+def test_flatten_books_with_highlights():
+    actual = flatten_books_with_highlights(mock_api_response())
+    expected = {
+        "books": [
+            {
+                "user_book_id": 12345,
+                "title": "book title",
+                "is_deleted": False,
+                "author": "name surname",
+                "readable_title": "Book Title",
+                "source": "web_clipper",
+                "cover_image_url": "https://link/to/image",
+                "unique_url": "http://the.source.url.ai",
+                "summary": None,
+                "category": "books",
+                "document_note": "A note added in Readwise Reader",
+                "readwise_url": "https://readwise.io/bookreview/12345",
+                "source_url": "http://the.source.url.ai",
+                "asin": None,
+            }
+        ],
+        "book_tags": [{"id": 6969, "name": "arch_btw", "user_book_id": 12345}],
+        "highlights": [
+            {
+                "id": 10,
+                "text": "The highlight text",
+                "location": 1000,
+                "location_type": "location",
+                "note": "document note",
+                "color": "yellow",
+                "highlighted_at": "2025-01-01T00:01:00",
+                "created_at": "2025-01-01T00:01:10",
+                "updated_at": "2025-01-01T00:01:20",
+                "external_id": None,
+                "end_location": None,
+                "url": None,
+                "book_id": 12345,
+                "is_favorite": False,
+                "is_discard": True,
+                "is_deleted": False,
+                "readwise_url": "https://readwise.io/open/10",
+                "user_book_id": 12345,
+            }
+        ],
+        "highlight_tags": [{"id": 97654, "name": "favorite", "highlight_id": 10}],
+    }
+    assert actual == expected
 
 
 @patch("readwise_sqlalchemy.main.datetime")

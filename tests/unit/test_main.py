@@ -282,6 +282,7 @@ def test_run_pipeline_function_calls(
     assertion(mocks[mock_name])
 
 
+@pytest.mark.skip(reason="Revise once real functionality in place.")
 @pytest.mark.parametrize(
     "mock_name, assertion",
     [

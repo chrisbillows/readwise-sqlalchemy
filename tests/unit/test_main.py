@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Callable
-from unittest.mock import ANY, MagicMock, Mock, patch, call
+from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
 
@@ -58,10 +58,10 @@ def mock_run_pipeline_flatten() -> tuple[dict, Any]:
         ),
         "mock_flatten_books_with_highlights": MagicMock(
             return_value={
-                "books": "book_data_dicts", 
+                "books": "book_data_dicts",
                 "book_tags": "book_tags_dicts",
                 "highlights": "highlights_dicts",
-                "highlight_tags": "highlight_tags_dicts"
+                "highlight_tags": "highlight_tags_dicts",
             }
         ),
         "mock_validate_flat_api_data_by_object": MagicMock(
@@ -75,7 +75,7 @@ def mock_run_pipeline_flatten() -> tuple[dict, Any]:
         get_session_func=mocks["mock_get_session"],
         check_db_func=mocks["mock_check_database"],
         fetch_func=mocks["mock_fetch_books_with_highlights"],
-        flatten_func=mocks["mock_flatten_books_with_highlights"]
+        flatten_func=mocks["mock_flatten_books_with_highlights"],
         validate_func=mocks["mock_validate_flat_api_data_by_object"],
         update_db_func=mocks["mock_update_database"],
     )
@@ -296,7 +296,7 @@ def test_run_pipeline_function_calls(
         (
             "mock_flatten_books_with_highlights",
             lambda m: m.assert_called_once_with("raw_data"),
-        )
+        ),
         # (
         #     "mock_validate_flat_api_data_by_object",
         #     lambda m: m.assert_has_calls(
@@ -320,7 +320,6 @@ def test_run_pipeline_flatten_function_calls(
 ):
     mocks, run_pipeline_return_value = mock_run_pipeline_flatten
     assertion(mocks[mock_name])
-
 
 
 def test_run_pipeline_return_value(mock_run_pipeline: tuple[dict, Any]):

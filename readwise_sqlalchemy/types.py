@@ -16,3 +16,6 @@ UpdateFn = Callable[[Session, list[BookSchema], datetime, datetime], None]
 ValidateFetchFn = Callable[
     [list[dict[str, Any]]], tuple[list[BookSchema], list[tuple[dict[str, Any], str]]]
 ]
+ValidateFlatFetchFn = Callable[
+    [dict[str, list[dict[str, Any]]]], dict[str, list[dict[str, Any]]]
+]

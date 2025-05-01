@@ -237,7 +237,6 @@ def validate_flat_api_data_by_object_type(
 
     Validate by casting an object dict to a Pydantic schema. "validated" is either True
     or, if invalid, a dict of fields and errors. E.g.
-
     ```python
     "validated" {
          'asin': 'String should have at least 10 characters',
@@ -245,13 +244,18 @@ def validate_flat_api_data_by_object_type(
         ...
     }
     ```
-
     Parameters
     ----------
     flattened_api_data: dict[str, list[dict[str, Any]]]
         The flattened API data in the form:
-            `{"books": [{book_1}, {book_2}], "book_tags": [{book_tag_a}, {book_tag_b}]}`
-
+        ```
+        {
+            "books": [<books>],
+            "book_tags": [<book_tags>],
+            "highlights": [<highlights>],
+            "highlight_tags": [<highlight_tags>],
+        }
+        ```
     Returns
     -------
     dict[str, list[dict[str, Any]]]
@@ -278,41 +282,6 @@ def validate_flat_api_data_by_object_type(
                 processed_objects.append(item)
         processed_objects_by_type[object_type] = processed_objects
     return processed_objects_by_type
-
-
-# TODO: Remove
-# --- Expected structure of 'flattened_api_data' ---
-# return {
-#     "books": books,
-#     "book_tags": book_tags,
-#     "highlights": highlights,
-#     "highlight_tags": highlight_tags,
-# }
-
-# TODO: Remove
-# --- Original design ---
-
-# def validate_objects() -> tuple[list[dict[str, Any]], list[tuple[dict[str, Any], dict[str, str]]]]:
-#     valid = []
-#     invalid = []
-#     for obj in objs:
-#         try:
-#             schema_class(**obj)  # Validate
-#             valid.append(obj)
-#         except ValidationError as err:
-#             field_errors = {".".join(e['loc']): e['msg'] for e in err.errors()}
-#             invalid.append((obj, field_errors))
-#     return valid, invalid
-
-# def mark_validated(valid_objs: list[dict[str, Any]], invalid_objs: list[tuple[dict[str, Any], dict[str, str]]]) -> list[dict[str, Any]]:
-#     results = []
-#     for obj in valid_objs:
-#         obj['validated'] = True
-#         results.append(obj)
-#     for obj, error_fields in invalid_objs:
-#         obj['validated'] = error_fields
-#         results.append(obj)
-#     return results
 
 
 def update_database(

@@ -88,6 +88,37 @@ def create_database(database_path: str | Path) -> None:
     Base.metadata.create_all(engine)
 
 
+class DatabasePopulaterFlattenedData:
+    def __init__(
+        self,
+        session: Session,
+        validated_objs: dict[str, list[dict[str, Any]]],
+        start_fetch: datetime,
+        end_fetch: datetime,
+    ):
+        """Initialiser.
+
+        Parameters
+        ----------
+        session: Session
+            An SQL Alchemy session.
+        validated_objs: dict[str, list[dict[str, Any]]]
+            The flattened API data in it's original form, with each individual object -
+            book, book tag, highlight, highlight_tag - given a "validated" field.
+        start_fetch: datetime
+            The time when the API fetch was started.
+        end_fetch: datetime
+            The time when the API fetch was completed.
+        """
+        self.session = session
+        self.validated_objs = validated_objs
+        self.start_fetch = start_fetch
+        self.end_fetch = end_fetch
+
+    def populate_database(self) -> None:
+        pass
+
+
 class DatabasePopulater:
     def __init__(
         self,

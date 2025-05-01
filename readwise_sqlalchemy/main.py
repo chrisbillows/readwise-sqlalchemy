@@ -10,6 +10,7 @@ from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
 from readwise_sqlalchemy.configure_logging import setup_logging
 from readwise_sqlalchemy.db_operations import (
     DatabasePopulater,
+    DatabasePopulaterFlattenedData,
     create_database,
     get_last_fetch,
     get_session,
@@ -26,9 +27,10 @@ from readwise_sqlalchemy.types import (
     FlattenFn,
     LogSetupFn,
     SessionFn,
+    UpdateDbFlattenedDataFn,
     UpdateFn,
+    ValidateFetchFlattenedDataFn,
     ValidateFetchFn,
-    ValidateFlatFetchFn,
 )
 
 logger = logging.getLogger(__name__)
@@ -364,6 +366,35 @@ def update_database(
     logger.info("Database contains all Readwise highlights to date")
 
 
+def update_database_flatten(
+    session: Session,
+    validated_objs: dict[str, list[dict[str, Any]]],
+    start_fetch: datetime,
+    end_fetch: datetime,
+) -> None:
+    """
+    Update the database.
+
+    Parameters
+    ----------
+    session: Session
+        A SQL alchemy session connected to a database.
+    validated_objs: dict[str, list[dict[str, Any]]]
+        The flattened API data in it's original form, with each individual object -
+        book, book tag, highlight, highlight_tag - given a "validated" field.
+    start_fetch: datetime
+        The time the fetch was called.
+    end_fetch: datetime
+        The time the fetch was completed.
+    """
+    logger.info("Updating database")
+    dbp_fd = DatabasePopulaterFlattenedData(
+        session, validated_objs, start_fetch, end_fetch
+    )
+    dbp_fd.populate_database()
+    logger.info("Database updated.")
+
+
 def run_pipeline_flatten(
     user_config: UserConfig = USER_CONFIG,
     setup_logging_func: LogSetupFn = setup_logging,
@@ -371,8 +402,8 @@ def run_pipeline_flatten(
     check_db_func: CheckDBFn = check_database,
     fetch_func: FetchFn = fetch_books_with_highlights,
     flatten_func: FlattenFn = flatten_books_with_highlights,
-    validate_func: ValidateFlatFetchFn = validate_flat_api_data_by_object_type,
-    update_db_func: UpdateFn = update_database,
+    validate_func: ValidateFetchFlattenedDataFn = validate_flat_api_data_by_object_type,
+    update_db_func: UpdateDbFlattenedDataFn = update_database_flatten,
 ) -> None:
     """
     Orchestrate the end-to-end Readwise data sync process.
@@ -396,20 +427,23 @@ def run_pipeline_flatten(
     fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
         Function that fetches highlights and returns them as a tuple with the start
         and end times of the fetch as datetimes.
-    flatten_func: FlattenFn, optional, default =
-
-    validate_func:
-
-    update_func: UpdateFn, optional, default = update_database()
-        Function that populates the database with fetched highlights.
+    flatten_func: FlattenFn, optional, default = flatten_books_with_highlights()
+        A function that flattens the nested API response into a dict of lists of
+        unnested objects, associated by fk.
+    validate_func: ValidateFetchFlattenedDataFn,
+                    default = validate_flat_api_data_by_object_type()
+        A function that validates unnested objects with Pydantic schema, and adds a
+        "validated" bool field to each object.
+    update_func: UpdateDbFlattenedDataFn, optional, default = update_database_flatten()
+        Function that populates the database with the flattened objects.
     """
     setup_logging_func()
     session = get_session_func(user_config.db_path)
     last_fetch = check_db_func(session, user_config)
     raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
     flat_data = flatten_func(raw_books)
-    valid_and_invalid_objs = validate_func(flat_data)
-    update_db_func(session, valid_and_invalid_objs, start_fetch, end_fetch)  # type: ignore[arg-type]
+    objs_with_valid_field = validate_func(flat_data)
+    update_db_func(session, objs_with_valid_field, start_fetch, end_fetch)
 
 
 def run_pipeline(

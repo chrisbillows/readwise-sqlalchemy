@@ -180,6 +180,57 @@ def fetch_books_with_highlights(
     return (data, start_new_fetch, end_new_fetch)
 
 
+def flatten_books_with_highlights(
+    raw_books: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    """
+    Flatten the nested API response from the Readwise Highlight EXPORT endpoint.
+
+    Split "highlights" and "book_tags" from a book.  Split "tags" from "highlights".
+
+    Parameters
+    ----------
+    raw_books: list[dict[str, Any]]
+        A list of dicts where each dict represents a "book". Nested within each book
+        are "book_tags" and "highlights".  Nested within "highlights" are "tags".
+
+    Returns
+    -------
+    dict[str, list[dict[str, Any]]
+        A dictionary with the keys "books", "book_tags", "highlights", "highlight_tags".
+        The values are the unnested keys and values for the object.
+    """
+    books = []
+    book_tags = []
+    highlights = []
+    highlight_tags = []
+
+    for raw_book in raw_books:
+        books.append(
+            {k: v for k, v in raw_book.items() if k not in ("book_tags", "highlights")}
+        )
+
+        for book_tag in raw_book.get("book_tags", []):
+            book_tag["user_book_id"] = raw_book["user_book_id"]
+            book_tags.append(book_tag)
+
+        for highlight in raw_book.get("highlights", []):
+            for tag in highlight.get("tags", []):
+                tag["highlight_id"] = highlight["id"]
+                highlight_tags.append(tag)
+
+            highlight = {k: v for k, v in highlight.items() if k != "tags"}
+            highlight["user_book_id"] = raw_book["user_book_id"]
+            highlights.append(highlight)
+
+    return {
+        "books": books,
+        "book_tags": book_tags,
+        "highlights": highlights,
+        "highlight_tags": highlight_tags,
+    }
+
+
 def validate_books_with_highlights(
     raw_books: list[dict[str, Any]],
 ) -> tuple[list[BookSchema], list[tuple[dict[str, Any], str]]]:

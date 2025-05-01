@@ -15,12 +15,11 @@ from readwise_sqlalchemy.db_operations import (
     get_session,
 )
 from readwise_sqlalchemy.schemas import (
-    BookSchema, BookTagsSchema, HighlightSchema, HighlightTagsSchema,
+    BookSchema,
 )
 from readwise_sqlalchemy.types import (
     CheckDBFn,
     FetchFn,
-    FlattenFn,
     LogSetupFn,
     SessionFn,
     UpdateFn,
@@ -183,7 +182,9 @@ def fetch_books_with_highlights(
     return (data, start_new_fetch, end_new_fetch)
 
 
-def skeleton_flatten_books_with_highlights(raw_books: list[dict[str, Any]]) -> dict[str, list[dict]]:
+def skeleton_flatten_books_with_highlights(
+    raw_books: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
     raise NotImplementedError("To be implemented as part of issue #38.")
 
 
@@ -222,11 +223,11 @@ def validate_books_with_highlights(
     return valid_books, failed_books
 
 
-def skeleton_validate_flat_api_data_by_object():
+def skeleton_validate_flat_api_data_by_object() -> None:
     raise NotImplementedError("To be implemented as part of issue #38.")
 
 
-def skeleton_compute_books_children_valid():
+def skeleton_compute_books_children_valid() -> None:
     raise NotImplementedError("To be implemented as part of issue #38.")
 
 
@@ -257,15 +258,15 @@ def update_database(
     logger.info("Database contains all Readwise highlights to date")
 
 
-def run_pipeline_flatten(
+def run_pipeline_flatten(  # type: ignore[no-untyped-def]
     user_config: UserConfig = USER_CONFIG,
     setup_logging_func: LogSetupFn = setup_logging,
     get_session_func: SessionFn = get_session,
     check_db_func: CheckDBFn = check_database,
     fetch_func: FetchFn = fetch_books_with_highlights,
-    flatten_func: FlattenFn = skeleton_flatten_books_with_highlights,
-    validate_func = skeleton_validate_flat_api_data_by_object, #TODO: Update type.
-    validate_books_children = skeleton_compute_books_children_valid,
+    flatten_func=skeleton_flatten_books_with_highlights,
+    validate_func=skeleton_validate_flat_api_data_by_object,
+    validate_books_children=skeleton_compute_books_children_valid,
     update_db_func: UpdateFn = update_database,
 ) -> None:
     """
@@ -275,7 +276,7 @@ def run_pipeline_flatten(
     and fetches only new/updated highlights.
 
     Use dependency injection for functions for simplified testing.
-    
+
     Parameters
     ----------
     user_config : UserConfig, optional, default = USER_CONFIG
@@ -290,9 +291,9 @@ def run_pipeline_flatten(
     fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
         Function that fetches highlights and returns them as a tuple with the start
         and end times of the fetch as datetimes.
-    flatten_func: FlattenFn, optional, default = 
+    flatten_func: FlattenFn, optional, default =
 
-    validate_func: 
+    validate_func:
 
     update_func: UpdateFn, optional, default = update_database()
         Function that populates the database with fetched highlights.
@@ -301,14 +302,15 @@ def run_pipeline_flatten(
     session = get_session_func(user_config.db_path)
     last_fetch = check_db_func(session, user_config)
     raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
-    
-    flat_data = flatten_func(raw_books)
-    
-    # Should validate just return `final_flat_data`?
-    valid_and_invalid_objs = skeleton_validate_flat_api_data_by_object(flat_data)
-    valid_and_invalid_obs = skeleton_compute_books_children_valid(valid_and_invalid_objs)
-    update_db_func(session, valid_and_invalid_objs, start_fetch, end_fetch)
 
+    flat_data = flatten_func(raw_books)
+
+    # Should validate just return `final_flat_data`?
+    valid_and_invalid_objs = skeleton_validate_flat_api_data_by_object(flat_data)  # type: ignore[call-arg, func-returns-value]
+    valid_and_invalid_objs = skeleton_compute_books_children_valid(  # type: ignore[call-arg, func-returns-value]
+        valid_and_invalid_objs
+    )
+    update_db_func(session, valid_and_invalid_objs, start_fetch, end_fetch)
 
 
 def run_pipeline(

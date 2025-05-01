@@ -28,6 +28,7 @@ from readwise_sqlalchemy.types import (
     SessionFn,
     UpdateFn,
     ValidateFetchFn,
+    ValidateFlatFetchFn,
 )
 
 logger = logging.getLogger(__name__)
@@ -363,14 +364,14 @@ def update_database(
     logger.info("Database contains all Readwise highlights to date")
 
 
-def run_pipeline_flatten(  # type: ignore[no-untyped-def]
+def run_pipeline_flatten(
     user_config: UserConfig = USER_CONFIG,
     setup_logging_func: LogSetupFn = setup_logging,
     get_session_func: SessionFn = get_session,
     check_db_func: CheckDBFn = check_database,
     fetch_func: FetchFn = fetch_books_with_highlights,
     flatten_func: FlattenFn = flatten_books_with_highlights,
-    validate_func=validate_flat_api_data_by_object_type,
+    validate_func: ValidateFlatFetchFn = validate_flat_api_data_by_object_type,
     update_db_func: UpdateFn = update_database,
 ) -> None:
     """
@@ -406,10 +407,8 @@ def run_pipeline_flatten(  # type: ignore[no-untyped-def]
     session = get_session_func(user_config.db_path)
     last_fetch = check_db_func(session, user_config)
     raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
-
-    # Should validate just return `final_flat_data`?
     flat_data = flatten_func(raw_books)
-    valid_and_invalid_objs = validate_flat_api_data_by_object_type(flat_data)
+    valid_and_invalid_objs = validate_func(flat_data)
     update_db_func(session, valid_and_invalid_objs, start_fetch, end_fetch)  # type: ignore[arg-type]
 
 

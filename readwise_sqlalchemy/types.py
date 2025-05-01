@@ -9,6 +9,7 @@ from readwise_sqlalchemy.schemas import BookSchema
 
 CheckDBFn = Callable[[Session, UserConfig], datetime | None]
 FetchFn = Callable[[datetime | None], tuple[list[dict[str, Any]], datetime, datetime]]
+FlattenFn = Callable[[list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]
 LogSetupFn = Callable[[], None]
 SessionFn = Callable[[str | Path], Session]
 UpdateFn = Callable[[Session, list[BookSchema], datetime, datetime], None]

@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 import requests
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
@@ -16,6 +16,9 @@ from readwise_sqlalchemy.db_operations import (
 )
 from readwise_sqlalchemy.schemas import (
     BookSchema,
+    BookTagsSchema,
+    HighlightSchema,
+    HighlightTagsSchema,
 )
 from readwise_sqlalchemy.types import (
     CheckDBFn,
@@ -28,6 +31,14 @@ from readwise_sqlalchemy.types import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+SCHEMAS_BY_OBJECT: dict[str, type[BaseModel]] = {
+    "books": BookSchema,
+    "book_tags": BookTagsSchema,
+    "highlights": HighlightSchema,
+    "highlight_tags": HighlightTagsSchema,
+}
 
 
 def fetch_from_export_api(
@@ -269,8 +280,60 @@ def validate_books_with_highlights(
     return valid_books, failed_books
 
 
-def skeleton_validate_flat_api_data_by_object() -> None:
-    raise NotImplementedError("To be implemented as part of issue #38.")
+def validate_flat_api_data_by_object_type(
+    flattened_api_data: dict[str, list[dict[str, Any]]],
+    schemas: dict[str, type[BaseModel]] = SCHEMAS_BY_OBJECT,
+) -> dict[str, list[dict[str, Any]]]:
+    """
+    Add a validated field to Readwise objects, by object type.
+
+    Validate by casting an object dict to a Pydantic schema. "validated" is either True
+    or, if invalid, a dict of fields and errors. E.g.
+    ```python
+    "validated" {
+         'asin': 'String should have at least 10 characters',
+         'author': 'Field required',
+        ...
+    }
+    ```
+    Parameters
+    ----------
+    flattened_api_data: dict[str, list[dict[str, Any]]]
+        The flattened API data in the form:
+        ```
+        {
+            "books": [<books>],
+            "book_tags": [<book_tags>],
+            "highlights": [<highlights>],
+            "highlight_tags": [<highlight_tags>],
+        }
+        ```
+    Returns
+    -------
+    dict[str, list[dict[str, Any]]]
+        The flattened API data in it's original form, with each individual object -
+        book, book tag, highlight, highlight_tag - given a "validated" field.
+    """
+    processed_objects_by_type = {}
+    for object_type, objects in flattened_api_data.items():
+        processed_objects = []
+        for item in objects:
+            try:
+                schema = schemas[object_type]
+                item_as_schema = schema(**item)
+                # Capture any data integrity transformation's done by the schema.
+                validated_item = item_as_schema.model_dump()
+                validated_item["validated"] = True
+                processed_objects.append(validated_item)
+            except ValidationError as err:
+                field_errors = {
+                    ".".join(str(part) for part in e["loc"]): e["msg"]
+                    for e in err.errors()
+                }
+                item["validated"] = field_errors
+                processed_objects.append(item)
+        processed_objects_by_type[object_type] = processed_objects
+    return processed_objects_by_type
 
 
 def update_database(
@@ -307,7 +370,7 @@ def run_pipeline_flatten(  # type: ignore[no-untyped-def]
     check_db_func: CheckDBFn = check_database,
     fetch_func: FetchFn = fetch_books_with_highlights,
     flatten_func: FlattenFn = flatten_books_with_highlights,
-    validate_func=skeleton_validate_flat_api_data_by_object,
+    validate_func=validate_flat_api_data_by_object_type,
     update_db_func: UpdateFn = update_database,
 ) -> None:
     """
@@ -346,8 +409,8 @@ def run_pipeline_flatten(  # type: ignore[no-untyped-def]
 
     # Should validate just return `final_flat_data`?
     flat_data = flatten_func(raw_books)
-    valid_and_invalid_objs = skeleton_validate_flat_api_data_by_object(flat_data)  # type: ignore[call-arg, func-returns-value]
-    update_db_func(session, valid_and_invalid_objs, start_fetch, end_fetch)
+    valid_and_invalid_objs = validate_flat_api_data_by_object_type(flat_data)
+    update_db_func(session, valid_and_invalid_objs, start_fetch, end_fetch)  # type: ignore[arg-type]
 
 
 def run_pipeline(

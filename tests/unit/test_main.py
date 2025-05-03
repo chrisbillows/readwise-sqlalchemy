@@ -4,6 +4,7 @@ from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
 from pydantic import ValidationError
+from pydantic_core import InitErrorDetails, PydanticCustomError
 
 from readwise_sqlalchemy.config import UserConfig
 from readwise_sqlalchemy.main import (
@@ -30,7 +31,7 @@ def mock_run_pipeline() -> tuple[dict, Any]:
         "mock_get_session": MagicMock(return_value="session"),
         "mock_check_database": MagicMock(return_value="last_fetch"),
         "mock_fetch_books_with_highlights": MagicMock(
-            return_value=("data", "start", "end")
+            return_value=("raw_data", "start", "end")
         ),
         "mock_validate_books_with_highlights": MagicMock(
             return_value=("valid_books", "invalid_books")
@@ -67,10 +68,10 @@ def mock_run_pipeline_flatten() -> tuple[dict, Any]:
                 "highlight_tags": "highlight_tags_dicts",
             }
         ),
-        "mock_validate_flat_api_data_by_object": MagicMock(
+        "mock_validate_flat_api_data_by_object_type": MagicMock(
             return_value=("valid_objs", "invalid_objs")
         ),
-        "mock_update_database": MagicMock(),
+        "mock_update_database_flatten": MagicMock(),
     }
     actual = run_pipeline_flatten(
         user_config=MagicMock(DB="db"),
@@ -79,8 +80,8 @@ def mock_run_pipeline_flatten() -> tuple[dict, Any]:
         check_db_func=mocks["mock_check_database"],
         fetch_func=mocks["mock_fetch_books_with_highlights"],
         flatten_func=mocks["mock_flatten_books_with_highlights"],
-        validate_func=mocks["mock_validate_flat_api_data_by_object"],
-        update_db_func=mocks["mock_update_database"],
+        validate_func=mocks["mock_validate_flat_api_data_by_object_type"],
+        update_db_func=mocks["mock_update_database_flatten"],
     )
     return mocks, actual
 
@@ -159,7 +160,7 @@ def test_check_database_when_database_exists(
     assert result == mock_last_fetch
 
 
-def test_str_to_iso_format():
+def test_datetime_to_iso_format_str():
     date_time = datetime(2025, 4, 14, 20, 28, 21, 589651)
     expected = "2025-04-14T20:28:21.589651"
     actual = datetime_to_isoformat_str(date_time)
@@ -187,6 +188,30 @@ def test_fetch_books_with_highlights_no_last_fetch(
     mock_str_to_iso_format.assert_not_called()
     mock_datetime.now.assert_called()
     mock_fetch_from_export_api.assert_called_once_with(last_fetch)
+    assert actual == (mock_api_response, mock_start_new_fetch, mock_end_new_fetch)
+
+
+@patch("readwise_sqlalchemy.main.datetime")
+@patch("readwise_sqlalchemy.main.fetch_from_export_api")
+def test_fetch_books_with_highlights_last_fetch_exists(
+    mock_fetch_from_export_api: MagicMock,
+    mock_datetime: MagicMock,
+):
+    mock_api_response = ["book_with_hl"]
+    mock_fetch_from_export_api.return_value = mock_api_response
+
+    mock_start_new_fetch = datetime(2025, 1, 1, 2, 2, 2)
+    mock_end_new_fetch = datetime(2025, 1, 1, 3, 3, 3)
+    mock_datetime.now.side_effect = [mock_start_new_fetch, mock_end_new_fetch]
+
+    last_fetch = datetime(2025, 1, 1, 1, 1, 1)
+    last_fetch_iso_string = "2025-01-01T01:01:01"
+
+    actual = fetch_books_with_highlights(last_fetch)
+
+    mock_datetime.now.assert_called()
+    mock_fetch_from_export_api.assert_called_once_with(last_fetch_iso_string)
+
     assert actual == (mock_api_response, mock_start_new_fetch, mock_end_new_fetch)
 
 
@@ -239,32 +264,7 @@ def test_flatten_books_with_highlights():
     assert actual == expected
 
 
-@patch("readwise_sqlalchemy.main.datetime")
-@patch("readwise_sqlalchemy.main.fetch_from_export_api")
-def test_fetch_books_with_highlights_last_fetch_exists(
-    mock_fetch_from_export_api: MagicMock,
-    mock_datetime: MagicMock,
-):
-    mock_api_response = ["book_with_hl"]
-    mock_fetch_from_export_api.return_value = mock_api_response
-
-    mock_start_new_fetch = datetime(2025, 1, 1, 2, 2, 2)
-    mock_end_new_fetch = datetime(2025, 1, 1, 3, 3, 3)
-    mock_datetime.now.side_effect = [mock_start_new_fetch, mock_end_new_fetch]
-
-    last_fetch = datetime(2025, 1, 1, 1, 1, 1)
-    last_fetch_iso_string = "2025-01-01T01:01:01"
-
-    actual = fetch_books_with_highlights(last_fetch)
-
-    mock_datetime.now.assert_called()
-    mock_fetch_from_export_api.assert_called_once_with(last_fetch_iso_string)
-
-    assert actual == (mock_api_response, mock_start_new_fetch, mock_end_new_fetch)
-
-
-# TODO: Delete as part of issue #38.
-def test_validate_books_and_highlights_valid_book():
+def test_validate_books_with_highlights():
     mock_valid_book = mock_api_response()[0]
 
     mock_invalid_book = mock_api_response()[0]
@@ -293,24 +293,41 @@ def test_validate_books_and_highlights_valid_book():
     )
 
 
-def test_validate_flat_api_data_by_object_type_mock_schema():
+def test_validate_flat_api_data_by_object_type():
+    # Mock the pydantic model instance to illustrate the output for a valid object.
     mock_schema_instance = MagicMock()
     mock_schema_instance.model_dump.return_value = {"title": "valid_book_model_dump"}
 
-    validation_error = ValidationError.from_exception_data("mock_error", [])
+    # Mock the pydantic validation error to illustrate the output for an invalid object.
+    mock_error_type = PydanticCustomError("mock_error", "Title invalid reason")
+    mock_error_details = InitErrorDetails(
+        type=mock_error_type,
+        loc=["title"],
+    )
+    validation_error = ValidationError.from_exception_data(
+        "mock_error", [mock_error_details]
+    )
+
+    # Pass a mock schema.
     mock_schema = MagicMock()
     mock_schema.side_effect = [mock_schema_instance, validation_error]
-
     schemas = {"mock_obj": mock_schema}
 
     mock_flattened_api_data = {
-        "mock_obj": [{"title": "valid_obj"}, {"title": "invalid_obj"}]
+        "mock_obj": [{"title": "valid_value"}, {"title": "invalid_value"}]
     }
     actual = validate_flat_api_data_by_object_type(mock_flattened_api_data, schemas)
     expected = {
         "mock_obj": [
             {"title": "valid_book_model_dump", "validated": True},
-            {"title": "invalid_obj", "validated": {}},
+            # For an invalid object, validated should be a dict of obj fields and their
+            # validation error.
+            {
+                "title": "invalid_value",
+                "validated": {
+                    "title": "Title invalid reason",
+                },
+            },
         ]
     }
     assert actual == expected
@@ -326,6 +343,11 @@ def test_update_database(mock_db_populater: MagicMock):
     mock_instance.populate_database.assert_called_once_with()
 
 
+@pytest.mark.skip("To be implemented")
+def test_update_database_flatten():
+    pass
+
+
 @pytest.mark.parametrize(
     "mock_name, assertion",
     [
@@ -339,7 +361,11 @@ def test_update_database(mock_db_populater: MagicMock):
         ),
         (
             "mock_validate_books_with_highlights",
-            lambda m: m.assert_called_once_with("data"),
+            lambda m: m.assert_called_once_with("raw_data"),
+        ),
+        (
+            "mock_validate_books_with_highlights",
+            lambda m: m.assert_called_once_with("raw_data"),
         ),
         (
             "mock_update_database",
@@ -358,7 +384,6 @@ def test_run_pipeline_function_calls(
     assertion(mocks[mock_name])
 
 
-@pytest.mark.skip(reason="Revise once real functionality in place.")
 @pytest.mark.parametrize(
     "mock_name, assertion",
     [
@@ -374,18 +399,21 @@ def test_run_pipeline_function_calls(
             "mock_flatten_books_with_highlights",
             lambda m: m.assert_called_once_with("raw_data"),
         ),
-        # (
-        #     "mock_validate_flat_api_data_by_object",
-        #     lambda m: m.assert_has_calls(
-        #         [
-        #             call()
-        #         ]
-        #     ),
-        # ),
         (
-            "mock_update_database",
+            "mock_validate_flat_api_data_by_object_type",
             lambda m: m.assert_called_once_with(
-                "session", "valid_books", "start", "end"
+                {
+                    "books": "book_data_dicts",
+                    "book_tags": "book_tags_dicts",
+                    "highlights": "highlights_dicts",
+                    "highlight_tags": "highlight_tags_dicts",
+                }
+            ),
+        ),
+        (
+            "mock_update_database_flatten",
+            lambda m: m.assert_called_once_with(
+                "session", ("valid_objs", "invalid_objs"), "start", "end"
             ),
         ),
     ],

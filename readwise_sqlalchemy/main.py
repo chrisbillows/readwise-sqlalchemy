@@ -395,6 +395,51 @@ def update_database_flatten(
     logger.info("Database updated.")
 
 
+def run_pipeline(
+    user_config: UserConfig = USER_CONFIG,
+    setup_logging_func: LogSetupFn = setup_logging,
+    get_session_func: SessionFn = get_session,
+    check_db_func: CheckDBFn = check_database,
+    fetch_func: FetchFn = fetch_books_with_highlights,
+    validate_func: ValidateFetchFn = validate_books_with_highlights,
+    update_db_func: UpdateFn = update_database,
+) -> None:
+    """
+    Orchestrate the end-to-end Readwise data sync process.
+
+    Creates a new database and fetches all highlights, or gets the last fetch datetime
+    and fetches only new highlights.
+
+    Use dependency injection for functions for simplified testing.
+
+    Parameters
+    ----------
+    user_config : UserConfig, optional, default = USER_CONFIG
+        Configuration object.
+    setup_logging_func: LogSetupFn, optional, default = setup_logging()
+        A function that sets up application logging.
+    get_session_func: SessionFn, optional, get_session()
+        A function that returns a SQLAlchemy database Session.
+    check_db_func: CheckDBFn, optional, default = check_database()
+        A function that creates the database or returns the last fetch datetime (or
+        None if it just creates the db).
+    fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
+        Function that fetches highlights and returns them as a tuple with the start
+        and end times of the fetch as datetimes.
+    validate_func: ValidateFetchFn, default = validate_books_with_highlights()
+        A function that validates an API response, returning lists of valid and failed
+        items.
+    update_func: UpdateFn, optional, default = update_database()
+        Function that populates the database with fetched highlights.
+    """
+    setup_logging_func()
+    session = get_session_func(user_config.db_path)
+    last_fetch = check_db_func(session, user_config)
+    data, start_fetch, end_fetch = fetch_func(last_fetch)
+    valid_books, failed_books = validate_func(data)
+    update_db_func(session, valid_books, start_fetch, end_fetch)
+
+
 def run_pipeline_flatten(
     user_config: UserConfig = USER_CONFIG,
     setup_logging_func: LogSetupFn = setup_logging,
@@ -442,53 +487,8 @@ def run_pipeline_flatten(
     last_fetch = check_db_func(session, user_config)
     raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
     flat_data = flatten_func(raw_books)
-    objs_with_valid_field = validate_func(flat_data)
-    update_db_func(session, objs_with_valid_field, start_fetch, end_fetch)
-
-
-def run_pipeline(
-    user_config: UserConfig = USER_CONFIG,
-    setup_logging_func: LogSetupFn = setup_logging,
-    get_session_func: SessionFn = get_session,
-    check_db_func: CheckDBFn = check_database,
-    fetch_func: FetchFn = fetch_books_with_highlights,
-    validate_func: ValidateFetchFn = validate_books_with_highlights,
-    update_db_func: UpdateFn = update_database,
-) -> None:
-    """
-    Orchestrate the end-to-end Readwise data sync process.
-
-    Creates a new database and fetches all highlights, or gets the last fetch datetime
-    and fetches only new highlights.
-
-    Use dependency injection for functions for simplified testing.
-
-    Parameters
-    ----------
-    user_config : UserConfig, optional, default = USER_CONFIG
-        Configuration object.
-    setup_logging_func: LogSetupFn, optional, default = setup_logging()
-        A function that sets up application logging.
-    get_session_func: SessionFn, optional, get_session()
-        A function that returns a SQLAlchemy database Session.
-    check_db_func: CheckDBFn, optional, default = check_database()
-        A function that creates the database or returns the last fetch datetime (or
-        None if it just creates the db).
-    fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
-        Function that fetches highlights and returns them as a tuple with the start
-        and end times of the fetch as datetimes.
-    validate_func: ValidateFetchFn, default = validate_books_with_highlights()
-        A function that validates an API response, returning lists of valid and failed
-        items.
-    update_func: UpdateFn, optional, default = update_database()
-        Function that populates the database with fetched highlights.
-    """
-    setup_logging_func()
-    session = get_session_func(user_config.db_path)
-    last_fetch = check_db_func(session, user_config)
-    data, start_fetch, end_fetch = fetch_func(last_fetch)
-    valid_books, failed_books = validate_func(data)
-    update_db_func(session, valid_books, start_fetch, end_fetch)
+    objs_with_validated_field = validate_func(flat_data)
+    update_db_func(session, objs_with_validated_field, start_fetch, end_fetch)
 
 
 def main(user_config: UserConfig = USER_CONFIG) -> None:

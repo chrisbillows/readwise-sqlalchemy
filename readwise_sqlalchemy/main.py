@@ -180,6 +180,41 @@ def fetch_books_with_highlights(
     return (data, start_new_fetch, end_new_fetch)
 
 
+def validate_object_relationships(
+    raw_books: list[dict[str, Any]],
+) -> None:
+    """
+    Validate the relationships nested Readwise objects.
+
+    This first validation layer checks essential relationships between objects. This
+    errors are understood to be impossible and therefore an error is raised and the
+    entire pipeline is stopped: an issue with the Readwise API or the data output is
+    assumed.
+
+    The checks are:
+        - Each highlight's `book_id` matches the book's `user_book_id`.
+
+    Parameters
+    ----------
+    raw_books : list[dict]
+        A list of raw dicts from the Readwise API.
+
+    Raises
+    -------
+    ValueError
+        If any of the checks fail.
+    """
+    for book in raw_books:
+        if "highlights" in book:
+            for highlight in book["highlights"]:
+                if highlight.get("book_id") != book.get("user_book_id"):
+                    raise ValueError(
+                        f"Book ID {book['user_book_id']} does not match "
+                        f"highlight ID {highlight['book_id']}"
+                    )
+    logger.info("Validated object relationships in Readwise data.")
+
+
 def validate_books_with_highlights(
     raw_books: list[dict[str, Any]],
 ) -> tuple[list[BookSchema], list[tuple[dict[str, Any], str]]]:

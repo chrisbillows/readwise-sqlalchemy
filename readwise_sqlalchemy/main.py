@@ -180,39 +180,146 @@ def fetch_books_with_highlights(
     return (data, start_new_fetch, end_new_fetch)
 
 
-def validate_object_relationships(
-    raw_books: list[dict[str, Any]],
-) -> None:
+def validation_ensure_list(
+    obj: dict[str, Any], field: str, parent_label: str
+) -> list[str]:
     """
-    Validate the relationships nested Readwise objects.
+    Ensure a field is a list. Fix if needed and return any validation errors.
 
-    This first validation layer checks essential relationships between objects. This
-    errors are understood to be impossible and therefore an error is raised and the
-    entire pipeline is stopped: an issue with the Readwise API or the data output is
-    assumed.
+    Parameters
+    ----------
+    obj: dict
+        A dictionary-like object.
+    field: str
+        The field to check.
+    parent_label: str
+        A label for the parent object (for error messages). E.g. "book" or "highlight".
 
-    The checks are:
-        - Each highlight's `book_id` matches the book's `user_book_id`.
+    Returns
+    -------
+    list[str]
+        A list of validation errors. Empty if the field is valid.
+    """
+    errors = []
+    if obj.get(field) is None:
+        obj[field] = []
+        errors.append(f"No {field} found in {parent_label}")
+    elif not isinstance(obj[field], list):
+        errors.append(
+            f"{field} not stored, not a list in {parent_label}. Value: {obj[field]}"
+        )
+        obj[field] = []
+    return errors
+
+
+def validation_annotate_validated(obj: dict[str, Any], errors: list[str]) -> None:
+    """
+    Set `validated` and `validation_errors` fields on any dict-like object.
+
+    Parameters
+    ----------
+    obj: dict
+        A dictionary-like object.
+    errors: list[str]
+        A list of validation errors. Empty if the object is valid.
+    """
+    obj["validated"] = not errors
+    obj["validation_errors"] = errors
+
+
+def validation_highlight_book_id(
+    highlight: dict[str, Any], book_user_book_id: int
+) -> list[str]:
+    """
+    Ensure highlight.book_id matches its parent book.user_book_id.
+
+    Fix if needed and return any validation errors.
+
+    #TODO: Finish docstring
+
+
+    """
+    errors = []
+    if highlight.get("book_id") != book_user_book_id:
+        errors.append(
+            f"Highlight book_id {highlight.get('book_id')} does not match "
+            f"book user_book_id {book_user_book_id}"
+        )
+        highlight["book_id"] = book_user_book_id
+    return errors
+
+
+def validation_nested_obj_layer(
+    raw_books: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """
+    First validation layer: validate nested Readwise objects.
+
+    Check and fix essential aspects of nested objects to avoid downstream errors once
+    the API data is flattened. All books are assumed to have a "user_book_id" field.
+
+    Each object is tagged with:
+    - `validated`: True or False
+    - `validation_errors`: a list of errors (empty if valid)
 
     Parameters
     ----------
     raw_books : list[dict]
         A list of raw dicts from the Readwise API.
 
-    Raises
+    Returns
     -------
-    ValueError
-        If any of the checks fail.
+    raw_books : list[dict]
+        A list of raw dicts from the Readwise API. Each object has a `validated` field
+        set to True or False, and a `validation_errors` field containing a list of
+        errors (empty if the object is valid). False will indicate the object failed
+        validation in any validation layer.
+
+    Notes
+    -----
+    - The validation checks:
+        - Each book has a list of highlights and book_tags. If the field is missing,
+          set to an empty list. If the field value is a type other than a list, put
+          the field value into a list.
+        - Each highlight's `book_id` matches the book's `user_book_id`.
+        - Each highlight has a list of tags. If the field is missing, set to an empty
+          list. If the field value is a type other than a list, put the field value into
+          a list.
+    - The validation checks are not strict. They are designed to ensure that the data
+      is in a format that can be processed downstream. The checks are not exhaustive
+      and do not cover all possible edge cases. The goal is to include as much data as
+      possible while still being able to promise type safety when using data from the
+      database.
+
     """
     for book in raw_books:
-        if "highlights" in book:
-            for highlight in book["highlights"]:
-                if highlight.get("book_id") != book.get("user_book_id"):
-                    raise ValueError(
-                        f"Book ID {book['user_book_id']} does not match "
-                        f"highlight ID {highlight['book_id']}"
-                    )
-    logger.info("Validated object relationships in Readwise data.")
+        book_errors = []
+
+        # Highlights and book_tags must exist and be lists
+        book_errors += validation_ensure_list(book, "highlights", "book")
+        book_errors += validation_ensure_list(book, "book_tags", "book")
+
+        # Validate each book_tag (no strict checks yet)
+        for tag in book["book_tags"]:
+            validation_annotate_validated(tag, [])
+
+        # Validate each highlight and its tags
+        for highlight in book["highlights"]:
+            highlight_errors = []
+
+            highlight_errors += validation_highlight_book_id(
+                highlight, book["user_book_id"]
+            )
+            highlight_errors += validation_ensure_list(highlight, "tags", "highlight")
+
+            for tag in highlight["tags"]:
+                validation_annotate_validated(tag, [])
+
+            validation_annotate_validated(highlight, highlight_errors)
+
+        validation_annotate_validated(book, book_errors)
+
+    return raw_books
 
 
 def validate_books_with_highlights(

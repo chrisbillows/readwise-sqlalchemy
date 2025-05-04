@@ -228,16 +228,24 @@ def validation_annotate_validated(obj: dict[str, Any], errors: list[str]) -> Non
 
 
 def validation_highlight_book_id(
-    highlight: dict[str, Any], book_user_book_id: int
+    highlight: dict[str, Any], book_user_book_id: Any
 ) -> list[str]:
     """
     Ensure highlight.book_id matches its parent book.user_book_id.
 
     Fix if needed and return any validation errors.
 
-    #TODO: Finish docstring
+    Parameters
+    --------
+    highlight: dict[str, Any]
+        A highlight obj.
+    book_user_id: Any
+        A book user id. It's expected to be an int but a value of any type is accepted.
 
-
+    Returns
+    -------
+    list[str]
+        A list of errors.
     """
     errors = []
     if highlight.get("book_id") != book_user_book_id:

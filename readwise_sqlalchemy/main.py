@@ -203,10 +203,10 @@ def validation_ensure_list(
     errors = []
     if obj.get(field) is None:
         obj[field] = []
-        errors.append(f"No {field} found in {parent_label}")
+        errors.append(f"Invalid field: {field}. Field not found in {parent_label}")
     elif not isinstance(obj[field], list):
         errors.append(
-            f"{field} not stored, not a list in {parent_label}. Value: {obj[field]}"
+            f"Invalid field: {field}. Field value not stored, not a list in {parent_label}. Value: {obj[field]}"
         )
         obj[field] = []
     return errors
@@ -250,8 +250,8 @@ def validation_highlight_book_id(
     errors = []
     if highlight.get("book_id") != book_user_book_id:
         errors.append(
-            f"Highlight book_id {highlight.get('book_id')} does not match "
-            f"book user_book_id {book_user_book_id}"
+            f"Invalid field: book_id. Highlight book_id {highlight.get('book_id')} does"
+            f" not match book user_book_id {book_user_book_id}"
         )
         highlight["book_id"] = book_user_book_id
     return errors

@@ -181,8 +181,13 @@ def test_fetch_books_with_highlights_last_fetch_exists(
 @pytest.mark.parametrize(
     "mock_obj, expected",
     [
-        ({}, ["No mock_field found in obj"]),
-        ({"mock_field": 123}, ["mock_field not stored, not a list in obj. Value: 123"]),
+        ({}, ["Invalid field: mock_field. Field not found in obj"]),
+        (
+            {"mock_field": 123},
+            [
+                "Invalid field: mock_field. Field value not stored, not a list in obj. Value: 123"
+            ],
+        ),
     ],
 )
 def test_validation_ensure_list(mock_obj: dict[str, Any], expected: dict[str, Any]):
@@ -215,7 +220,12 @@ def test_validation_annotate_validated(
     "mock_highlight, expected",
     [
         ({"book_id": 1}, []),
-        ({"book_id": 2}, ["Highlight book_id 2 does not match book user_book_id 1"]),
+        (
+            {"book_id": 2},
+            [
+                "Invalid field: book_id. Highlight book_id 2 does not match book user_book_id 1"
+            ],
+        ),
     ],
 )
 def test_validation_highlight_book_id(
@@ -279,8 +289,8 @@ def test_first_validation_layer_for_all_valid_objs():
                     "highlights": [],
                     "validated": False,
                     "validation_errors": [
-                        "No highlights found in book",
-                        "No book_tags found in book",
+                        "Invalid field: highlights. Field not found in book",
+                        "Invalid field: book_tags. Field not found in book",
                     ],
                 },
             ],
@@ -302,14 +312,15 @@ def test_first_validation_layer_for_all_valid_objs():
                             "tags": [],
                             "validated": False,
                             "validation_errors": [
-                                "Highlight book_id 2 does not match book user_book_id 1",
-                                "No tags found in highlight",
+                                "Invalid field: book_id. Highlight book_id 2 does not "
+                                "match book user_book_id 1",
+                                "Invalid field: tags. Field not found in highlight",
                             ],
                         }
                     ],
                     "validated": False,
                     "validation_errors": [
-                        "No book_tags found in book",
+                        "Invalid field: book_tags. Field not found in book",
                     ],
                 },
             ],
@@ -343,7 +354,7 @@ def test_first_validation_layer_for_all_valid_objs():
                     ],
                     "validated": False,
                     "validation_errors": [
-                        "book_tags not stored, not a list in book. Value: I am a string",
+                        "Invalid field: book_tags. Field value not stored, not a list in book. Value: I am a string",
                     ],
                 },
             ],

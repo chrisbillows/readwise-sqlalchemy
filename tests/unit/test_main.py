@@ -15,14 +15,14 @@ from readwise_sqlalchemy.main import (
     flatten_books_with_highlights,
     main,
     run_pipeline,
-    run_pipeline_flatten,
+    run_pipeline_flattened_objects,
     update_database,
     validate_books_with_highlights,
-    validate_flat_api_data_by_object_type,
+    validate_flattened_objects,
+    validate_nested_objects,
     validation_annotate_validated,
-    validation_ensure_list,
-    validation_highlight_book_id,
-    validation_nested_obj_layer,
+    validation_ensure_field_is_a_list,
+    validation_ensure_highlight_has_correct_book_id,
 )
 from readwise_sqlalchemy.schemas import BookSchema
 from tests.unit.test_schemas import mock_api_response
@@ -77,7 +77,7 @@ def mock_run_pipeline_flatten() -> tuple[dict, Any]:
         ),
         "mock_update_database_flatten": MagicMock(),
     }
-    actual = run_pipeline_flatten(
+    actual = run_pipeline_flattened_objects(
         user_config=MagicMock(DB="db"),
         setup_logging_func=mocks["mock_setup_logging"],
         get_session_func=mocks["mock_get_session"],
@@ -219,55 +219,6 @@ def test_fetch_books_with_highlights_last_fetch_exists(
     assert actual == (mock_api_response, mock_start_new_fetch, mock_end_new_fetch)
 
 
-def test_flatten_books_with_highlights():
-    actual = flatten_books_with_highlights(mock_api_response())
-    expected = {
-        "books": [
-            {
-                "user_book_id": 12345,
-                "title": "book title",
-                "is_deleted": False,
-                "author": "name surname",
-                "readable_title": "Book Title",
-                "source": "web_clipper",
-                "cover_image_url": "https://link/to/image",
-                "unique_url": "http://the.source.url.ai",
-                "summary": None,
-                "category": "books",
-                "document_note": "A note added in Readwise Reader",
-                "readwise_url": "https://readwise.io/bookreview/12345",
-                "source_url": "http://the.source.url.ai",
-                "asin": None,
-            }
-        ],
-        "book_tags": [{"id": 6969, "name": "arch_btw", "user_book_id": 12345}],
-        "highlights": [
-            {
-                "id": 10,
-                "text": "The highlight text",
-                "location": 1000,
-                "location_type": "location",
-                "note": "document note",
-                "color": "yellow",
-                "highlighted_at": "2025-01-01T00:01:00",
-                "created_at": "2025-01-01T00:01:10",
-                "updated_at": "2025-01-01T00:01:20",
-                "external_id": None,
-                "end_location": None,
-                "url": None,
-                "book_id": 12345,
-                "is_favorite": False,
-                "is_discard": True,
-                "is_deleted": False,
-                "readwise_url": "https://readwise.io/open/10",
-                "user_book_id": 12345,
-            }
-        ],
-        "highlight_tags": [{"id": 97654, "name": "favorite", "highlight_id": 10}],
-    }
-    assert actual == expected
-
-
 @pytest.mark.parametrize(
     "mock_obj, expected",
     [
@@ -280,8 +231,10 @@ def test_flatten_books_with_highlights():
         ),
     ],
 )
-def test_validation_ensure_list(mock_obj: dict[str, Any], expected: dict[str, Any]):
-    assert validation_ensure_list(mock_obj, "mock_field", "obj") == expected
+def test_validation_ensure_field_is_a_list(
+    mock_obj: dict[str, Any], expected: dict[str, Any]
+):
+    assert validation_ensure_field_is_a_list(mock_obj, "mock_field", "obj") == expected
 
 
 @pytest.mark.parametrize(
@@ -318,14 +271,14 @@ def test_validation_annotate_validated(
         ),
     ],
 )
-def test_validation_highlight_book_id(
+def test_validation_ensure_highlight_has_correct_book_id(
     mock_highlight: dict[str, Any], expected: dict[str, Any]
 ):
-    actual = validation_highlight_book_id(mock_highlight, 1)
+    actual = validation_ensure_highlight_has_correct_book_id(mock_highlight, 1)
     assert actual == expected
 
 
-def test_first_validation_layer_for_all_valid_objs():
+def test_validate_nested_objects_for_all_valid_objects():
     mock_raw_books = [
         {
             "user_book_id": 123,
@@ -359,7 +312,7 @@ def test_first_validation_layer_for_all_valid_objs():
             "validation_errors": [],
         }
     ]
-    actual = validation_nested_obj_layer(mock_raw_books)
+    actual = validate_nested_objects(mock_raw_books)
     assert actual == expected
 
 
@@ -451,41 +404,63 @@ def test_first_validation_layer_for_all_valid_objs():
         ),
     ],
 )
-def test_first_validation_layer_for_errors(mock_raw_books, expected):
-    actual = validation_nested_obj_layer(mock_raw_books)
+def test_validate_nested_objects_for_sample_of_invalid_objects(
+    mock_raw_books, expected
+):
+    actual = validate_nested_objects(mock_raw_books)
     assert actual == expected
 
 
-def test_validate_books_with_highlights():
-    mock_valid_book = mock_api_response()[0]
+def test_flatten_books_with_highlights():
+    actual = flatten_books_with_highlights(mock_api_response())
+    expected = {
+        "books": [
+            {
+                "user_book_id": 12345,
+                "title": "book title",
+                "is_deleted": False,
+                "author": "name surname",
+                "readable_title": "Book Title",
+                "source": "web_clipper",
+                "cover_image_url": "https://link/to/image",
+                "unique_url": "http://the.source.url.ai",
+                "summary": None,
+                "category": "books",
+                "document_note": "A note added in Readwise Reader",
+                "readwise_url": "https://readwise.io/bookreview/12345",
+                "source_url": "http://the.source.url.ai",
+                "asin": None,
+            }
+        ],
+        "book_tags": [{"id": 6969, "name": "arch_btw", "user_book_id": 12345}],
+        "highlights": [
+            {
+                "id": 10,
+                "text": "The highlight text",
+                "location": 1000,
+                "location_type": "location",
+                "note": "document note",
+                "color": "yellow",
+                "highlighted_at": "2025-01-01T00:01:00",
+                "created_at": "2025-01-01T00:01:10",
+                "updated_at": "2025-01-01T00:01:20",
+                "external_id": None,
+                "end_location": None,
+                "url": None,
+                "book_id": 12345,
+                "is_favorite": False,
+                "is_discard": True,
+                "is_deleted": False,
+                "readwise_url": "https://readwise.io/open/10",
+                "user_book_id": 12345,
+            }
+        ],
+        "highlight_tags": [{"id": 97654, "name": "favorite", "highlight_id": 10}],
+    }
+    assert actual == expected
 
-    mock_invalid_book = mock_api_response()[0]
-    mock_invalid_book["user_book_id"] = "banana"
 
-    mock_list_of_book_dicts = [mock_valid_book, mock_invalid_book]
-
-    actual_valid, actual_failed = validate_books_with_highlights(
-        mock_list_of_book_dicts
-    )
-
-    assert len(actual_valid) == 1
-    assert len(actual_failed) == 1
-
-    assert isinstance(actual_valid[0], BookSchema)
-    assert getattr(actual_valid[0], "user_book_id") == mock_valid_book["user_book_id"]
-
-    assert isinstance(actual_failed[0], tuple)
-    failed_dict, failed_error = actual_failed[0]
-
-    assert failed_dict["user_book_id"] == mock_invalid_book["user_book_id"]
-    assert failed_error == (
-        "1 validation error for BookSchema\nuser_book_id\n  Input should be a valid "
-        "integer [type=int_type, input_value='banana', input_type=str]\n    "
-        "For further information visit https://errors.pydantic.dev/2.11/v/int_type"
-    )
-
-
-def test_validate_flat_api_data_by_object_type():
+def test_validate_flattened_objects():
     # Mock the pydantic model instance to illustrate the output for a valid object.
     mock_schema_instance = MagicMock()
     mock_schema_instance.model_dump.return_value = {"title": "valid_book_model_dump"}
@@ -508,7 +483,7 @@ def test_validate_flat_api_data_by_object_type():
     mock_flattened_api_data = {
         "mock_obj": [{"title": "valid_value"}, {"title": "invalid_value"}]
     }
-    actual = validate_flat_api_data_by_object_type(mock_flattened_api_data, schemas)
+    actual = validate_flattened_objects(mock_flattened_api_data, schemas)
     expected = {
         "mock_obj": [
             {"title": "valid_book_model_dump", "validated": True},
@@ -525,55 +500,9 @@ def test_validate_flat_api_data_by_object_type():
     assert actual == expected
 
 
-@patch("readwise_sqlalchemy.main.DatabasePopulater")
-def test_update_database(mock_db_populater: MagicMock):
-    mock_instance = mock_db_populater.return_value
-
-    update_database("session", "data", "start", "end")
-
-    mock_db_populater.assert_called_once_with("session", "data", "start", "end")
-    mock_instance.populate_database.assert_called_once_with()
-
-
 @pytest.mark.skip("To be implemented")
 def test_update_database_flatten():
     pass
-
-
-@pytest.mark.parametrize(
-    "mock_name, assertion",
-    [
-        ("mock_setup_logging", lambda m: m.assert_called_once_with()),
-        ("mock_get_session", lambda m: m.assert_called_once()),
-        # `Any` avoids passing in mock_user_config from mock_run_pipeline fixture.
-        ("mock_check_database", lambda m: m.assert_called_once_with("session", ANY)),
-        (
-            "mock_fetch_books_with_highlights",
-            lambda m: m.assert_called_once_with("last_fetch"),
-        ),
-        (
-            "mock_validate_books_with_highlights",
-            lambda m: m.assert_called_once_with("raw_data"),
-        ),
-        (
-            "mock_validate_books_with_highlights",
-            lambda m: m.assert_called_once_with("raw_data"),
-        ),
-        (
-            "mock_update_database",
-            lambda m: m.assert_called_once_with(
-                "session", "valid_books", "start", "end"
-            ),
-        ),
-    ],
-)
-def test_run_pipeline_function_calls(
-    mock_name: str,
-    assertion: Callable,
-    mock_run_pipeline: tuple[dict, Any],
-):
-    mocks, run_pipeline_return_value = mock_run_pipeline
-    assertion(mocks[mock_name])
 
 
 @pytest.mark.parametrize(
@@ -619,13 +548,88 @@ def test_run_pipeline_flatten_function_calls(
     assertion(mocks[mock_name])
 
 
-def test_run_pipeline_return_value(mock_run_pipeline: tuple[dict, Any]):
-    mocks, run_pipeline_return_value = mock_run_pipeline
-    assert run_pipeline_return_value is None
-
-
 @patch("readwise_sqlalchemy.main.run_pipeline")
 def test_main(mock_run_pipeline: MagicMock):
     mock_user_config = Mock()
     main(mock_user_config)
     mock_run_pipeline.assert_called_once_with(mock_user_config)
+
+
+def test_validate_books_with_highlights():
+    mock_valid_book = mock_api_response()[0]
+
+    mock_invalid_book = mock_api_response()[0]
+    mock_invalid_book["user_book_id"] = "banana"
+
+    mock_list_of_book_dicts = [mock_valid_book, mock_invalid_book]
+
+    actual_valid, actual_failed = validate_books_with_highlights(
+        mock_list_of_book_dicts
+    )
+
+    assert len(actual_valid) == 1
+    assert len(actual_failed) == 1
+
+    assert isinstance(actual_valid[0], BookSchema)
+    assert getattr(actual_valid[0], "user_book_id") == mock_valid_book["user_book_id"]
+
+    assert isinstance(actual_failed[0], tuple)
+    failed_dict, failed_error = actual_failed[0]
+
+    assert failed_dict["user_book_id"] == mock_invalid_book["user_book_id"]
+    assert failed_error == (
+        "1 validation error for BookSchema\nuser_book_id\n  Input should be a valid "
+        "integer [type=int_type, input_value='banana', input_type=str]\n    "
+        "For further information visit https://errors.pydantic.dev/2.11/v/int_type"
+    )
+
+
+@patch("readwise_sqlalchemy.main.DatabasePopulater")
+def test_update_database(mock_db_populater: MagicMock):
+    mock_instance = mock_db_populater.return_value
+
+    update_database("session", "data", "start", "end")
+
+    mock_db_populater.assert_called_once_with("session", "data", "start", "end")
+    mock_instance.populate_database.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "mock_name, assertion",
+    [
+        ("mock_setup_logging", lambda m: m.assert_called_once_with()),
+        ("mock_get_session", lambda m: m.assert_called_once()),
+        # `Any` avoids passing in mock_user_config from mock_run_pipeline fixture.
+        ("mock_check_database", lambda m: m.assert_called_once_with("session", ANY)),
+        (
+            "mock_fetch_books_with_highlights",
+            lambda m: m.assert_called_once_with("last_fetch"),
+        ),
+        (
+            "mock_validate_books_with_highlights",
+            lambda m: m.assert_called_once_with("raw_data"),
+        ),
+        (
+            "mock_validate_books_with_highlights",
+            lambda m: m.assert_called_once_with("raw_data"),
+        ),
+        (
+            "mock_update_database",
+            lambda m: m.assert_called_once_with(
+                "session", "valid_books", "start", "end"
+            ),
+        ),
+    ],
+)
+def test_run_pipeline_function_calls(
+    mock_name: str,
+    assertion: Callable,
+    mock_run_pipeline: tuple[dict, Any],
+):
+    mocks, run_pipeline_return_value = mock_run_pipeline
+    assertion(mocks[mock_name])
+
+
+def test_run_pipeline_return_value(mock_run_pipeline: tuple[dict, Any]):
+    mocks, run_pipeline_return_value = mock_run_pipeline
+    assert run_pipeline_return_value is None

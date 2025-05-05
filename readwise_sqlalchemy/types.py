@@ -19,6 +19,7 @@ UpdateDbFlattenedDataFn = Callable[
 ValidateFetchFn = Callable[
     [list[dict[str, Any]]], tuple[list[BookSchema], list[tuple[dict[str, Any], str]]]
 ]
-ValidateFetchFlattenedDataFn = Callable[
+ValidateNestedObjFn = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
+ValidateFlattenedObjFn = Callable[
     [dict[str, list[dict[str, Any]]]], dict[str, list[dict[str, Any]]]
 ]

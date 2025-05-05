@@ -3,8 +3,7 @@ from typing import Any, Callable
 from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
-from pydantic import ValidationError
-from pydantic_core import InitErrorDetails, PydanticCustomError
+from pydantic import BaseModel
 
 from readwise_sqlalchemy.config import UserConfig
 from readwise_sqlalchemy.main import (
@@ -227,19 +226,22 @@ def test_fetch_books_with_highlights_last_fetch_exists(
 @pytest.mark.parametrize(
     "mock_obj, expected",
     [
-        ({}, ["Invalid field: mock_field. Field not found in obj"]),
+        ({}, {"mock_field": "Field not found in test_obj"}),
         (
             {"mock_field": 123},
-            [
-                "Invalid field: mock_field. Field value not stored, not a list in obj. Value: 123"
-            ],
+            {
+                "mock_field": "Field not a list in test_obj. Passed value not stored. Value: 123"
+            },
         ),
     ],
 )
 def test_validation_ensure_field_is_a_list(
     mock_obj: dict[str, Any], expected: dict[str, Any]
 ):
-    assert validation_ensure_field_is_a_list(mock_obj, "mock_field", "obj") == expected
+    assert (
+        validation_ensure_field_is_a_list(mock_obj, "mock_field", "test_obj")
+        == expected
+    )
 
 
 @pytest.mark.parametrize(
@@ -247,13 +249,17 @@ def test_validation_ensure_field_is_a_list(
     [
         (
             {"field": 123},
-            [],
-            {"field": 123, "validated": True, "validation_errors": []},
+            {},
+            {"field": 123, "validated": True, "validation_errors": {}},
         ),
         (
             {"field": 123},
-            ["mock_error"],
-            {"field": 123, "validated": False, "validation_errors": ["mock_error"]},
+            {"field": "mock_error"},
+            {
+                "field": 123,
+                "validated": False,
+                "validation_errors": {"field": "mock_error"},
+            },
         ),
     ],
 )
@@ -267,12 +273,10 @@ def test_validation_annotate_validated(
 @pytest.mark.parametrize(
     "mock_highlight, expected",
     [
-        ({"book_id": 1}, []),
+        ({"book_id": 1}, {}),
         (
             {"book_id": 2},
-            [
-                "Invalid field: book_id. Highlight book_id 2 does not match book user_book_id 1"
-            ],
+            {"book_id": "Highlight book_id 2 does not match book user_book_id 1"},
         ),
     ],
 )
@@ -296,7 +300,7 @@ def test_validate_nested_objects_for_all_valid_objects():
         {
             "user_book_id": 123,
             "book_tags": [
-                {"id": 1, "name": "tag1", "validated": True, "validation_errors": []}
+                {"id": 1, "name": "tag1", "validated": True, "validation_errors": {}}
             ],
             "highlights": [
                 {
@@ -306,15 +310,15 @@ def test_validate_nested_objects_for_all_valid_objects():
                             "id": 10,
                             "name": "tag1",
                             "validated": True,
-                            "validation_errors": [],
+                            "validation_errors": {},
                         }
                     ],
                     "validated": True,
-                    "validation_errors": [],
+                    "validation_errors": {},
                 }
             ],
             "validated": True,
-            "validation_errors": [],
+            "validation_errors": {},
         }
     ]
     actual = validate_nested_objects(mock_raw_books)
@@ -336,10 +340,10 @@ def test_validate_nested_objects_for_all_valid_objects():
                     "book_tags": [],
                     "highlights": [],
                     "validated": False,
-                    "validation_errors": [
-                        "Invalid field: highlights. Field not found in book",
-                        "Invalid field: book_tags. Field not found in book",
-                    ],
+                    "validation_errors": {
+                        "highlights": "Field not found in book",
+                        "book_tags": "Field not found in book",
+                    },
                 },
             ],
         ),
@@ -359,17 +363,17 @@ def test_validate_nested_objects_for_all_valid_objects():
                             "book_id": 1,
                             "tags": [],
                             "validated": False,
-                            "validation_errors": [
-                                "Invalid field: book_id. Highlight book_id 2 does not "
+                            "validation_errors": {
+                                "book_id": "Highlight book_id 2 does not "
                                 "match book user_book_id 1",
-                                "Invalid field: tags. Field not found in highlight",
-                            ],
+                                "tags": "Field not found in highlight",
+                            },
                         }
                     ],
                     "validated": False,
-                    "validation_errors": [
-                        "Invalid field: book_tags. Field not found in book",
-                    ],
+                    "validation_errors": {
+                        "book_tags": "Field not found in book",
+                    },
                 },
             ],
         ),
@@ -393,17 +397,18 @@ def test_validate_nested_objects_for_all_valid_objects():
                                     "id": 1,
                                     "name": "tag",
                                     "validated": True,
-                                    "validation_errors": [],
+                                    "validation_errors": {},
                                 }
                             ],
                             "validated": True,
-                            "validation_errors": [],
+                            "validation_errors": {},
                         }
                     ],
                     "validated": False,
-                    "validation_errors": [
-                        "Invalid field: book_tags. Field value not stored, not a list in book. Value: I am a string",
-                    ],
+                    "validation_errors": {
+                        "book_tags": "Field not a list in book. Passed value not stored. Value: "
+                        "I am a string",
+                    },
                 },
             ],
         ),
@@ -490,38 +495,58 @@ def test_flatten_books_with_highlights(test_with_validated_keys_present: bool):
 
 
 def test_validate_flattened_objects():
-    # Mock the pydantic model instance to illustrate the output for a valid object.
-    mock_schema_instance = MagicMock()
-    mock_schema_instance.model_dump.return_value = {"title": "valid_book_model_dump"}
+    class MockUnnestedSchema(BaseModel, extra="forbid", strict=True):
+        id: int
+        title: str
 
-    # Mock the pydantic validation error to illustrate the output for an invalid object.
-    mock_error_type = PydanticCustomError("mock_error", "Title invalid reason")
-    mock_error_details = InitErrorDetails(
-        type=mock_error_type,
-        loc=["title"],
-    )
-    validation_error = ValidationError.from_exception_data(
-        "mock_error", [mock_error_details]
-    )
+    schemas = {"mock_obj": MockUnnestedSchema}
 
-    # Pass a mock schema.
-    mock_schema = MagicMock()
-    mock_schema.side_effect = [mock_schema_instance, validation_error]
-    schemas = {"mock_obj": mock_schema}
-
+    # --- The test isn't parametrized to test multiple simultaneous values ---
+    # id 1 is valid.
+    # id 2 has an invalid id type.
+    # id 3 was previously invalid, but has no issue in this validation layer.
+    # id 4 was previously invalid, and also has an invalid id type.
     mock_flattened_api_data = {
-        "mock_obj": [{"title": "valid_value"}, {"title": "invalid_value"}]
+        "mock_obj": [
+            {"id": 1, "title": "title_1", "validated": True, "validation_errors": {}},
+            {"id": "2", "title": "title_2", "validated": True, "validation_errors": {}},
+            {
+                "id": 3,
+                "title": "invalid_1",
+                "validated": False,
+                "validation_errors": {"title": "title is invalid"},
+            },
+            {
+                "id": "4",
+                "title": "invalid_2",
+                "validated": False,
+                "validation_errors": {"title": "title is invalid"},
+            },
+        ]
     }
     actual = validate_flattened_objects(mock_flattened_api_data, schemas)
     expected = {
         "mock_obj": [
-            {"title": "valid_book_model_dump", "validated": True},
-            # For an invalid object, validated should be a dict of obj fields and their
-            # validation error.
+            {"id": 1, "title": "title_1", "validated": True, "validation_errors": {}},
             {
-                "title": "invalid_value",
-                "validated": {
-                    "title": "Title invalid reason",
+                "id": "2",
+                "title": "title_2",
+                "validated": False,
+                "validation_errors": {"id": "Input should be a valid integer"},
+            },
+            {
+                "id": 3,
+                "title": "invalid_1",
+                "validated": False,
+                "validation_errors": {"title": "title is invalid"},
+            },
+            {
+                "id": "4",
+                "title": "invalid_2",
+                "validated": False,
+                "validation_errors": {
+                    "title": "title is invalid",
+                    "id": "Input should be a valid integer",
                 },
             },
         ]

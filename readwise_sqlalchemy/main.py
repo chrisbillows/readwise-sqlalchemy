@@ -200,7 +200,7 @@ def fetch_books_with_highlights(
 
 def validation_ensure_field_is_a_list(
     obj: dict[str, Any], field: str, parent_label: str
-) -> list[str]:
+) -> dict[str, str]:
     """
     Ensure a field is a list. Fix if needed and return any validation errors.
 
@@ -215,22 +215,23 @@ def validation_ensure_field_is_a_list(
 
     Returns
     -------
-    list[str]
-        A list of validation errors. Empty if the field is valid.
+    dict[str, str]
+        A dict of validation errors. Empty if the field is valid.
     """
-    errors = []
+    errors = {}
     if obj.get(field) is None:
         obj[field] = []
-        errors.append(f"Invalid field: {field}. Field not found in {parent_label}")
+        errors[field] = f"Field not found in {parent_label}"
     elif not isinstance(obj[field], list):
-        errors.append(
-            f"Invalid field: {field}. Field value not stored, not a list in {parent_label}. Value: {obj[field]}"
+        errors[field] = (
+            f"Field not a list in {parent_label}. Passed value not stored. Value: "
+            f"{obj[field]}"
         )
         obj[field] = []
     return errors
 
 
-def validation_annotate_validated(obj: dict[str, Any], errors: list[str]) -> None:
+def validation_annotate_validated(obj: dict[str, Any], errors: dict[str, str]) -> None:
     """
     Set `validated` and `validation_errors` fields on any dict-like object.
 
@@ -247,7 +248,7 @@ def validation_annotate_validated(obj: dict[str, Any], errors: list[str]) -> Non
 
 def validation_ensure_highlight_has_correct_book_id(
     highlight: dict[str, Any], book_user_book_id: Any
-) -> list[str]:
+) -> dict[str, str]:
     """
     Ensure highlight.book_id matches its parent book.user_book_id.
 
@@ -262,14 +263,14 @@ def validation_ensure_highlight_has_correct_book_id(
 
     Returns
     -------
-    list[str]
-        A list of errors.
+    dict[str, str]
+        A dict of errors.
     """
-    errors = []
+    errors = {}
     if highlight.get("book_id") != book_user_book_id:
-        errors.append(
-            f"Invalid field: book_id. Highlight book_id {highlight.get('book_id')} does"
-            f" not match book user_book_id {book_user_book_id}"
+        errors["book_id"] = (
+            f"Highlight book_id {highlight.get('book_id')} does not match book "
+            f"user_book_id {book_user_book_id}"
         )
         highlight["book_id"] = book_user_book_id
     return errors
@@ -318,29 +319,33 @@ def validate_nested_objects(
         validation in any validation layer.
     """
     for book in raw_books:
-        book_errors = []
+        book_errors = {}
 
         # Highlights and book_tags must exist and be lists
-        book_errors += validation_ensure_field_is_a_list(book, "highlights", "book")
-        book_errors += validation_ensure_field_is_a_list(book, "book_tags", "book")
+        book_errors.update(
+            validation_ensure_field_is_a_list(book, "highlights", "book")
+        )
+        book_errors.update(validation_ensure_field_is_a_list(book, "book_tags", "book"))
 
         # Validate each book_tag (no strict checks yet)
         for tag in book["book_tags"]:
-            validation_annotate_validated(tag, [])
+            validation_annotate_validated(tag, {})
 
         # Validate each highlight and its tags
         for highlight in book["highlights"]:
-            highlight_errors = []
+            highlight_errors = {}
 
-            highlight_errors += validation_ensure_highlight_has_correct_book_id(
-                highlight, book["user_book_id"]
+            highlight_errors.update(
+                validation_ensure_highlight_has_correct_book_id(
+                    highlight, book["user_book_id"]
+                )
             )
-            highlight_errors += validation_ensure_field_is_a_list(
-                highlight, "tags", "highlight"
+            highlight_errors.update(
+                validation_ensure_field_is_a_list(highlight, "tags", "highlight")
             )
 
             for tag in highlight["tags"]:
-                validation_annotate_validated(tag, [])
+                validation_annotate_validated(tag, {})
 
             validation_annotate_validated(highlight, highlight_errors)
 
@@ -405,7 +410,6 @@ def flatten_books_with_highlights(
     }
 
 
-# TODO: Update for objs having validation fields from first validation layer.
 def validate_flattened_objects(
     flattened_api_data: dict[str, list[dict[str, Any]]],
     schemas: dict[str, type[BaseModel]] = SCHEMAS_BY_OBJECT,
@@ -446,17 +450,23 @@ def validate_flattened_objects(
         for item in objects:
             try:
                 schema = schemas[object_type]
-                item_as_schema = schema(**item)
+                api_fields = {k: v for k, v in item.items() if k in schema.model_fields}
+                item_as_schema = schema(**api_fields)
                 # Capture any data integrity transformation's done by the schema.
-                validated_item = item_as_schema.model_dump()
-                validated_item["validated"] = True
-                processed_objects.append(validated_item)
+                # Reattach validation data. NOTE: If this try branch succeeds, an item's
+                # validation status doesn't change. If it was true from earlier
+                # validation, it stays true. If it was false - invalid on early checks -
+                # it remains invalid.
+                item_as_schema_dumped = item_as_schema.model_dump()
+                item_as_schema_dumped["validated"] = item["validated"]
+                item_as_schema_dumped["validation_errors"] = item["validation_errors"]
+                processed_objects.append(item_as_schema_dumped)
             except ValidationError as err:
-                field_errors = {
-                    ".".join(str(part) for part in e["loc"]): e["msg"]
-                    for e in err.errors()
-                }
-                item["validated"] = field_errors
+                item["validated"] = False
+                for detail in err.errors():
+                    item["validation_errors"][
+                        ".".join(str(part) for part in detail["loc"])
+                    ] = detail["msg"]
                 processed_objects.append(item)
         processed_objects_by_type[object_type] = processed_objects
     return processed_objects_by_type

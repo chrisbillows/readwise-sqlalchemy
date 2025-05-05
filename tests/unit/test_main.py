@@ -267,7 +267,7 @@ def test_flatten_books_with_highlights():
     }
     assert actual == expected
 
-    
+
 @pytest.mark.parametrize(
     "mock_obj, expected",
     [

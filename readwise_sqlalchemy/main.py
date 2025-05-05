@@ -247,7 +247,7 @@ def flatten_books_with_highlights(
         "highlight_tags": highlight_tags,
     }
 
-  
+
 def validation_ensure_list(
     obj: dict[str, Any], field: str, parent_label: str
 ) -> list[str]:

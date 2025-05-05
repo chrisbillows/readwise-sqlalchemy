@@ -276,6 +276,7 @@ def validation_ensure_highlight_has_correct_book_id(
     return errors
 
 
+# TODO: Now we are using dicts, can we not write directly to the objects?
 def validate_nested_objects(
     raw_books: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:

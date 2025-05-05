@@ -17,6 +17,7 @@ from readwise_sqlalchemy.main import (
     run_pipeline,
     run_pipeline_flattened_objects,
     update_database,
+    update_database_flattened_objects,
     validate_books_with_highlights,
     validate_flattened_objects,
     validate_nested_objects,
@@ -528,9 +529,16 @@ def test_validate_flattened_objects():
     assert actual == expected
 
 
-@pytest.mark.skip("To be implemented")
-def test_update_database_flattened_objects():
-    pass
+@patch("readwise_sqlalchemy.main.DatabasePopulaterFlattenedData")
+def test_update_database_flattened_objects(mock_db_populater_flattened_data: MagicMock):
+    mock_instance = mock_db_populater_flattened_data.return_value
+
+    update_database_flattened_objects("session", "data", "start", "end")
+
+    mock_db_populater_flattened_data.assert_called_once_with(
+        "session", "data", "start", "end"
+    )
+    mock_instance.populate_database.assert_called_once_with()
 
 
 @pytest.mark.parametrize(

@@ -35,6 +35,29 @@ DATABASE_WRITE_TIME = datetime(2025, 1, 1, 10, 10, 22)
 BATCH_ID = 1
 
 
+def unnested_minimal_objects():
+    """
+    Return a dictionary of unnested minimal objects.
+
+    Batch is included for testing convenience - "batch_id" is an auto increment PK.
+
+    Use a function to allow for in-test mutation.
+
+    Returns
+    -------
+    dict[str, dict[str, Any]]
+        A dictionary of minimal unnested objects with the keys `min_book`,
+        `min_book_tag`, `min_highlight`, `min_highlight_tag`, `batch_id`.
+    """
+    return {
+        "min_book": {"user_book_id": 99, "title": "book_1"},
+        "min_book_tag": {"id": 9990, "name": "book_tag_1", "user_book_id": 99},
+        "min_highlight": {"id": 111, "book_id": 99, "text": "highlight_1"},
+        "min_highlight_tag": {"id": 5555, "name": "orange", "highlight_id": 111},
+        "batch_id": 1,
+    }
+
+
 def mock_pydantic_model_dump():
     """
     Mock output of ``<pydantic_schema>.model_dump()`` for a pydantic verified book.
@@ -176,6 +199,42 @@ def mem_db_containing_minimal_objects(mem_db: DbHandle):
 
 
 @pytest.fixture()
+def mem_db_containing_unnested_minimal_objects(mem_db: DbHandle):
+    """
+    Engine with a db containing minimal object records, created from unnested data.
+
+    Create a database with UNNESTED entries for a book, highlight, highlight tag and a
+    readwise batch. This is a proof of concept test for the flatten API data refactor,
+    see issue #38.
+
+    Note
+    ----
+    Constructing objects with minimal field is possible as SQLAlchemy ORM mapped classes
+    do not enforce the presence of non-nullable fields. Missing fields will error in
+    pydantic data verification.
+
+    """
+    batch = ReadwiseBatch(start_time=START_TIME, end_time=END_TIME)
+
+    min_objs = unnested_minimal_objects()
+
+    book_as_orm = Book(**min_objs["min_book"], batch=batch)
+    book_tag_1 = BookTag(**min_objs["min_book_tag"], batch=batch)
+    highlight_1 = Highlight(**min_objs["min_highlight"], batch=batch)
+    highlight_1_tag_1 = HighlightTag(**min_objs["min_highlight_tag"], batch=batch)
+
+    with mem_db.session.begin():
+        mem_db.session.add(batch)
+        # Flush to generate batch id which is no nullable for other objects.
+        mem_db.session.flush()
+        mem_db.session.add_all(
+            [book_as_orm, book_tag_1, highlight_1, highlight_1_tag_1]
+        )
+        batch.database_write_time = DATABASE_WRITE_TIME
+    yield mem_db.engine
+
+
+@pytest.fixture()
 def minimal_book_as_orm(mem_db_containing_minimal_objects: Engine):
     """A minimal ``Book`` fetched from the minimal object database."""
     with Session(mem_db_containing_minimal_objects) as clean_session:
@@ -284,6 +343,45 @@ def test_minimal_readwise_batch_read_from_db_correctly(
     assert minimal_batch_as_orm.start_time == START_TIME
     assert minimal_batch_as_orm.end_time == END_TIME
     assert minimal_batch_as_orm.database_write_time == DATABASE_WRITE_TIME
+
+
+def test_tables_in_mem_db_containing_unnested_minimal_objects(
+    mem_db_containing_unnested_minimal_objects: Engine,
+):
+    with Session(mem_db_containing_unnested_minimal_objects) as clean_session:
+        inspector = inspect(clean_session.bind)
+        tables = inspector.get_table_names()
+        assert tables == [
+            "book_tags",
+            "books",
+            "highlight_tags",
+            "highlights",
+            "readwise_batches",
+        ]
+
+
+def test_mem_db_containing_unnested_minimal_objects(
+    mem_db_containing_unnested_minimal_objects: DbHandle,
+):
+    minimal_objects = unnested_minimal_objects()
+    with Session(mem_db_containing_unnested_minimal_objects) as clean_session:
+        fetched_books = clean_session.scalars(select(Book)).all()
+        fetched_book_tags = clean_session.scalars(select(BookTag)).all()
+        fetched_highlights = clean_session.scalars(select(Highlight)).all()
+        fetched_highlight_tags = clean_session.scalars(select(HighlightTag)).all()
+        fetched_batches = clean_session.scalars(select(ReadwiseBatch)).all()
+
+        fetched_book = fetched_books[0]
+        fetched_book_tag = fetched_book_tags[0]
+        fetched_highlight = fetched_highlights[0]
+        fetched_highlight_tag = fetched_highlight_tags[0]
+        fetched_batch = fetched_batches[0]
+
+        assert fetched_book.user_book_id == minimal_objects["min_book"]["user_book_id"]
+        assert fetched_book_tag.id == minimal_objects["min_book_tag"]["id"]
+        assert fetched_highlight.id == minimal_objects["min_highlight"]["id"]
+        assert fetched_highlight_tag.id == minimal_objects["min_highlight_tag"]["id"]
+        assert fetched_batch.id == minimal_objects["batch_id"]
 
 
 # -------

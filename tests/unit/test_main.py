@@ -3,6 +3,7 @@ from typing import Any, Callable
 from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
+from pydantic import BaseModel
 
 from readwise_sqlalchemy.config import UserConfig
 from readwise_sqlalchemy.main import (
@@ -10,14 +11,18 @@ from readwise_sqlalchemy.main import (
     datetime_to_isoformat_str,
     fetch_books_with_highlights,
     fetch_from_export_api,
+    flatten_books_with_highlights,
     main,
     run_pipeline,
+    run_pipeline_flattened_objects,
     update_database,
+    update_database_flattened_objects,
     validate_books_with_highlights,
+    validate_flattened_objects,
+    validate_nested_objects,
     validation_annotate_validated,
-    validation_ensure_list,
-    validation_highlight_book_id,
-    validation_nested_obj_layer,
+    validation_ensure_field_is_a_list,
+    validation_ensure_highlight_has_correct_book_id,
 )
 from readwise_sqlalchemy.schemas import BookSchema
 from tests.unit.test_schemas import mock_api_response
@@ -30,7 +35,7 @@ def mock_run_pipeline() -> tuple[dict, Any]:
         "mock_get_session": MagicMock(return_value="session"),
         "mock_check_database": MagicMock(return_value="last_fetch"),
         "mock_fetch_books_with_highlights": MagicMock(
-            return_value=("data", "start", "end")
+            return_value=("raw_data", "start", "end")
         ),
         "mock_validate_books_with_highlights": MagicMock(
             return_value=("valid_books", "invalid_books")
@@ -45,6 +50,46 @@ def mock_run_pipeline() -> tuple[dict, Any]:
         fetch_func=mocks["mock_fetch_books_with_highlights"],
         validate_func=mocks["mock_validate_books_with_highlights"],
         update_db_func=mocks["mock_update_database"],
+    )
+    return mocks, actual
+
+
+@pytest.fixture()
+def mock_run_pipeline_flattened_objs() -> tuple[dict, Any]:
+    # Strings are used as simplified return values. They are not the real return types.
+    mocks = {
+        "mock_setup_logging": MagicMock(),
+        "mock_get_session": MagicMock(return_value="session"),
+        "mock_check_database": MagicMock(return_value="last_fetch"),
+        "mock_fetch_books_with_highlights": MagicMock(
+            return_value=("raw_data", "start", "end")
+        ),
+        "mock_validate_nested_objects": MagicMock(
+            return_value="nested_objs_with_validation_status"
+        ),
+        "mock_flatten_books_with_highlights": MagicMock(
+            return_value={
+                "books": "book_data_dicts",
+                "book_tags": "book_tags_dicts",
+                "highlights": "highlights_dicts",
+                "highlight_tags": "highlight_tags_dicts",
+            }
+        ),
+        "mock_validate_flattened_objects": MagicMock(
+            return_value={"obj_name": "objs_with_final_validation_status"}
+        ),
+        "mock_update_database_flattened_objects": MagicMock(),
+    }
+    actual = run_pipeline_flattened_objects(
+        user_config=MagicMock(DB="db"),
+        setup_logging_func=mocks["mock_setup_logging"],
+        get_session_func=mocks["mock_get_session"],
+        check_db_func=mocks["mock_check_database"],
+        fetch_func=mocks["mock_fetch_books_with_highlights"],
+        validate_nested_objs_func=mocks["mock_validate_nested_objects"],
+        flatten_func=mocks["mock_flatten_books_with_highlights"],
+        validate_flattened_objs_func=mocks["mock_validate_flattened_objects"],
+        update_db_func=mocks["mock_update_database_flattened_objects"],
     )
     return mocks, actual
 
@@ -123,7 +168,7 @@ def test_check_database_when_database_exists(
     assert result == mock_last_fetch
 
 
-def test_str_to_iso_format():
+def test_datetime_to_iso_format_str():
     date_time = datetime(2025, 4, 14, 20, 28, 21, 589651)
     expected = "2025-04-14T20:28:21.589651"
     actual = datetime_to_isoformat_str(date_time)
@@ -181,17 +226,22 @@ def test_fetch_books_with_highlights_last_fetch_exists(
 @pytest.mark.parametrize(
     "mock_obj, expected",
     [
-        ({}, ["Invalid field: mock_field. Field not found in obj"]),
+        ({}, {"mock_field": "Field not found in test_obj"}),
         (
             {"mock_field": 123},
-            [
-                "Invalid field: mock_field. Field value not stored, not a list in obj. Value: 123"
-            ],
+            {
+                "mock_field": "Field not a list in test_obj. Passed value not stored. Value: 123"
+            },
         ),
     ],
 )
-def test_validation_ensure_list(mock_obj: dict[str, Any], expected: dict[str, Any]):
-    assert validation_ensure_list(mock_obj, "mock_field", "obj") == expected
+def test_validation_ensure_field_is_a_list(
+    mock_obj: dict[str, Any], expected: dict[str, Any]
+):
+    assert (
+        validation_ensure_field_is_a_list(mock_obj, "mock_field", "test_obj")
+        == expected
+    )
 
 
 @pytest.mark.parametrize(
@@ -199,13 +249,17 @@ def test_validation_ensure_list(mock_obj: dict[str, Any], expected: dict[str, An
     [
         (
             {"field": 123},
-            [],
-            {"field": 123, "validated": True, "validation_errors": []},
+            {},
+            {"field": 123, "validated": True, "validation_errors": {}},
         ),
         (
             {"field": 123},
-            ["mock_error"],
-            {"field": 123, "validated": False, "validation_errors": ["mock_error"]},
+            {"field": "mock_error"},
+            {
+                "field": 123,
+                "validated": False,
+                "validation_errors": {"field": "mock_error"},
+            },
         ),
     ],
 )
@@ -219,23 +273,21 @@ def test_validation_annotate_validated(
 @pytest.mark.parametrize(
     "mock_highlight, expected",
     [
-        ({"book_id": 1}, []),
+        ({"book_id": 1}, {}),
         (
             {"book_id": 2},
-            [
-                "Invalid field: book_id. Highlight book_id 2 does not match book user_book_id 1"
-            ],
+            {"book_id": "Highlight book_id 2 does not match book user_book_id 1"},
         ),
     ],
 )
-def test_validation_highlight_book_id(
+def test_validation_ensure_highlight_has_correct_book_id(
     mock_highlight: dict[str, Any], expected: dict[str, Any]
 ):
-    actual = validation_highlight_book_id(mock_highlight, 1)
+    actual = validation_ensure_highlight_has_correct_book_id(mock_highlight, 1)
     assert actual == expected
 
 
-def test_first_validation_layer_for_all_valid_objs():
+def test_validate_nested_objects_for_all_valid_objects():
     mock_raw_books = [
         {
             "user_book_id": 123,
@@ -248,7 +300,7 @@ def test_first_validation_layer_for_all_valid_objs():
         {
             "user_book_id": 123,
             "book_tags": [
-                {"id": 1, "name": "tag1", "validated": True, "validation_errors": []}
+                {"id": 1, "name": "tag1", "validated": True, "validation_errors": {}}
             ],
             "highlights": [
                 {
@@ -258,18 +310,18 @@ def test_first_validation_layer_for_all_valid_objs():
                             "id": 10,
                             "name": "tag1",
                             "validated": True,
-                            "validation_errors": [],
+                            "validation_errors": {},
                         }
                     ],
                     "validated": True,
-                    "validation_errors": [],
+                    "validation_errors": {},
                 }
             ],
             "validated": True,
-            "validation_errors": [],
+            "validation_errors": {},
         }
     ]
-    actual = validation_nested_obj_layer(mock_raw_books)
+    actual = validate_nested_objects(mock_raw_books)
     assert actual == expected
 
 
@@ -288,10 +340,10 @@ def test_first_validation_layer_for_all_valid_objs():
                     "book_tags": [],
                     "highlights": [],
                     "validated": False,
-                    "validation_errors": [
-                        "Invalid field: highlights. Field not found in book",
-                        "Invalid field: book_tags. Field not found in book",
-                    ],
+                    "validation_errors": {
+                        "highlights": "Field not found in book",
+                        "book_tags": "Field not found in book",
+                    },
                 },
             ],
         ),
@@ -311,17 +363,17 @@ def test_first_validation_layer_for_all_valid_objs():
                             "book_id": 1,
                             "tags": [],
                             "validated": False,
-                            "validation_errors": [
-                                "Invalid field: book_id. Highlight book_id 2 does not "
+                            "validation_errors": {
+                                "book_id": "Highlight book_id 2 does not "
                                 "match book user_book_id 1",
-                                "Invalid field: tags. Field not found in highlight",
-                            ],
+                                "tags": "Field not found in highlight",
+                            },
                         }
                     ],
                     "validated": False,
-                    "validation_errors": [
-                        "Invalid field: book_tags. Field not found in book",
-                    ],
+                    "validation_errors": {
+                        "book_tags": "Field not found in book",
+                    },
                 },
             ],
         ),
@@ -345,28 +397,240 @@ def test_first_validation_layer_for_all_valid_objs():
                                     "id": 1,
                                     "name": "tag",
                                     "validated": True,
-                                    "validation_errors": [],
+                                    "validation_errors": {},
                                 }
                             ],
                             "validated": True,
-                            "validation_errors": [],
+                            "validation_errors": {},
                         }
                     ],
                     "validated": False,
-                    "validation_errors": [
-                        "Invalid field: book_tags. Field value not stored, not a list in book. Value: I am a string",
-                    ],
+                    "validation_errors": {
+                        "book_tags": "Field not a list in book. Passed value not stored. Value: "
+                        "I am a string",
+                    },
                 },
             ],
         ),
     ],
 )
-def test_first_validation_layer_for_errors(mock_raw_books, expected):
-    actual = validation_nested_obj_layer(mock_raw_books)
+def test_validate_nested_objects_for_sample_of_invalid_objects(
+    mock_raw_books, expected
+):
+    actual = validate_nested_objects(mock_raw_books)
     assert actual == expected
 
 
-def test_validate_books_and_highlights_valid_book():
+@pytest.mark.parametrize("test_with_validated_keys_present", [True, False])
+def test_flatten_books_with_highlights(test_with_validated_keys_present: bool):
+    mock_api_response_data = mock_api_response()
+    expected = {
+        "books": [
+            {
+                "user_book_id": 12345,
+                "title": "book title",
+                "is_deleted": False,
+                "author": "name surname",
+                "readable_title": "Book Title",
+                "source": "web_clipper",
+                "cover_image_url": "https://link/to/image",
+                "unique_url": "http://the.source.url.ai",
+                "summary": None,
+                "category": "books",
+                "document_note": "A note added in Readwise Reader",
+                "readwise_url": "https://readwise.io/bookreview/12345",
+                "source_url": "http://the.source.url.ai",
+                "asin": None,
+            }
+        ],
+        "book_tags": [{"id": 6969, "name": "arch_btw", "user_book_id": 12345}],
+        "highlights": [
+            {
+                "id": 10,
+                "text": "The highlight text",
+                "location": 1000,
+                "location_type": "location",
+                "note": "document note",
+                "color": "yellow",
+                "highlighted_at": "2025-01-01T00:01:00",
+                "created_at": "2025-01-01T00:01:10",
+                "updated_at": "2025-01-01T00:01:20",
+                "external_id": None,
+                "end_location": None,
+                "url": None,
+                "book_id": 12345,
+                "is_favorite": False,
+                "is_discard": True,
+                "is_deleted": False,
+                "readwise_url": "https://readwise.io/open/10",
+                "user_book_id": 12345,
+            }
+        ],
+        "highlight_tags": [{"id": 97654, "name": "favorite", "highlight_id": 10}],
+    }
+
+    # Add validated keys to input and expected data. Function not expected to care if
+    # the data has validation keys or not.
+    if test_with_validated_keys_present:
+
+        def add_validation_fields_recursive(obj):
+            if isinstance(obj, dict):
+                obj["validated"] = True
+                obj["validation_errors"] = []
+                for value in obj.values():
+                    add_validation_fields_recursive(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    add_validation_fields_recursive(item)
+
+        add_validation_fields_recursive(mock_api_response_data)
+        add_validation_fields_recursive(expected)
+        # Remove unneeded keys.
+        del expected["validated"]
+        del expected["validation_errors"]
+
+    actual = flatten_books_with_highlights(mock_api_response_data)
+
+    assert actual == expected
+
+
+def test_validate_flattened_objects():
+    class MockUnnestedSchema(BaseModel, extra="forbid", strict=True):
+        id: int
+        title: str
+
+    schemas = {"mock_obj": MockUnnestedSchema}
+
+    # --- The test isn't parametrized to test multiple simultaneous values ---
+    # id 1 is valid.
+    # id 2 has an invalid id type.
+    # id 3 was previously invalid, but has no issue in this validation layer.
+    # id 4 was previously invalid, and also has an invalid id type.
+    mock_flattened_api_data = {
+        "mock_obj": [
+            {"id": 1, "title": "title_1", "validated": True, "validation_errors": {}},
+            {"id": "2", "title": "title_2", "validated": True, "validation_errors": {}},
+            {
+                "id": 3,
+                "title": "invalid_1",
+                "validated": False,
+                "validation_errors": {"title": "title is invalid"},
+            },
+            {
+                "id": "4",
+                "title": "invalid_2",
+                "validated": False,
+                "validation_errors": {"title": "title is invalid"},
+            },
+        ]
+    }
+    actual = validate_flattened_objects(mock_flattened_api_data, schemas)
+    expected = {
+        "mock_obj": [
+            {"id": 1, "title": "title_1", "validated": True, "validation_errors": {}},
+            {
+                "id": "2",
+                "title": "title_2",
+                "validated": False,
+                "validation_errors": {"id": "Input should be a valid integer"},
+            },
+            {
+                "id": 3,
+                "title": "invalid_1",
+                "validated": False,
+                "validation_errors": {"title": "title is invalid"},
+            },
+            {
+                "id": "4",
+                "title": "invalid_2",
+                "validated": False,
+                "validation_errors": {
+                    "title": "title is invalid",
+                    "id": "Input should be a valid integer",
+                },
+            },
+        ]
+    }
+    assert actual == expected
+
+
+@patch("readwise_sqlalchemy.main.DatabasePopulaterFlattenedData")
+def test_update_database_flattened_objects(mock_db_populater_flattened_data: MagicMock):
+    mock_instance = mock_db_populater_flattened_data.return_value
+
+    update_database_flattened_objects("session", "data", "start", "end")
+
+    mock_db_populater_flattened_data.assert_called_once_with(
+        "session", "data", "start", "end"
+    )
+    mock_instance.populate_database.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "mock_name, assertion",
+    [
+        ("mock_setup_logging", lambda m: m.assert_called_once_with()),
+        ("mock_get_session", lambda m: m.assert_called_once()),
+        # `Any` avoids passing in mock_user_config from mock_run_pipeline fixture.
+        ("mock_check_database", lambda m: m.assert_called_once_with("session", ANY)),
+        (
+            "mock_fetch_books_with_highlights",
+            lambda m: m.assert_called_once_with("last_fetch"),
+        ),
+        (
+            "mock_validate_nested_objects",
+            lambda m: m.assert_called_once_with("raw_data"),
+        ),
+        (
+            "mock_flatten_books_with_highlights",
+            lambda m: m.assert_called_once_with("nested_objs_with_validation_status"),
+        ),
+        (
+            "mock_validate_flattened_objects",
+            lambda m: m.assert_called_once_with(
+                {
+                    "books": "book_data_dicts",
+                    "book_tags": "book_tags_dicts",
+                    "highlights": "highlights_dicts",
+                    "highlight_tags": "highlight_tags_dicts",
+                }
+            ),
+        ),
+        (
+            "mock_update_database_flattened_objects",
+            lambda m: m.assert_called_once_with(
+                "session",
+                {"obj_name": "objs_with_final_validation_status"},
+                "start",
+                "end",
+            ),
+        ),
+    ],
+)
+def test_run_pipeline_flattened_objects_function_calls(
+    mock_name: str,
+    assertion: Callable,
+    mock_run_pipeline_flattened_objs: tuple[dict, Any],
+):
+    mocks, run_pipeline_return_value = mock_run_pipeline_flattened_objs
+    assertion(mocks[mock_name])
+
+
+def test_run_pipeline_flattened_objects_return_value(
+    mock_run_pipeline_flattened_objs: tuple[dict, Any],
+):
+    mocks, run_pipeline_return_value = mock_run_pipeline_flattened_objs
+    assert run_pipeline_return_value is None
+
+
+@patch("readwise_sqlalchemy.main.run_pipeline")
+def test_main(mock_run_pipeline: MagicMock):
+    mock_user_config = Mock()
+    main(mock_user_config)
+    mock_run_pipeline.assert_called_once_with(mock_user_config)
+
+
+def test_validate_books_with_highlights():
     mock_valid_book = mock_api_response()[0]
 
     mock_invalid_book = mock_api_response()[0]
@@ -418,7 +682,11 @@ def test_update_database(mock_db_populater: MagicMock):
         ),
         (
             "mock_validate_books_with_highlights",
-            lambda m: m.assert_called_once_with("data"),
+            lambda m: m.assert_called_once_with("raw_data"),
+        ),
+        (
+            "mock_validate_books_with_highlights",
+            lambda m: m.assert_called_once_with("raw_data"),
         ),
         (
             "mock_update_database",
@@ -440,10 +708,3 @@ def test_run_pipeline_function_calls(
 def test_run_pipeline_return_value(mock_run_pipeline: tuple[dict, Any]):
     mocks, run_pipeline_return_value = mock_run_pipeline
     assert run_pipeline_return_value is None
-
-
-@patch("readwise_sqlalchemy.main.run_pipeline")
-def test_main(mock_run_pipeline: MagicMock):
-    mock_user_config = Mock()
-    main(mock_user_config)
-    mock_run_pipeline.assert_called_once_with(mock_user_config)

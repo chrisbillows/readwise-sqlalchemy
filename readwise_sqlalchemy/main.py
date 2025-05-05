@@ -3,28 +3,46 @@ from datetime import datetime
 from typing import Any
 
 import requests
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
 from readwise_sqlalchemy.configure_logging import setup_logging
 from readwise_sqlalchemy.db_operations import (
     DatabasePopulater,
+    DatabasePopulaterFlattenedData,
     create_database,
     get_last_fetch,
     get_session,
 )
-from readwise_sqlalchemy.schemas import BookSchema
+from readwise_sqlalchemy.schemas import (
+    BookSchema,
+    BookTagsSchema,
+    HighlightSchema,
+    HighlightTagsSchema,
+)
 from readwise_sqlalchemy.types import (
     CheckDBFn,
     FetchFn,
+    FlattenFn,
     LogSetupFn,
     SessionFn,
+    UpdateDbFlattenedObjFn,
     UpdateFn,
     ValidateFetchFn,
+    ValidateFlattenedObjFn,
+    ValidateNestedObjFn,
 )
 
 logger = logging.getLogger(__name__)
+
+
+SCHEMAS_BY_OBJECT: dict[str, type[BaseModel]] = {
+    "books": BookSchema,
+    "book_tags": BookTagsSchema,
+    "highlights": HighlightSchema,
+    "highlight_tags": HighlightTagsSchema,
+}
 
 
 def fetch_from_export_api(
@@ -180,9 +198,9 @@ def fetch_books_with_highlights(
     return (data, start_new_fetch, end_new_fetch)
 
 
-def validation_ensure_list(
+def validation_ensure_field_is_a_list(
     obj: dict[str, Any], field: str, parent_label: str
-) -> list[str]:
+) -> dict[str, str]:
     """
     Ensure a field is a list. Fix if needed and return any validation errors.
 
@@ -197,22 +215,23 @@ def validation_ensure_list(
 
     Returns
     -------
-    list[str]
-        A list of validation errors. Empty if the field is valid.
+    dict[str, str]
+        A dict of validation errors. Empty if the field is valid.
     """
-    errors = []
+    errors = {}
     if obj.get(field) is None:
         obj[field] = []
-        errors.append(f"Invalid field: {field}. Field not found in {parent_label}")
+        errors[field] = f"Field not found in {parent_label}"
     elif not isinstance(obj[field], list):
-        errors.append(
-            f"Invalid field: {field}. Field value not stored, not a list in {parent_label}. Value: {obj[field]}"
+        errors[field] = (
+            f"Field not a list in {parent_label}. Passed value not stored. Value: "
+            f"{obj[field]}"
         )
         obj[field] = []
     return errors
 
 
-def validation_annotate_validated(obj: dict[str, Any], errors: list[str]) -> None:
+def validation_annotate_validated(obj: dict[str, Any], errors: dict[str, str]) -> None:
     """
     Set `validated` and `validation_errors` fields on any dict-like object.
 
@@ -227,9 +246,9 @@ def validation_annotate_validated(obj: dict[str, Any], errors: list[str]) -> Non
     obj["validation_errors"] = errors
 
 
-def validation_highlight_book_id(
+def validation_ensure_highlight_has_correct_book_id(
     highlight: dict[str, Any], book_user_book_id: Any
-) -> list[str]:
+) -> dict[str, str]:
     """
     Ensure highlight.book_id matches its parent book.user_book_id.
 
@@ -244,20 +263,21 @@ def validation_highlight_book_id(
 
     Returns
     -------
-    list[str]
-        A list of errors.
+    dict[str, str]
+        A dict of errors.
     """
-    errors = []
+    errors = {}
     if highlight.get("book_id") != book_user_book_id:
-        errors.append(
-            f"Invalid field: book_id. Highlight book_id {highlight.get('book_id')} does"
-            f" not match book user_book_id {book_user_book_id}"
+        errors["book_id"] = (
+            f"Highlight book_id {highlight.get('book_id')} does not match book "
+            f"user_book_id {book_user_book_id}"
         )
         highlight["book_id"] = book_user_book_id
     return errors
 
 
-def validation_nested_obj_layer(
+# TODO: Now we are using dicts, can we not write directly to the objects?
+def validate_nested_objects(
     raw_books: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """
@@ -269,19 +289,6 @@ def validation_nested_obj_layer(
     Each object is tagged with:
     - `validated`: True or False
     - `validation_errors`: a list of errors (empty if valid)
-
-    Parameters
-    ----------
-    raw_books : list[dict]
-        A list of raw dicts from the Readwise API.
-
-    Returns
-    -------
-    raw_books : list[dict]
-        A list of raw dicts from the Readwise API. Each object has a `validated` field
-        set to True or False, and a `validation_errors` field containing a list of
-        errors (empty if the object is valid). False will indicate the object failed
-        validation in any validation layer.
 
     Notes
     -----
@@ -299,35 +306,273 @@ def validation_nested_obj_layer(
       possible while still being able to promise type safety when using data from the
       database.
 
+    Parameters
+    ----------
+    raw_books : list[dict]
+        A list of raw dicts from the Readwise API.
+
+    Returns
+    -------
+    raw_books : list[dict]
+        A list of raw dicts from the Readwise API. Each object has a `validated` field
+        set to True or False, and a `validation_errors` field containing a list of
+        errors (empty if the object is valid). False will indicate the object failed
+        validation in any validation layer.
     """
     for book in raw_books:
-        book_errors = []
+        book_errors = {}
 
         # Highlights and book_tags must exist and be lists
-        book_errors += validation_ensure_list(book, "highlights", "book")
-        book_errors += validation_ensure_list(book, "book_tags", "book")
+        book_errors.update(
+            validation_ensure_field_is_a_list(book, "highlights", "book")
+        )
+        book_errors.update(validation_ensure_field_is_a_list(book, "book_tags", "book"))
 
         # Validate each book_tag (no strict checks yet)
         for tag in book["book_tags"]:
-            validation_annotate_validated(tag, [])
+            validation_annotate_validated(tag, {})
 
         # Validate each highlight and its tags
         for highlight in book["highlights"]:
-            highlight_errors = []
+            highlight_errors = {}
 
-            highlight_errors += validation_highlight_book_id(
-                highlight, book["user_book_id"]
+            highlight_errors.update(
+                validation_ensure_highlight_has_correct_book_id(
+                    highlight, book["user_book_id"]
+                )
             )
-            highlight_errors += validation_ensure_list(highlight, "tags", "highlight")
+            highlight_errors.update(
+                validation_ensure_field_is_a_list(highlight, "tags", "highlight")
+            )
 
             for tag in highlight["tags"]:
-                validation_annotate_validated(tag, [])
+                validation_annotate_validated(tag, {})
 
             validation_annotate_validated(highlight, highlight_errors)
 
         validation_annotate_validated(book, book_errors)
 
     return raw_books
+
+
+def flatten_books_with_highlights(
+    raw_books: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    """
+    Flatten the nested API response from the Readwise Highlight EXPORT endpoint.
+
+    Split "highlights" and "book_tags" from a book.  Split "tags" from "highlights".
+
+    Note
+    ----
+    This function works regardless of objects having additional "validated" and
+    "validation_error" fields.
+
+    Parameters
+    ----------
+    raw_books: list[dict[str, Any]]
+        A list of dicts where each dict represents a "book". Nested within each book
+        are "book_tags" and "highlights".  Nested within "highlights" are "tags".
+
+    Returns
+    -------
+    dict[str, list[dict[str, Any]]
+        A dictionary with the keys "books", "book_tags", "highlights", "highlight_tags".
+        The values are the unnested keys and values for the object.
+    """
+    books = []
+    book_tags = []
+    highlights = []
+    highlight_tags = []
+
+    for raw_book in raw_books:
+        books.append(
+            {k: v for k, v in raw_book.items() if k not in ("book_tags", "highlights")}
+        )
+
+        for book_tag in raw_book.get("book_tags", []):
+            book_tag["user_book_id"] = raw_book["user_book_id"]
+            book_tags.append(book_tag)
+
+        for highlight in raw_book.get("highlights", []):
+            for tag in highlight.get("tags", []):
+                tag["highlight_id"] = highlight["id"]
+                highlight_tags.append(tag)
+
+            highlight = {k: v for k, v in highlight.items() if k != "tags"}
+            highlight["user_book_id"] = raw_book["user_book_id"]
+            highlights.append(highlight)
+
+    return {
+        "books": books,
+        "book_tags": book_tags,
+        "highlights": highlights,
+        "highlight_tags": highlight_tags,
+    }
+
+
+def validate_flattened_objects(
+    flattened_api_data: dict[str, list[dict[str, Any]]],
+    schemas: dict[str, type[BaseModel]] = SCHEMAS_BY_OBJECT,
+) -> dict[str, list[dict[str, Any]]]:
+    """
+    Second validation layer: validate the fields in flattened Readwise objects.
+
+    Validate by casting an object dict to a Pydantic schema. "validated" is either True
+    or, if invalid, a dict of fields and errors. E.g.
+    ```python
+    "validated" {
+         'asin': 'String should have at least 10 characters',
+         'author': 'Field required',
+        ...
+    }
+    ```
+    Parameters
+    ----------
+    flattened_api_data: dict[str, list[dict[str, Any]]]
+        The flattened API data in the form:
+        ```
+        {
+            "books": [<books>],
+            "book_tags": [<book_tags>],
+            "highlights": [<highlights>],
+            "highlight_tags": [<highlight_tags>],
+        }
+        ```
+    Returns
+    -------
+    dict[str, list[dict[str, Any]]]
+        The flattened API data in it's original form, with each individual object -
+        book, book tag, highlight, highlight_tag - given a "validated" field.
+    """
+    processed_objects_by_type = {}
+    for object_type, objects in flattened_api_data.items():
+        processed_objects = []
+        for item in objects:
+            try:
+                schema = schemas[object_type]
+                api_fields = {k: v for k, v in item.items() if k in schema.model_fields}
+                item_as_schema = schema(**api_fields)
+                # Capture any data integrity transformation's done by the schema.
+                # Reattach validation data. NOTE: If this try branch succeeds, an item's
+                # validation status doesn't change. If it was true from earlier
+                # validation, it stays true. If it was false - invalid on early checks -
+                # it remains invalid.
+                item_as_schema_dumped = item_as_schema.model_dump()
+                item_as_schema_dumped["validated"] = item["validated"]
+                item_as_schema_dumped["validation_errors"] = item["validation_errors"]
+                processed_objects.append(item_as_schema_dumped)
+            except ValidationError as err:
+                item["validated"] = False
+                for detail in err.errors():
+                    item["validation_errors"][
+                        ".".join(str(part) for part in detail["loc"])
+                    ] = detail["msg"]
+                processed_objects.append(item)
+        processed_objects_by_type[object_type] = processed_objects
+    return processed_objects_by_type
+
+
+def update_database_flattened_objects(
+    session: Session,
+    flattened_validated_objs: dict[str, list[dict[str, Any]]],
+    start_fetch: datetime,
+    end_fetch: datetime,
+) -> None:
+    """
+    Update the database. Expects flattened Readwise objects.
+
+    Parameters
+    ----------
+    session: Session
+        A SQL alchemy session connected to a database.
+    validated_objs: dict[str, list[dict[str, Any]]]
+        The flattened API data in it's original form, with each individual object -
+        book, book tag, highlight, highlight_tag - given a "validated" field.
+    start_fetch: datetime
+        The time the fetch was called.
+    end_fetch: datetime
+        The time the fetch was completed.
+    """
+    logger.info("Updating database")
+    dbp_fd = DatabasePopulaterFlattenedData(
+        session, flattened_validated_objs, start_fetch, end_fetch
+    )
+    dbp_fd.populate_database()
+    logger.info("Database updated.")
+
+
+def run_pipeline_flattened_objects(
+    user_config: UserConfig = USER_CONFIG,
+    setup_logging_func: LogSetupFn = setup_logging,
+    get_session_func: SessionFn = get_session,
+    check_db_func: CheckDBFn = check_database,
+    fetch_func: FetchFn = fetch_books_with_highlights,
+    validate_nested_objs_func: ValidateNestedObjFn = validate_nested_objects,
+    flatten_func: FlattenFn = flatten_books_with_highlights,
+    validate_flattened_objs_func: ValidateFlattenedObjFn = validate_flattened_objects,
+    update_db_func: UpdateDbFlattenedObjFn = update_database_flattened_objects,
+) -> None:
+    """
+    Orchestrate the end-to-end Readwise data sync process.
+
+    Creates a new database and fetches all highlights, or gets the last fetch datetime
+    and fetches only new/updated highlights.
+
+    Use dependency injection for functions for simplified testing.
+
+    Parameters
+    ----------
+    user_config : UserConfig, optional, default = USER_CONFIG
+        Configuration object.
+    setup_logging_func: LogSetupFn, optional, default = setup_logging()
+        A function that sets up application logging.
+    get_session_func: SessionFn, optional, get_session()
+        A function that returns a SQLAlchemy database Session.
+    check_db_func: CheckDBFn, optional, default = check_database()
+        A function that creates the database or returns the last fetch datetime (or
+        None if it just creates the db).
+    fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
+        Function that fetches highlights and returns them as a tuple with the start
+        and end times of the fetch as datetimes.
+    validate_nested_objs_func: ValidateNestedObjFn, optional, default = validate_nested_objects()
+        The first layer of validation, performed on the nested Readwise objects output
+        by the API. Adds fields "validated" and "validation_errors" to each obj.
+    flatten_func: FlattenFn, optional, default = flatten_books_with_highlights()
+        A function that flattens the nested API response into a dict of lists of
+        unnested objects, associated by fk.
+    validate_flattened_objs_func: ValidateFetchFlattenedObjFn, default = validate_flattened_objects()
+        The second layer of validation, performed on unnested objects using Pydantic
+        schema.
+    update_func: UpdateDbFlattenedDataFn, optional, default = update_database_flattened_objects()
+        Function that populates the database with the flattened objects.
+    """
+    setup_logging_func()
+    session = get_session_func(user_config.db_path)
+    last_fetch = check_db_func(session, user_config)
+    raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
+    nested_books_with_initial_validation_status = validate_nested_objs_func(raw_books)
+    flat_objs_with_initial_validation_status = flatten_func(
+        nested_books_with_initial_validation_status
+    )
+    flat_objs_with_final_validation_status = validate_flattened_objs_func(
+        flat_objs_with_initial_validation_status
+    )
+    update_db_func(
+        session, flat_objs_with_final_validation_status, start_fetch, end_fetch
+    )
+
+
+def main(user_config: UserConfig = USER_CONFIG) -> None:
+    """
+    Main function that runs with the entry point.
+
+    Parameters
+    ----------
+    user_config
+        A UserConfig object.
+    """
+    run_pipeline(user_config)
 
 
 def validate_books_with_highlights(
@@ -435,18 +680,6 @@ def run_pipeline(
     data, start_fetch, end_fetch = fetch_func(last_fetch)
     valid_books, failed_books = validate_func(data)
     update_db_func(session, valid_books, start_fetch, end_fetch)
-
-
-def main(user_config: UserConfig = USER_CONFIG) -> None:
-    """
-    Main function that runs with the entry point.
-
-    Parameters
-    ----------
-    user_config
-        A UserConfig object.
-    """
-    run_pipeline(user_config)
 
 
 if __name__ == "__main__":

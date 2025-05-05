@@ -19,6 +19,10 @@ from readwise_sqlalchemy.main import (
     update_database,
     validate_books_with_highlights,
     validate_flat_api_data_by_object_type,
+    validation_annotate_validated,
+    validation_ensure_list,
+    validation_highlight_book_id,
+    validation_nested_obj_layer,
 )
 from readwise_sqlalchemy.schemas import BookSchema
 from tests.unit.test_schemas import mock_api_response
@@ -261,6 +265,194 @@ def test_flatten_books_with_highlights():
         ],
         "highlight_tags": [{"id": 97654, "name": "favorite", "highlight_id": 10}],
     }
+    assert actual == expected
+
+    
+@pytest.mark.parametrize(
+    "mock_obj, expected",
+    [
+        ({}, ["Invalid field: mock_field. Field not found in obj"]),
+        (
+            {"mock_field": 123},
+            [
+                "Invalid field: mock_field. Field value not stored, not a list in obj. Value: 123"
+            ],
+        ),
+    ],
+)
+def test_validation_ensure_list(mock_obj: dict[str, Any], expected: dict[str, Any]):
+    assert validation_ensure_list(mock_obj, "mock_field", "obj") == expected
+
+
+@pytest.mark.parametrize(
+    "mock_obj, mock_errors, expected",
+    [
+        (
+            {"field": 123},
+            [],
+            {"field": 123, "validated": True, "validation_errors": []},
+        ),
+        (
+            {"field": 123},
+            ["mock_error"],
+            {"field": 123, "validated": False, "validation_errors": ["mock_error"]},
+        ),
+    ],
+)
+def test_validation_annotate_validated(
+    mock_obj: dict[str, Any], mock_errors: list[str], expected: dict[str, Any]
+):
+    validation_annotate_validated(mock_obj, mock_errors)
+    assert mock_obj == expected
+
+
+@pytest.mark.parametrize(
+    "mock_highlight, expected",
+    [
+        ({"book_id": 1}, []),
+        (
+            {"book_id": 2},
+            [
+                "Invalid field: book_id. Highlight book_id 2 does not match book user_book_id 1"
+            ],
+        ),
+    ],
+)
+def test_validation_highlight_book_id(
+    mock_highlight: dict[str, Any], expected: dict[str, Any]
+):
+    actual = validation_highlight_book_id(mock_highlight, 1)
+    assert actual == expected
+
+
+def test_first_validation_layer_for_all_valid_objs():
+    mock_raw_books = [
+        {
+            "user_book_id": 123,
+            "book_tags": [{"id": 1, "name": "tag1"}],
+            "highlights": [{"book_id": 123, "tags": [{"id": 10, "name": "tag1"}]}],
+        }
+    ]
+
+    expected = [
+        {
+            "user_book_id": 123,
+            "book_tags": [
+                {"id": 1, "name": "tag1", "validated": True, "validation_errors": []}
+            ],
+            "highlights": [
+                {
+                    "book_id": 123,
+                    "tags": [
+                        {
+                            "id": 10,
+                            "name": "tag1",
+                            "validated": True,
+                            "validation_errors": [],
+                        }
+                    ],
+                    "validated": True,
+                    "validation_errors": [],
+                }
+            ],
+            "validated": True,
+            "validation_errors": [],
+        }
+    ]
+    actual = validation_nested_obj_layer(mock_raw_books)
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "mock_raw_books, expected",
+    [
+        (
+            [
+                {
+                    "user_book_id": 1,
+                }
+            ],
+            [
+                {
+                    "user_book_id": 1,
+                    "book_tags": [],
+                    "highlights": [],
+                    "validated": False,
+                    "validation_errors": [
+                        "Invalid field: highlights. Field not found in book",
+                        "Invalid field: book_tags. Field not found in book",
+                    ],
+                },
+            ],
+        ),
+        (
+            [
+                {
+                    "user_book_id": 1,
+                    "highlights": [{"book_id": 2}],
+                }
+            ],
+            [
+                {
+                    "user_book_id": 1,
+                    "book_tags": [],
+                    "highlights": [
+                        {
+                            "book_id": 1,
+                            "tags": [],
+                            "validated": False,
+                            "validation_errors": [
+                                "Invalid field: book_id. Highlight book_id 2 does not "
+                                "match book user_book_id 1",
+                                "Invalid field: tags. Field not found in highlight",
+                            ],
+                        }
+                    ],
+                    "validated": False,
+                    "validation_errors": [
+                        "Invalid field: book_tags. Field not found in book",
+                    ],
+                },
+            ],
+        ),
+        (
+            [
+                {
+                    "user_book_id": 2,
+                    "book_tags": "I am a string",
+                    "highlights": [{"book_id": 2, "tags": [{"id": 1, "name": "tag"}]}],
+                }
+            ],
+            [
+                {
+                    "user_book_id": 2,
+                    "book_tags": [],
+                    "highlights": [
+                        {
+                            "book_id": 2,
+                            "tags": [
+                                {
+                                    "id": 1,
+                                    "name": "tag",
+                                    "validated": True,
+                                    "validation_errors": [],
+                                }
+                            ],
+                            "validated": True,
+                            "validation_errors": [],
+                        }
+                    ],
+                    "validated": False,
+                    "validation_errors": [
+                        "Invalid field: book_tags. Field value not stored, not a list in book. Value: I am a string",
+                    ],
+                },
+            ],
+        ),
+    ],
+)
+def test_first_validation_layer_for_errors(mock_raw_books, expected):
+    actual = validation_nested_obj_layer(mock_raw_books)
     assert actual == expected
 
 

@@ -55,7 +55,7 @@ def mock_run_pipeline() -> tuple[dict, Any]:
 
 
 @pytest.fixture()
-def mock_run_pipeline_flatten() -> tuple[dict, Any]:
+def mock_run_pipeline_flattened_objs() -> tuple[dict, Any]:
     # Strings are used as simplified return values. They are not the real return types.
     mocks = {
         "mock_setup_logging": MagicMock(),
@@ -63,6 +63,9 @@ def mock_run_pipeline_flatten() -> tuple[dict, Any]:
         "mock_check_database": MagicMock(return_value="last_fetch"),
         "mock_fetch_books_with_highlights": MagicMock(
             return_value=("raw_data", "start", "end")
+        ),
+        "mock_validate_nested_objects": MagicMock(
+            return_value="nested_objs_with_validation_status"
         ),
         "mock_flatten_books_with_highlights": MagicMock(
             return_value={
@@ -72,10 +75,10 @@ def mock_run_pipeline_flatten() -> tuple[dict, Any]:
                 "highlight_tags": "highlight_tags_dicts",
             }
         ),
-        "mock_validate_flat_api_data_by_object_type": MagicMock(
-            return_value=("valid_objs", "invalid_objs")
+        "mock_validate_flattened_objects": MagicMock(
+            return_value={"obj_name": "objs_with_final_validation_status"}
         ),
-        "mock_update_database_flatten": MagicMock(),
+        "mock_update_database_flattened_objects": MagicMock(),
     }
     actual = run_pipeline_flattened_objects(
         user_config=MagicMock(DB="db"),
@@ -83,9 +86,10 @@ def mock_run_pipeline_flatten() -> tuple[dict, Any]:
         get_session_func=mocks["mock_get_session"],
         check_db_func=mocks["mock_check_database"],
         fetch_func=mocks["mock_fetch_books_with_highlights"],
+        validate_nested_objs_func=mocks["mock_validate_nested_objects"],
         flatten_func=mocks["mock_flatten_books_with_highlights"],
-        validate_func=mocks["mock_validate_flat_api_data_by_object_type"],
-        update_db_func=mocks["mock_update_database_flatten"],
+        validate_flattened_objs_func=mocks["mock_validate_flattened_objects"],
+        update_db_func=mocks["mock_update_database_flattened_objects"],
     )
     return mocks, actual
 
@@ -411,6 +415,7 @@ def test_validate_nested_objects_for_sample_of_invalid_objects(
     assert actual == expected
 
 
+# TODO: Add validated fields with comment.
 def test_flatten_books_with_highlights():
     actual = flatten_books_with_highlights(mock_api_response())
     expected = {
@@ -501,7 +506,7 @@ def test_validate_flattened_objects():
 
 
 @pytest.mark.skip("To be implemented")
-def test_update_database_flatten():
+def test_update_database_flattened_objects():
     pass
 
 
@@ -518,10 +523,10 @@ def test_update_database_flatten():
         ),
         (
             "mock_flatten_books_with_highlights",
-            lambda m: m.assert_called_once_with("raw_data"),
+            lambda m: m.assert_called_once_with("nested_objs_with_validation_status"),
         ),
         (
-            "mock_validate_flat_api_data_by_object_type",
+            "mock_validate_flattened_objects",
             lambda m: m.assert_called_once_with(
                 {
                     "books": "book_data_dicts",
@@ -532,20 +537,31 @@ def test_update_database_flatten():
             ),
         ),
         (
-            "mock_update_database_flatten",
+            "mock_update_database_flattened_objects",
             lambda m: m.assert_called_once_with(
-                "session", ("valid_objs", "invalid_objs"), "start", "end"
+                "session",
+                {"obj_name": "objs_with_final_validation_status"},
+                "start",
+                "end",
             ),
         ),
     ],
 )
-def test_run_pipeline_flatten_function_calls(
+# TODO: Add a test for the validate nested objects.
+def test_run_pipeline_flattened_objects_function_calls(
     mock_name: str,
     assertion: Callable,
-    mock_run_pipeline_flatten: tuple[dict, Any],
+    mock_run_pipeline_flattened_objs: tuple[dict, Any],
 ):
-    mocks, run_pipeline_return_value = mock_run_pipeline_flatten
+    mocks, run_pipeline_return_value = mock_run_pipeline_flattened_objs
     assertion(mocks[mock_name])
+
+
+def test_run_pipeline_flattened_objects_return_value(
+    mock_run_pipeline_flattened_objs: tuple[dict, Any],
+):
+    mocks, run_pipeline_return_value = mock_run_pipeline_flattened_objs
+    assert run_pipeline_return_value is None
 
 
 @patch("readwise_sqlalchemy.main.run_pipeline")

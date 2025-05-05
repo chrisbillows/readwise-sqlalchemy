@@ -27,7 +27,7 @@ from readwise_sqlalchemy.types import (
     FlattenFn,
     LogSetupFn,
     SessionFn,
-    UpdateDbFlattenedDataFn,
+    UpdateDbFlattenedObjFn,
     UpdateFn,
     ValidateFetchFn,
     ValidateFlattenedObjFn,
@@ -288,19 +288,6 @@ def validate_nested_objects(
     - `validated`: True or False
     - `validation_errors`: a list of errors (empty if valid)
 
-    Parameters
-    ----------
-    raw_books : list[dict]
-        A list of raw dicts from the Readwise API.
-
-    Returns
-    -------
-    raw_books : list[dict]
-        A list of raw dicts from the Readwise API. Each object has a `validated` field
-        set to True or False, and a `validation_errors` field containing a list of
-        errors (empty if the object is valid). False will indicate the object failed
-        validation in any validation layer.
-
     Notes
     -----
     - The validation checks:
@@ -317,6 +304,18 @@ def validate_nested_objects(
       possible while still being able to promise type safety when using data from the
       database.
 
+    Parameters
+    ----------
+    raw_books : list[dict]
+        A list of raw dicts from the Readwise API.
+
+    Returns
+    -------
+    raw_books : list[dict]
+        A list of raw dicts from the Readwise API. Each object has a `validated` field
+        set to True or False, and a `validation_errors` field containing a list of
+        errors (empty if the object is valid). False will indicate the object failed
+        validation in any validation layer.
     """
     for book in raw_books:
         book_errors = []
@@ -357,6 +356,11 @@ def flatten_books_with_highlights(
     Flatten the nested API response from the Readwise Highlight EXPORT endpoint.
 
     Split "highlights" and "book_tags" from a book.  Split "tags" from "highlights".
+
+    Note
+    ----
+    This function works regardless of objects having additional "validated" and
+    "validation_error" fields.
 
     Parameters
     ----------
@@ -401,6 +405,7 @@ def flatten_books_with_highlights(
     }
 
 
+# TODO: Update for objs having validation fields from first validation layer.
 def validate_flattened_objects(
     flattened_api_data: dict[str, list[dict[str, Any]]],
     schemas: dict[str, type[BaseModel]] = SCHEMAS_BY_OBJECT,
@@ -457,14 +462,14 @@ def validate_flattened_objects(
     return processed_objects_by_type
 
 
-def update_database_flatten_objects(
+def update_database_flattened_objects(
     session: Session,
-    validated_objs: dict[str, list[dict[str, Any]]],
+    flattened_validated_objs: dict[str, list[dict[str, Any]]],
     start_fetch: datetime,
     end_fetch: datetime,
 ) -> None:
     """
-    Update the database.
+    Update the database. Expects flattened Readwise objects.
 
     Parameters
     ----------
@@ -480,7 +485,7 @@ def update_database_flatten_objects(
     """
     logger.info("Updating database")
     dbp_fd = DatabasePopulaterFlattenedData(
-        session, validated_objs, start_fetch, end_fetch
+        session, flattened_validated_objs, start_fetch, end_fetch
     )
     dbp_fd.populate_database()
     logger.info("Database updated.")
@@ -492,10 +497,10 @@ def run_pipeline_flattened_objects(
     get_session_func: SessionFn = get_session,
     check_db_func: CheckDBFn = check_database,
     fetch_func: FetchFn = fetch_books_with_highlights,
-    validate_nested_func: ValidateNestedObjFn = validate_nested_objects,
+    validate_nested_objs_func: ValidateNestedObjFn = validate_nested_objects,
     flatten_func: FlattenFn = flatten_books_with_highlights,
-    validate_func: ValidateFlattenedObjFn = validate_flattened_objects,
-    update_db_func: UpdateDbFlattenedDataFn = update_database_flatten_objects,
+    validate_flattened_objs_func: ValidateFlattenedObjFn = validate_flattened_objects,
+    update_db_func: UpdateDbFlattenedObjFn = update_database_flattened_objects,
 ) -> None:
     """
     Orchestrate the end-to-end Readwise data sync process.
@@ -519,23 +524,32 @@ def run_pipeline_flattened_objects(
     fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
         Function that fetches highlights and returns them as a tuple with the start
         and end times of the fetch as datetimes.
+    validate_nested_objs_func: ValidateNestedObjFn, optional, default = validate_nested_objects()
+        The first layer of validation, performed on the nested Readwise objects output
+        by the API. Adds fields "validated" and "validation_errors" to each obj.
     flatten_func: FlattenFn, optional, default = flatten_books_with_highlights()
         A function that flattens the nested API response into a dict of lists of
         unnested objects, associated by fk.
-    validate_func: ValidateFetchFlattenedDataFn,
-                    default = validate_flat_api_data_by_object_type()
-        A function that validates unnested objects with Pydantic schema, and adds a
-        "validated" bool field to each object.
-    update_func: UpdateDbFlattenedDataFn, optional, default = update_database_flatten()
+    validate_flattened_objs_func: ValidateFetchFlattenedObjFn, default = validate_flattened_objects()
+        The second layer of validation, performed on unnested objects using Pydantic
+        schema.
+    update_func: UpdateDbFlattenedDataFn, optional, default = update_database_flattened_objects()
         Function that populates the database with the flattened objects.
     """
     setup_logging_func()
     session = get_session_func(user_config.db_path)
     last_fetch = check_db_func(session, user_config)
     raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
-    flat_data = flatten_func(raw_books)
-    objs_with_validated_field = validate_func(flat_data)
-    update_db_func(session, objs_with_validated_field, start_fetch, end_fetch)
+    nested_books_with_initial_validation_status = validate_nested_objs_func(raw_books)
+    flat_objs_with_initial_validation_status = flatten_func(
+        nested_books_with_initial_validation_status
+    )
+    flat_objs_with_final_validation_status = validate_flattened_objs_func(
+        flat_objs_with_initial_validation_status
+    )
+    update_db_func(
+        session, flat_objs_with_final_validation_status, start_fetch, end_fetch
+    )
 
 
 def main(user_config: UserConfig = USER_CONFIG) -> None:

@@ -13,7 +13,7 @@ FlattenFn = Callable[[list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]
 LogSetupFn = Callable[[], None]
 SessionFn = Callable[[str | Path], Session]
 UpdateFn = Callable[[Session, list[BookSchema], datetime, datetime], None]
-UpdateDbFlattenedDataFn = Callable[
+UpdateDbFlattenedObjFn = Callable[
     [Session, dict[str, list[dict[str, Any]]], datetime, datetime], None
 ]
 ValidateFetchFn = Callable[

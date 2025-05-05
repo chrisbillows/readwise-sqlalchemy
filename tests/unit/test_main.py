@@ -415,9 +415,9 @@ def test_validate_nested_objects_for_sample_of_invalid_objects(
     assert actual == expected
 
 
-# TODO: Add validated fields with comment.
-def test_flatten_books_with_highlights():
-    actual = flatten_books_with_highlights(mock_api_response())
+@pytest.mark.parametrize("test_with_validated_keys_present", [True, False])
+def test_flatten_books_with_highlights(test_with_validated_keys_present: bool):
+    mock_api_response_data = mock_api_response()
     expected = {
         "books": [
             {
@@ -462,6 +462,29 @@ def test_flatten_books_with_highlights():
         ],
         "highlight_tags": [{"id": 97654, "name": "favorite", "highlight_id": 10}],
     }
+
+    # Add validated keys to input and expected data. Function not expected to care if
+    # the data has validation keys or not.
+    if test_with_validated_keys_present:
+
+        def add_validation_fields_recursive(obj):
+            if isinstance(obj, dict):
+                obj["validated"] = True
+                obj["validation_errors"] = []
+                for value in obj.values():
+                    add_validation_fields_recursive(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    add_validation_fields_recursive(item)
+
+        add_validation_fields_recursive(mock_api_response_data)
+        add_validation_fields_recursive(expected)
+        # Remove unneeded keys.
+        del expected["validated"]
+        del expected["validation_errors"]
+
+    actual = flatten_books_with_highlights(mock_api_response_data)
+
     assert actual == expected
 
 

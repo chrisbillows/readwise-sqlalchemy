@@ -522,6 +522,10 @@ def test_update_database_flattened_objects():
             lambda m: m.assert_called_once_with("last_fetch"),
         ),
         (
+            "mock_validate_nested_objects",
+            lambda m: m.assert_called_once_with("raw_data"),
+        ),
+        (
             "mock_flatten_books_with_highlights",
             lambda m: m.assert_called_once_with("nested_objs_with_validation_status"),
         ),
@@ -547,7 +551,6 @@ def test_update_database_flattened_objects():
         ),
     ],
 )
-# TODO: Add a test for the validate nested objects.
 def test_run_pipeline_flattened_objects_function_calls(
     mock_name: str,
     assertion: Callable,

@@ -286,30 +286,6 @@ def test_validation_ensure_highlight_has_correct_book_id(
     assert mock_highlight == expected
 
 
-# @pytest.mark.parametrize(
-#     "mock_obj,expected",
-#     [
-#         (
-#             {"field": 123},
-#             {"field": 123, "validated": True, "validation_errors": {}},
-#         ),
-#         (
-#             {"field": 123, "validation_errors": {"field": "mock_error"}},
-#             {
-#                 "field": 123,
-#                 "validated": False,
-#                 "validation_errors": {"field": "mock_error"},
-#             },
-#         ),
-#     ],
-# )
-# def test_validation_annotate_validated(
-#     mock_obj: dict[str, Any], expected: dict[str, Any]
-# ):
-#     validation_annotate_validated(mock_obj)
-#     assert mock_obj == expected
-
-
 @pytest.mark.parametrize(
     "mock_obj, expected",
     [

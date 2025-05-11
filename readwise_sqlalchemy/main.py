@@ -257,42 +257,6 @@ def validation_ensure_highlight_has_correct_book_id(
         highlight["book_id"] = book_user_book_id
 
 
-# def validation_annotate_validated(obj: dict[str, Any]) -> None:
-#     """
-#     Set `validated` status (and `validation_errors`) fields on any dict-like object.
-
-#     Assumes obj has a "validation_errors" field if the obj has had errors in validation
-#     functions.
-
-#     Parameters
-#     ----------
-#     obj: dict
-#         A dictionary-like object.
-#     """
-#     if obj.get("validation_errors"):
-#         obj["validated"] = False
-#     else:
-#         obj["validated"] = True
-#         # If the obj has had no errors, the field will not have been set.
-#         obj["validation_errors"] = {}
-
-
-# def validation_add_initial_validation_status_old(obj: dict[str, Any]) -> None:
-#     """
-#     Add initial validation fields to an object.
-
-#     Ensure objects have consistent fields for mutation through validation checks.
-#     Validation checks are assumed to overwrite the "validated" field to False.
-
-#     Parameters
-#     ----------
-#     obj: dict
-#         A dictionary-like object.
-#     """
-#     obj["validated"] = True
-#     obj["validation_errors"] = {}
-
-
 def validation_add_initial_validation_status(
     obj: dict[str, Any] | list[dict[str, Any]],
 ) -> dict[str, Any] | list[dict[str, Any]]:

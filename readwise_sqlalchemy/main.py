@@ -9,16 +9,15 @@ from sqlalchemy.orm import Session
 from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
 from readwise_sqlalchemy.configure_logging import setup_logging
 from readwise_sqlalchemy.db_operations import (
-    DatabasePopulater,
     DatabasePopulaterFlattenedData,
     create_database,
     get_last_fetch,
     get_session,
 )
 from readwise_sqlalchemy.schemas import (
-    BookSchema,
+    BookSchemaUnnested,
     BookTagsSchema,
-    HighlightSchema,
+    HighlightSchemaUnnested,
     HighlightTagsSchema,
 )
 from readwise_sqlalchemy.types import (
@@ -27,10 +26,8 @@ from readwise_sqlalchemy.types import (
     FlattenFn,
     LogSetupFn,
     SessionFn,
-    UpdateDbFlattenedObjFn,
-    UpdateFn,
-    ValidateFetchFn,
-    ValidateFlattenedObjFn,
+    UpdateDbFlatObjFn,
+    ValidateFlatObjFn,
     ValidateNestedObjFn,
 )
 
@@ -38,9 +35,9 @@ logger = logging.getLogger(__name__)
 
 
 SCHEMAS_BY_OBJECT: dict[str, type[BaseModel]] = {
-    "books": BookSchema,
+    "books": BookSchemaUnnested,
     "book_tags": BookTagsSchema,
-    "highlights": HighlightSchema,
+    "highlights": HighlightSchemaUnnested,
     "highlight_tags": HighlightTagsSchema,
 }
 
@@ -510,8 +507,8 @@ def run_pipeline_flattened_objects(
     fetch_func: FetchFn = fetch_books_with_highlights,
     validate_nested_objs_func: ValidateNestedObjFn = validate_nested_objects,
     flatten_func: FlattenFn = flatten_books_with_highlights,
-    validate_flattened_objs_func: ValidateFlattenedObjFn = validate_flattened_objects,
-    update_db_func: UpdateDbFlattenedObjFn = update_database_flattened_objects,
+    validate_flat_objs_func: ValidateFlatObjFn = validate_flattened_objects,
+    update_db_func: UpdateDbFlatObjFn = update_database_flattened_objects,
 ) -> None:
     """
     Orchestrate the end-to-end Readwise data sync process.
@@ -551,16 +548,10 @@ def run_pipeline_flattened_objects(
     session = get_session_func(user_config.db_path)
     last_fetch = check_db_func(session, user_config)
     raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
-    nested_books_with_initial_validation_status = validate_nested_objs_func(raw_books)
-    flat_objs_with_initial_validation_status = flatten_func(
-        nested_books_with_initial_validation_status
-    )
-    flat_objs_with_final_validation_status = validate_flattened_objs_func(
-        flat_objs_with_initial_validation_status
-    )
-    update_db_func(
-        session, flat_objs_with_final_validation_status, start_fetch, end_fetch
-    )
+    nested_books_first_validation = validate_nested_objs_func(raw_books)
+    flat_objs_first_validation = flatten_func(nested_books_first_validation)
+    flat_objs_second_validation = validate_flat_objs_func(flat_objs_first_validation)
+    update_db_func(session, flat_objs_second_validation, start_fetch, end_fetch)
 
 
 def main(user_config: UserConfig = USER_CONFIG) -> None:
@@ -572,114 +563,114 @@ def main(user_config: UserConfig = USER_CONFIG) -> None:
     user_config
         A UserConfig object.
     """
-    run_pipeline(user_config)
+    run_pipeline_flattened_objects(user_config)
 
 
-def validate_books_with_highlights(
-    raw_books: list[dict[str, Any]],
-) -> tuple[list[BookSchema], list[tuple[dict[str, Any], str]]]:
-    """
-    Attempt to convert raw book dicts to Pydantic BookSchema models.
+# def validate_books_with_highlights(
+#     raw_books: list[dict[str, Any]],
+# ) -> tuple[list[BookSchema], list[tuple[dict[str, Any], str]]]:
+#     """
+#     Attempt to convert raw book dicts to Pydantic BookSchema models.
 
-    Parameters
-    ----------
-    raw_books : list[dict]
-        A list of raw dicts from the Readwise API.
+#     Parameters
+#     ----------
+#     raw_books : list[dict]
+#         A list of raw dicts from the Readwise API.
 
-    Returns
-    -------
-    tuple
-        - A list of successfully validated BookSchema instances.
-        - A list of tuples containing (invalid dict, error message).
-    """
-    valid_books = []
-    failed_books = []
+#     Returns
+#     -------
+#     tuple
+#         - A list of successfully validated BookSchema instances.
+#         - A list of tuples containing (invalid dict, error message).
+#     """
+#     valid_books = []
+#     failed_books = []
 
-    for raw_book in raw_books:
-        try:
-            book_as_schema = BookSchema(**raw_book)
-            valid_books.append(book_as_schema)
-        except ValidationError as err:
-            error_msg = str(err)
-            failed_books.append((raw_book, error_msg))
-            logging.warning(
-                "Validation failed for book with title '"
-                f"{raw_book.get('title', '[no title]')}'. Error: {error_msg}"
-            )
+#     for raw_book in raw_books:
+#         try:
+#             book_as_schema = BookSchema(**raw_book)
+#             valid_books.append(book_as_schema)
+#         except ValidationError as err:
+#             error_msg = str(err)
+#             failed_books.append((raw_book, error_msg))
+#             logging.warning(
+#                 "Validation failed for book with title '"
+#                 f"{raw_book.get('title', '[no title]')}'. Error: {error_msg}"
+#             )
 
-    return valid_books, failed_books
-
-
-def update_database(
-    session: Session,
-    validated_books: list[BookSchema],
-    start_fetch: datetime,
-    end_fetch: datetime,
-) -> None:
-    """
-    Update the database.
-
-    Parameters
-    ----------
-    session: Session
-        A SQL alchemy session connected to a database.
-    validated_books: list[BookSchema]
-        A list of books with highlights fetched from the Readwise Highlight EXPORT
-        endpoint.
-    start_fetch: datetime
-        The time the fetch was called.
-    end_fetch: datetime
-        The time the fetch was completed.
-    """
-    logger.info("Updating database")
-    dbp = DatabasePopulater(session, validated_books, start_fetch, end_fetch)
-    dbp.populate_database()
-    logger.info("Database contains all Readwise highlights to date")
+#     return valid_books, failed_books
 
 
-def run_pipeline(
-    user_config: UserConfig = USER_CONFIG,
-    setup_logging_func: LogSetupFn = setup_logging,
-    get_session_func: SessionFn = get_session,
-    check_db_func: CheckDBFn = check_database,
-    fetch_func: FetchFn = fetch_books_with_highlights,
-    validate_func: ValidateFetchFn = validate_books_with_highlights,
-    update_db_func: UpdateFn = update_database,
-) -> None:
-    """
-    Orchestrate the end-to-end Readwise data sync process.
+# def update_database(
+#     session: Session,
+#     validated_books: list[BookSchema],
+#     start_fetch: datetime,
+#     end_fetch: datetime,
+# ) -> None:
+#     """
+#     Update the database.
 
-    Creates a new database and fetches all highlights, or gets the last fetch datetime
-    and fetches only new highlights.
+#     Parameters
+#     ----------
+#     session: Session
+#         A SQL alchemy session connected to a database.
+#     validated_books: list[BookSchema]
+#         A list of books with highlights fetched from the Readwise Highlight EXPORT
+#         endpoint.
+#     start_fetch: datetime
+#         The time the fetch was called.
+#     end_fetch: datetime
+#         The time the fetch was completed.
+#     """
+#     logger.info("Updating database")
+#     dbp = DatabasePopulater(session, validated_books, start_fetch, end_fetch)
+#     dbp.populate_database()
+#     logger.info("Database contains all Readwise highlights to date")
 
-    Use dependency injection for functions for simplified testing.
 
-    Parameters
-    ----------
-    user_config : UserConfig, optional, default = USER_CONFIG
-        Configuration object.
-    setup_logging_func: LogSetupFn, optional, default = setup_logging()
-        A function that sets up application logging.
-    get_session_func: SessionFn, optional, get_session()
-        A function that returns a SQLAlchemy database Session.
-    check_db_func: CheckDBFn, optional, default = check_database()
-        A function that creates the database or returns the last fetch datetime (or
-        None if it just creates the db).
-    fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
-        Function that fetches highlights and returns them as a tuple with the start
-        and end times of the fetch as datetimes.
-    validate_func: ValidateFetchFn, default = validate_books_with_highlights()
-        A function that validates an API response, returning lists of valid and failed
-        items.
-    update_func: UpdateFn, optional, default = update_database()
-        Function that populates the database with fetched highlights.
-    """
-    setup_logging_func()
-    session = get_session_func(user_config.db_path)
-    last_fetch = check_db_func(session, user_config)
-    data, start_fetch, end_fetch = fetch_func(last_fetch)
-    valid_books, failed_books = validate_func(data)
-    update_db_func(session, valid_books, start_fetch, end_fetch)
+# def run_pipeline(
+#     user_config: UserConfig = USER_CONFIG,
+#     setup_logging_func: LogSetupFn = setup_logging,
+#     get_session_func: SessionFn = get_session,
+#     check_db_func: CheckDBFn = check_database,
+#     fetch_func: FetchFn = fetch_books_with_highlights,
+#     validate_func: ValidateFetchFn = validate_books_with_highlights,
+#     update_db_func: UpdateFn = update_database,
+# ) -> None:
+#     """
+#     Orchestrate the end-to-end Readwise data sync process.
+
+#     Creates a new database and fetches all highlights, or gets the last fetch datetime
+#     and fetches only new highlights.
+
+#     Use dependency injection for functions for simplified testing.
+
+#     Parameters
+#     ----------
+#     user_config : UserConfig, optional, default = USER_CONFIG
+#         Configuration object.
+#     setup_logging_func: LogSetupFn, optional, default = setup_logging()
+#         A function that sets up application logging.
+#     get_session_func: SessionFn, optional, get_session()
+#         A function that returns a SQLAlchemy database Session.
+#     check_db_func: CheckDBFn, optional, default = check_database()
+#         A function that creates the database or returns the last fetch datetime (or
+#         None if it just creates the db).
+#     fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
+#         Function that fetches highlights and returns them as a tuple with the start
+#         and end times of the fetch as datetimes.
+#     validate_func: ValidateFetchFn, default = validate_books_with_highlights()
+#         A function that validates an API response, returning lists of valid and failed
+#         items.
+#     update_func: UpdateFn, optional, default = update_database()
+#         Function that populates the database with fetched highlights.
+#     """
+#     setup_logging_func()
+#     session = get_session_func(user_config.db_path)
+#     last_fetch = check_db_func(session, user_config)
+#     data, start_fetch, end_fetch = fetch_func(last_fetch)
+#     valid_books, failed_books = validate_func(data)
+#     update_db_func(session, valid_books, start_fetch, end_fetch)
 
 
 if __name__ == "__main__":

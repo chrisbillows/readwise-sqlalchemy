@@ -13,45 +13,18 @@ from readwise_sqlalchemy.main import (
     fetch_from_export_api,
     flatten_books_with_highlights,
     main,
-    run_pipeline,
+    # run_pipeline,
     run_pipeline_flattened_objects,
-    update_database,
+    # update_database,
     update_database_flattened_objects,
-    validate_books_with_highlights,
+    # validate_books_with_highlights,
     validate_flattened_objects,
     validate_nested_objects,
     validation_add_initial_validation_status,
     validation_ensure_field_is_a_list,
     validation_ensure_highlight_has_correct_book_id,
 )
-from readwise_sqlalchemy.schemas import BookSchema
 from tests.unit.test_schemas import mock_api_response
-
-
-@pytest.fixture()
-def mock_run_pipeline() -> tuple[dict, Any]:
-    mocks = {
-        "mock_setup_logging": MagicMock(),
-        "mock_get_session": MagicMock(return_value="session"),
-        "mock_check_database": MagicMock(return_value="last_fetch"),
-        "mock_fetch_books_with_highlights": MagicMock(
-            return_value=("raw_data", "start", "end")
-        ),
-        "mock_validate_books_with_highlights": MagicMock(
-            return_value=("valid_books", "invalid_books")
-        ),
-        "mock_update_database": MagicMock(),
-    }
-    actual = run_pipeline(
-        user_config=MagicMock(DB="db"),
-        setup_logging_func=mocks["mock_setup_logging"],
-        get_session_func=mocks["mock_get_session"],
-        check_db_func=mocks["mock_check_database"],
-        fetch_func=mocks["mock_fetch_books_with_highlights"],
-        validate_func=mocks["mock_validate_books_with_highlights"],
-        update_db_func=mocks["mock_update_database"],
-    )
-    return mocks, actual
 
 
 @pytest.fixture()
@@ -88,7 +61,7 @@ def mock_run_pipeline_flattened_objs() -> tuple[dict, Any]:
         fetch_func=mocks["mock_fetch_books_with_highlights"],
         validate_nested_objs_func=mocks["mock_validate_nested_objects"],
         flatten_func=mocks["mock_flatten_books_with_highlights"],
-        validate_flattened_objs_func=mocks["mock_validate_flattened_objects"],
+        validate_flat_objs_func=mocks["mock_validate_flattened_objects"],
         update_db_func=mocks["mock_update_database_flattened_objects"],
     )
     return mocks, actual
@@ -720,88 +693,114 @@ def test_run_pipeline_flattened_objects_return_value(
     assert run_pipeline_return_value is None
 
 
-@patch("readwise_sqlalchemy.main.run_pipeline")
+@patch("readwise_sqlalchemy.main.run_pipeline_flattened_objects")
 def test_main(mock_run_pipeline: MagicMock):
     mock_user_config = Mock()
     main(mock_user_config)
     mock_run_pipeline.assert_called_once_with(mock_user_config)
 
 
-def test_validate_books_with_highlights():
-    mock_valid_book = mock_api_response()[0]
-
-    mock_invalid_book = mock_api_response()[0]
-    mock_invalid_book["user_book_id"] = "banana"
-
-    mock_list_of_book_dicts = [mock_valid_book, mock_invalid_book]
-
-    actual_valid, actual_failed = validate_books_with_highlights(
-        mock_list_of_book_dicts
-    )
-
-    assert len(actual_valid) == 1
-    assert len(actual_failed) == 1
-
-    assert isinstance(actual_valid[0], BookSchema)
-    assert getattr(actual_valid[0], "user_book_id") == mock_valid_book["user_book_id"]
-
-    assert isinstance(actual_failed[0], tuple)
-    failed_dict, failed_error = actual_failed[0]
-
-    assert failed_dict["user_book_id"] == mock_invalid_book["user_book_id"]
-    assert failed_error == (
-        "1 validation error for BookSchema\nuser_book_id\n  Input should be a valid "
-        "integer [type=int_type, input_value='banana', input_type=str]\n    "
-        "For further information visit https://errors.pydantic.dev/2.11/v/int_type"
-    )
+# @pytest.fixture()
+# def mock_run_pipeline() -> tuple[dict, Any]:
+#     mocks = {
+#         "mock_setup_logging": MagicMock(),
+#         "mock_get_session": MagicMock(return_value="session"),
+#         "mock_check_database": MagicMock(return_value="last_fetch"),
+#         "mock_fetch_books_with_highlights": MagicMock(
+#             return_value=("raw_data", "start", "end")
+#         ),
+#         "mock_validate_books_with_highlights": MagicMock(
+#             return_value=("valid_books", "invalid_books")
+#         ),
+#         "mock_update_database": MagicMock(),
+#     }
+#     actual = run_pipeline(
+#         user_config=MagicMock(DB="db"),
+#         setup_logging_func=mocks["mock_setup_logging"],
+#         get_session_func=mocks["mock_get_session"],
+#         check_db_func=mocks["mock_check_database"],
+#         fetch_func=mocks["mock_fetch_books_with_highlights"],
+#         validate_func=mocks["mock_validate_books_with_highlights"],
+#         update_db_func=mocks["mock_update_database"],
+#     )
+#     return mocks, actual
 
 
-@patch("readwise_sqlalchemy.main.DatabasePopulater")
-def test_update_database(mock_db_populater: MagicMock):
-    mock_instance = mock_db_populater.return_value
+# def test_validate_books_with_highlights():
+#     mock_valid_book = mock_api_response()[0]
 
-    update_database("session", "data", "start", "end")
+#     mock_invalid_book = mock_api_response()[0]
+#     mock_invalid_book["user_book_id"] = "banana"
 
-    mock_db_populater.assert_called_once_with("session", "data", "start", "end")
-    mock_instance.populate_database.assert_called_once_with()
+#     mock_list_of_book_dicts = [mock_valid_book, mock_invalid_book]
 
+#     actual_valid, actual_failed = validate_books_with_highlights(
+#         mock_list_of_book_dicts
+#     )
 
-@pytest.mark.parametrize(
-    "mock_name, assertion",
-    [
-        ("mock_setup_logging", lambda m: m.assert_called_once_with()),
-        ("mock_get_session", lambda m: m.assert_called_once()),
-        # `Any` avoids passing in mock_user_config from mock_run_pipeline fixture.
-        ("mock_check_database", lambda m: m.assert_called_once_with("session", ANY)),
-        (
-            "mock_fetch_books_with_highlights",
-            lambda m: m.assert_called_once_with("last_fetch"),
-        ),
-        (
-            "mock_validate_books_with_highlights",
-            lambda m: m.assert_called_once_with("raw_data"),
-        ),
-        (
-            "mock_validate_books_with_highlights",
-            lambda m: m.assert_called_once_with("raw_data"),
-        ),
-        (
-            "mock_update_database",
-            lambda m: m.assert_called_once_with(
-                "session", "valid_books", "start", "end"
-            ),
-        ),
-    ],
-)
-def test_run_pipeline_function_calls(
-    mock_name: str,
-    assertion: Callable,
-    mock_run_pipeline: tuple[dict, Any],
-):
-    mocks, run_pipeline_return_value = mock_run_pipeline
-    assertion(mocks[mock_name])
+#     assert len(actual_valid) == 1
+#     assert len(actual_failed) == 1
+
+#     assert isinstance(actual_valid[0], BookSchema)
+#     assert getattr(actual_valid[0], "user_book_id") == mock_valid_book["user_book_id"]
+
+#     assert isinstance(actual_failed[0], tuple)
+#     failed_dict, failed_error = actual_failed[0]
+
+#     assert failed_dict["user_book_id"] == mock_invalid_book["user_book_id"]
+#     assert failed_error == (
+#         "1 validation error for BookSchema\nuser_book_id\n  Input should be a valid "
+#         "integer [type=int_type, input_value='banana', input_type=str]\n    "
+#         "For further information visit https://errors.pydantic.dev/2.11/v/int_type"
+#     )
 
 
-def test_run_pipeline_return_value(mock_run_pipeline: tuple[dict, Any]):
-    mocks, run_pipeline_return_value = mock_run_pipeline
-    assert run_pipeline_return_value is None
+# @pytest.mark.parametrize(
+#     "mock_name, assertion",
+#     [
+#         ("mock_setup_logging", lambda m: m.assert_called_once_with()),
+#         ("mock_get_session", lambda m: m.assert_called_once()),
+#         # `Any` avoids passing in mock_user_config from mock_run_pipeline fixture.
+#         ("mock_check_database", lambda m: m.assert_called_once_with("session", ANY)),
+#         (
+#             "mock_fetch_books_with_highlights",
+#             lambda m: m.assert_called_once_with("last_fetch"),
+#         ),
+#         (
+#             "mock_validate_books_with_highlights",
+#             lambda m: m.assert_called_once_with("raw_data"),
+#         ),
+#         (
+#             "mock_validate_books_with_highlights",
+#             lambda m: m.assert_called_once_with("raw_data"),
+#         ),
+#         (
+#             "mock_update_database",
+#             lambda m: m.assert_called_once_with(
+#                 "session", "valid_books", "start", "end"
+#             ),
+#         ),
+#     ],
+# )
+# def test_run_pipeline_function_calls(
+#     mock_name: str,
+#     assertion: Callable,
+#     mock_run_pipeline: tuple[dict, Any],
+# ):
+#     mocks, run_pipeline_return_value = mock_run_pipeline
+#     assertion(mocks[mock_name])
+
+
+# def test_run_pipeline_return_value(mock_run_pipeline: tuple[dict, Any]):
+#     mocks, run_pipeline_return_value = mock_run_pipeline
+#     assert run_pipeline_return_value is None
+
+
+# @patch("readwise_sqlalchemy.main.DatabasePopulater")
+# def test_update_database(mock_db_populater: MagicMock):
+#     mock_instance = mock_db_populater.return_value
+
+#     update_database("session", "data", "start", "end")
+
+#     mock_db_populater.assert_called_once_with("session", "data", "start", "end")
+#     mock_instance.populate_database.assert_called_once_with()

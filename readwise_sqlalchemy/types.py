@@ -13,13 +13,13 @@ FlattenFn = Callable[[list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]
 LogSetupFn = Callable[[], None]
 SessionFn = Callable[[str | Path], Session]
 UpdateFn = Callable[[Session, list[BookSchema], datetime, datetime], None]
-UpdateDbFlattenedObjFn = Callable[
+UpdateDbFlatObjFn = Callable[
     [Session, dict[str, list[dict[str, Any]]], datetime, datetime], None
 ]
 ValidateFetchFn = Callable[
     [list[dict[str, Any]]], tuple[list[BookSchema], list[tuple[dict[str, Any], str]]]
 ]
 ValidateNestedObjFn = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
-ValidateFlattenedObjFn = Callable[
+ValidateFlatObjFn = Callable[
     [dict[str, list[dict[str, Any]]]], dict[str, list[dict[str, Any]]]
 ]

@@ -20,7 +20,7 @@ from readwise_sqlalchemy.main import (
     validate_books_with_highlights,
     validate_flattened_objects,
     validate_nested_objects,
-    validation_annotate_validated,
+    validation_add_initial_validation_status,
     validation_ensure_field_is_a_list,
     validation_ensure_highlight_has_correct_book_id,
 )
@@ -226,11 +226,29 @@ def test_fetch_books_with_highlights_last_fetch_exists(
 @pytest.mark.parametrize(
     "mock_obj, expected",
     [
-        ({}, {"mock_field": "Field not found in test_obj"}),
         (
-            {"mock_field": 123},
+            {"mock_field": [1, 2, 3], "validated": True, "validation_errors": {}},
+            {"mock_field": [1, 2, 3], "validated": True, "validation_errors": {}},
+        ),
+        (
+            {"validated": True, "validation_errors": {}},
             {
-                "mock_field": "Field not a list in test_obj. Passed value not stored. Value: 123"
+                "mock_field": [],
+                "validated": False,
+                "validation_errors": {
+                    "mock_field": "Field not found in test_obj. (Empty list added instead)."
+                },
+            },
+        ),
+        (
+            {"mock_field": 123, "validated": True, "validation_errors": {}},
+            {
+                "mock_field": [],
+                "validated": False,
+                "validation_errors": {
+                    "mock_field": "Field not a list in test_obj. Passed value not stored. Value: "
+                    "123. (Empty list added instead)."
+                },
             },
         ),
     ],
@@ -238,52 +256,153 @@ def test_fetch_books_with_highlights_last_fetch_exists(
 def test_validation_ensure_field_is_a_list(
     mock_obj: dict[str, Any], expected: dict[str, Any]
 ):
-    assert (
-        validation_ensure_field_is_a_list(mock_obj, "mock_field", "test_obj")
-        == expected
-    )
-
-
-@pytest.mark.parametrize(
-    "mock_obj, mock_errors, expected",
-    [
-        (
-            {"field": 123},
-            {},
-            {"field": 123, "validated": True, "validation_errors": {}},
-        ),
-        (
-            {"field": 123},
-            {"field": "mock_error"},
-            {
-                "field": 123,
-                "validated": False,
-                "validation_errors": {"field": "mock_error"},
-            },
-        ),
-    ],
-)
-def test_validation_annotate_validated(
-    mock_obj: dict[str, Any], mock_errors: list[str], expected: dict[str, Any]
-):
-    validation_annotate_validated(mock_obj, mock_errors)
+    validation_ensure_field_is_a_list(mock_obj, "mock_field", "test_obj")
     assert mock_obj == expected
 
 
 @pytest.mark.parametrize(
     "mock_highlight, expected",
     [
-        ({"book_id": 1}, {}),
         (
-            {"book_id": 2},
-            {"book_id": "Highlight book_id 2 does not match book user_book_id 1"},
+            {"book_id": 1, "validation_errors": {}, "validated": True},
+            {"book_id": 1, "validation_errors": {}, "validated": True},
+        ),
+        (
+            {"book_id": 2, "validation_errors": {}, "validated": True},
+            {
+                "book_id": 1,
+                "validated": False,
+                "validation_errors": {
+                    "book_id": "Highlight book_id 2 does not match book user_book_id 1"
+                },
+            },
         ),
     ],
 )
 def test_validation_ensure_highlight_has_correct_book_id(
     mock_highlight: dict[str, Any], expected: dict[str, Any]
 ):
-    actual = validation_ensure_highlight_has_correct_book_id(mock_highlight, 1)
+    validation_ensure_highlight_has_correct_book_id(mock_highlight, 1)
+    assert mock_highlight == expected
+
+
+# @pytest.mark.parametrize(
+#     "mock_obj,expected",
+#     [
+#         (
+#             {"field": 123},
+#             {"field": 123, "validated": True, "validation_errors": {}},
+#         ),
+#         (
+#             {"field": 123, "validation_errors": {"field": "mock_error"}},
+#             {
+#                 "field": 123,
+#                 "validated": False,
+#                 "validation_errors": {"field": "mock_error"},
+#             },
+#         ),
+#     ],
+# )
+# def test_validation_annotate_validated(
+#     mock_obj: dict[str, Any], expected: dict[str, Any]
+# ):
+#     validation_annotate_validated(mock_obj)
+#     assert mock_obj == expected
+
+
+@pytest.mark.parametrize(
+    "mock_obj, expected",
+    [
+        (
+            {
+                "title": "book_1",
+                "highlights": [
+                    {
+                        "id": 2,
+                        "tags": [{"id": 3}],
+                    }
+                ],
+            },
+            {
+                "title": "book_1",
+                "highlights": [
+                    {
+                        "id": 2,
+                        "tags": [
+                            {
+                                "id": 3,
+                                "validated": True,
+                                "validation_errors": {},
+                            }
+                        ],
+                        "validated": True,
+                        "validation_errors": {},
+                    }
+                ],
+                "validated": True,
+                "validation_errors": {},
+            },
+        ),
+        (
+            {"id": 1, "tags": [{"id": 2}]},
+            {
+                "id": 1,
+                "tags": [
+                    {
+                        "id": 2,
+                        "validated": True,
+                        "validation_errors": {},
+                    }
+                ],
+                "validated": True,
+                "validation_errors": {},
+            },
+        ),
+        (
+            {
+                "title": "book_1",
+                "book_tags": [{"id": 1}],
+                "highlights": [
+                    {
+                        "id": 2,
+                        "tags": [{"id": 3}],
+                    }
+                ],
+            },
+            {
+                "title": "book_1",
+                "book_tags": [
+                    {
+                        "id": 1,
+                        "validated": True,
+                        "validation_errors": {},
+                    }
+                ],
+                "highlights": [
+                    {
+                        "id": 2,
+                        "tags": [
+                            {
+                                "id": 3,
+                                "validated": True,
+                                "validation_errors": {},
+                            }
+                        ],
+                        "validated": True,
+                        "validation_errors": {},
+                    }
+                ],
+                "validated": True,
+                "validation_errors": {},
+            },
+        ),
+    ],
+    ids=["mock_book_and_hl", "single_mock_highlight", "mock_full_book"],
+)
+def test_validation_add_initial_validation_status(
+    mock_obj: dict[str, Any], expected: dict[str, Any]
+):
+    actual = validation_add_initial_validation_status(mock_obj)
     assert actual == expected
 
 
@@ -341,8 +460,8 @@ def test_validate_nested_objects_for_all_valid_objects():
                     "highlights": [],
                     "validated": False,
                     "validation_errors": {
-                        "highlights": "Field not found in book",
-                        "book_tags": "Field not found in book",
+                        "highlights": "Field not found in book. (Empty list added instead).",
+                        "book_tags": "Field not found in book. (Empty list added instead).",
                     },
                 },
             ],
@@ -366,13 +485,15 @@ def test_validate_nested_objects_for_all_valid_objects():
                             "validation_errors": {
                                 "book_id": "Highlight book_id 2 does not "
                                 "match book user_book_id 1",
-                                "tags": "Field not found in highlight",
+                                "tags": "Field not found in highlight. (Empty list "
+                                "added instead).",
                             },
                         }
                     ],
                     "validated": False,
                     "validation_errors": {
-                        "book_tags": "Field not found in book",
+                        "book_tags": "Field not found in book. (Empty list added "
+                        "instead).",
                     },
                 },
             ],
@@ -407,7 +528,7 @@ def test_validate_nested_objects_for_all_valid_objects():
                     "validated": False,
                     "validation_errors": {
                         "book_tags": "Field not a list in book. Passed value not stored. Value: "
-                        "I am a string",
+                        "I am a string. (Empty list added instead).",
                     },
                 },
             ],

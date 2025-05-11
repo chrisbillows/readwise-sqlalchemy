@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import requests
 from pydantic import BaseModel, ValidationError
@@ -200,59 +200,46 @@ def fetch_books_with_highlights(
 
 def validation_ensure_field_is_a_list(
     obj: dict[str, Any], field: str, parent_label: str
-) -> dict[str, str]:
+) -> None:
     """
-    Ensure a field is a list. Fix if needed and return any validation errors.
+    Ensure a field is a list. Fix if needed.
+
+    If the field is missing or the field value is not a list, an empty list is added,
+    "validation" is set to False and the field and an error are added to the
+    "validation_errors" dict. The object is mutated in place.
 
     Parameters
     ----------
     obj: dict
-        A dictionary-like object.
+        A dictionary-like object. Expected to have the field "validated" and the field
+        "validation_errors" with a dict as it's value.
     field: str
         The field to check.
     parent_label: str
-        A label for the parent object (for error messages). E.g. "book" or "highlight".
-
-    Returns
-    -------
-    dict[str, str]
-        A dict of validation errors. Empty if the field is valid.
+        A label for the parent object for error messages. E.g. "book" or "highlight".
     """
-    errors = {}
     if obj.get(field) is None:
         obj[field] = []
-        errors[field] = f"Field not found in {parent_label}"
-    elif not isinstance(obj[field], list):
-        errors[field] = (
-            f"Field not a list in {parent_label}. Passed value not stored. Value: "
-            f"{obj[field]}"
+        obj["validation_errors"][field] = (
+            f"Field not found in {parent_label}. (Empty list added instead)."
         )
+        obj["validated"] = False
+    elif not isinstance(obj[field], list):
+        obj["validation_errors"][field] = (
+            f"Field not a list in {parent_label}. Passed value not stored. Value: "
+            f"{obj[field]}. (Empty list added instead)."
+        )
+        obj["validated"] = False
         obj[field] = []
-    return errors
-
-
-def validation_annotate_validated(obj: dict[str, Any], errors: dict[str, str]) -> None:
-    """
-    Set `validated` and `validation_errors` fields on any dict-like object.
-
-    Parameters
-    ----------
-    obj: dict
-        A dictionary-like object.
-    errors: list[str]
-        A list of validation errors. Empty if the object is valid.
-    """
-    obj["validated"] = not errors
-    obj["validation_errors"] = errors
 
 
 def validation_ensure_highlight_has_correct_book_id(
     highlight: dict[str, Any], book_user_book_id: Any
-) -> dict[str, str]:
+) -> None:
     """
     Ensure highlight.book_id matches its parent book.user_book_id.
 
-    Fix if needed and return any validation errors.
+    If not, fix add "validation_errors" dict to highlight.
 
     Parameters
     --------
@@ -260,23 +247,90 @@ def validation_ensure_highlight_has_correct_book_id(
         A highlight obj.
     book_user_id: Any
         A book user id. It's expected to be an int but a value of any type is accepted.
-
-    Returns
-    -------
-    dict[str, str]
-        A dict of errors.
     """
-    errors = {}
     if highlight.get("book_id") != book_user_book_id:
-        errors["book_id"] = (
+        highlight["validation_errors"]["book_id"] = (
             f"Highlight book_id {highlight.get('book_id')} does not match book "
             f"user_book_id {book_user_book_id}"
         )
+        highlight["validated"] = False
         highlight["book_id"] = book_user_book_id
-    return errors
 
 
-# TODO: Now we are using dicts, can we not write directly to the objects?
+# def validation_annotate_validated(obj: dict[str, Any]) -> None:
+#     """
+#     Set `validated` status (and `validation_errors`) fields on any dict-like object.
+
+#     Assumes obj has a "validation_errors" field if the obj has had errors in validation
+#     functions.
+
+#     Parameters
+#     ----------
+#     obj: dict
+#         A dictionary-like object.
+#     """
+#     if obj.get("validation_errors"):
+#         obj["validated"] = False
+#     else:
+#         obj["validated"] = True
+#         # If the obj has had no errors, the field will not have been set.
+#         obj["validation_errors"] = {}
+
+
+# def validation_add_initial_validation_status_old(obj: dict[str, Any]) -> None:
+#     """
+#     Add initial validation fields to an object.
+
+#     Ensure objects have consistent fields for mutation through validation checks.
+#     Validation checks are assumed to overwrite the "validated" field to False.
+
+#     Parameters
+#     ----------
+#     obj: dict
+#         A dictionary-like object.
+#     """
+#     obj["validated"] = True
+#     obj["validation_errors"] = {}
+
+
+def validation_add_initial_validation_status(
+    obj: dict[str, Any] | list[dict[str, Any]],
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """
+    Add initial validation fields to all objects nested in a given object.
+
+    Ensure objects have consistent fields for mutation through validation checks.
+    Validation checks are assumed to overwrite the "validated" field to False. Works on
+    any level of nested or unnested objects.
+
+    The method assumes the only dict-like objects are 'books', 'book_tags',
+    'highlights', and 'highlight_tags' - all of which require validation fields. Lists
+    are assumed to be lists of these objects.
+
+    Parameters
+    ----------
+    obj: list | dict
+        A list or dictionary-like object.
+
+    Returns
+    -------
+    obj: list | dict
+        The original object with the validation fields added to any dict-like objects,
+        inside and including the original object.
+    """
+    if isinstance(obj, list):
+        for item in obj:
+            validation_add_initial_validation_status(item)
+    elif isinstance(obj, dict):
+        for value in obj.values():
+            validation_add_initial_validation_status(value)
+        obj["validated"] = True
+        obj["validation_errors"] = {}
+    else:
+        pass
+    return obj
+
+
 def validate_nested_objects(
     raw_books: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -286,20 +340,21 @@ def validate_nested_objects(
     Check and fix essential aspects of nested objects to avoid downstream errors once
     the API data is flattened. All books are assumed to have a "user_book_id" field.
 
-    Each object is tagged with:
+    Each object has the following fields added
     - `validated`: True or False
-    - `validation_errors`: a list of errors (empty if valid)
+    - `validation_errors`: a dict of fields and errors (empty if valid)
 
     Notes
     -----
     - The validation checks:
-        - Each book has a list of highlights and book_tags. If the field is missing,
-          set to an empty list. If the field value is a type other than a list, put
-          the field value into a list.
+        - Each book has a list of highlights and book_tags. If the field is missing, or
+          the field has a value that isn't a list, set to an empty list.
         - Each highlight's `book_id` matches the book's `user_book_id`.
-        - Each highlight has a list of tags. If the field is missing, set to an empty
-          list. If the field value is a type other than a list, put the field value into
-          a list.
+        - Each highlight has a list of tags. If the field is missing, or the field has a
+          value that isn't a list, set to an empty list.
+    - There are current no nested checks for:
+        - Book tags
+        - Highlight tags
     - The validation checks are not strict. They are designed to ensure that the data
       is in a format that can be processed downstream. The checks are not exhaustive
       and do not cover all possible edge cases. The goal is to include as much data as
@@ -314,44 +369,22 @@ def validate_nested_objects(
     Returns
     -------
     raw_books : list[dict]
-        A list of raw dicts from the Readwise API. Each object has a `validated` field
-        set to True or False, and a `validation_errors` field containing a list of
+        A list of raw dicts from the Readwise API. Each object now has a `validated`
+        field set to True or False, and a `validation_errors` field containing a list of
         errors (empty if the object is valid). False will indicate the object failed
-        validation in any validation layer.
+        validation in any validation layer. (i.e. including later layers).
     """
-    for book in raw_books:
-        book_errors = {}
-
-        # Highlights and book_tags must exist and be lists
-        book_errors.update(
-            validation_ensure_field_is_a_list(book, "highlights", "book")
-        )
-        book_errors.update(validation_ensure_field_is_a_list(book, "book_tags", "book"))
-
-        # Validate each book_tag (no strict checks yet)
-        for tag in book["book_tags"]:
-            validation_annotate_validated(tag, {})
-
-        # Validate each highlight and its tags
+    raw_books_with_initial_validation_status = cast(
+        list[dict[str, Any]], validation_add_initial_validation_status(raw_books)
+    )
+    for book in raw_books_with_initial_validation_status:
+        validation_ensure_field_is_a_list(book, "highlights", "book")
+        validation_ensure_field_is_a_list(book, "book_tags", "book")
         for highlight in book["highlights"]:
-            highlight_errors = {}
-
-            highlight_errors.update(
-                validation_ensure_highlight_has_correct_book_id(
-                    highlight, book["user_book_id"]
-                )
+            validation_ensure_highlight_has_correct_book_id(
+                highlight, book["user_book_id"]
             )
-            highlight_errors.update(
-                validation_ensure_field_is_a_list(highlight, "tags", "highlight")
-            )
-
-            for tag in highlight["tags"]:
-                validation_annotate_validated(tag, {})
-
-            validation_annotate_validated(highlight, highlight_errors)
-
-        validation_annotate_validated(book, book_errors)
-
+            validation_ensure_field_is_a_list(highlight, "tags", "highlight")
     return raw_books
 
 
@@ -454,20 +487,23 @@ def validate_flattened_objects(
                 api_fields = {k: v for k, v in item.items() if k in schema.model_fields}
                 item_as_schema = schema(**api_fields)
                 # Capture any data integrity transformation's done by the schema.
-                # Reattach validation data. NOTE: If this try branch succeeds, an item's
-                # validation status doesn't change. If it was true from earlier
+                # Reattach validation data.
+                item_as_schema_dumped = item_as_schema.model_dump()
+                # Reattach validation status. NOTE: If this try branch succeeds, an
+                # item's validation status doesn't change. If it was true from earlier
                 # validation, it stays true. If it was false - invalid on early checks -
                 # it remains invalid.
-                item_as_schema_dumped = item_as_schema.model_dump()
                 item_as_schema_dumped["validated"] = item["validated"]
                 item_as_schema_dumped["validation_errors"] = item["validation_errors"]
                 processed_objects.append(item_as_schema_dumped)
             except ValidationError as err:
                 item["validated"] = False
+                validation_errors = {}
                 for detail in err.errors():
-                    item["validation_errors"][
-                        ".".join(str(part) for part in detail["loc"])
-                    ] = detail["msg"]
+                    validation_errors[".".join(str(part) for part in detail["loc"])] = (
+                        detail["msg"]
+                    )
+                item["validation_errors"].update(validation_errors)
                 processed_objects.append(item)
         processed_objects_by_type[object_type] = processed_objects
     return processed_objects_by_type

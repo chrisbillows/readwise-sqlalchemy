@@ -26,7 +26,7 @@ Mapped classes may seem to validate things that they actually don't:
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import JSON, Boolean, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -43,7 +43,24 @@ class Base(DeclarativeBase):
     __allow_unmapped__ = True
 
 
-class Book(Base):
+class ValidationMixin:
+    """
+    Add validation fields to SQL Alchemy ORM mapped classes.
+
+    Store validation errors as JSON strings. Data usage won't justify a table.
+
+    Note
+    ----
+    SQLite has supported JSON types since 3.9, released in 2015-10-14. See:
+    https://www.sqlite.org/changes.html
+
+    """
+
+    validated: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    validation_errors: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
+
+
+class Book(Base, ValidationMixin):
     """
     Readwise book as a SQL Alchemy ORM Mapped class.
 
@@ -165,7 +182,7 @@ class Book(Base):
         )
 
 
-class BookTag(Base):
+class BookTag(Base, ValidationMixin):
     """
     Readwise book tag as a SQL Alchemy ORM Mapped class.
 
@@ -189,7 +206,8 @@ class BookTag(Base):
         unique ``id``. Therefore, group by ``name`` for this attribute.
 
     book_id : int
-        Foreign key linking the ``id`` of the associated ``Book``.
+        Foreign key linking the ``id`` of the associated ``Book``. This can be passed as
+        a dictionary key, value or via a book relationship object - but not both.
     batch_id : int
         Foreign key linking the `id` of the associated ``ReadwiseBatch``.
 
@@ -218,7 +236,7 @@ class BookTag(Base):
         return f"BookTag(name={self.name!r}, id={self.id!r})"
 
 
-class Highlight(Base):
+class Highlight(Base, ValidationMixin):
     """
     Readwise highlight as a SQL Alchemy ORM Mapped class.
 
@@ -330,7 +348,7 @@ class Highlight(Base):
         return ", ".join(parts) + ")"
 
 
-class HighlightTag(Base):
+class HighlightTag(Base, ValidationMixin):
     """
     Readwise highlight tag as a SQL Alchemy ORM Mapped class.
 

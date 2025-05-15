@@ -1,3 +1,4 @@
+from copy import deepcopy
 from datetime import datetime
 from typing import Any, Callable
 
@@ -16,16 +17,23 @@ from readwise_sqlalchemy.models import (
 from tests.conftest import DbHandle
 
 # Minimal object configurations.
-MIN_HIGHLIGHT_1_TAG_1 = {"id": 5555, "name": "orange"}
 MIN_HIGHLIGHT_1_TAG_2 = {"id": 5556, "name": "blue"}
-
-MIN_HIGHLIGHT_1 = {"id": 111, "book_id": 99, "text": "highlight_1"}
+MIN_HIGHLIGHT_1_TAG_1 = {"id": 5555, "name": "orange"}
 MIN_HIGHLIGHT_2 = {"id": 222, "book_id": 99, "text": "highlight_2"}
-
-MIN_BOOK_TAG_1 = {"id": 9990, "name": "book_tag_1"}
+MIN_HIGHLIGHT_1 = {"id": 111, "book_id": 99, "text": "highlight_1"}
 MIN_BOOK_TAG_2 = {"id": 9991, "name": "book_tag_2"}
-
+MIN_BOOK_TAG_1 = {"id": 9990, "name": "book_tag_1"}
 MIN_BOOK = {"user_book_id": 99, "title": "book_1"}
+
+VALIDATION_KEYS = {"validated": True, "validation_errors": {}}
+
+MIN_HIGHLIGHT_1_TAG_2.update(VALIDATION_KEYS)
+MIN_HIGHLIGHT_1_TAG_1.update(VALIDATION_KEYS)
+MIN_HIGHLIGHT_2.update(VALIDATION_KEYS)
+MIN_HIGHLIGHT_1.update(VALIDATION_KEYS)
+MIN_BOOK_TAG_2.update(VALIDATION_KEYS)
+MIN_BOOK_TAG_1.update(VALIDATION_KEYS)
+MIN_BOOK.update(VALIDATION_KEYS)
 
 START_TIME = datetime(2025, 1, 1, 10, 10, 10)
 END_TIME = datetime(2025, 1, 1, 10, 10, 20)
@@ -49,12 +57,21 @@ def unnested_minimal_objects():
         A dictionary of minimal unnested objects with the keys `min_book`,
         `min_book_tag`, `min_highlight`, `min_highlight_tag`, `batch_id`.
     """
+
+    # Add foreign keys. These are added to objects when they are flattened.
+    min_book_tag = deepcopy(MIN_BOOK_TAG_1)
+    min_book_tag["user_book_id"] = MIN_BOOK["user_book_id"]
+    min_highlight = deepcopy(MIN_HIGHLIGHT_1)
+    min_highlight["book_id"] = MIN_BOOK["user_book_id"]
+    min_highlight_tag = deepcopy(MIN_HIGHLIGHT_1_TAG_1)
+    min_highlight_tag["highlight_id"] = MIN_HIGHLIGHT_1["id"]
+
     return {
-        "min_book": {"user_book_id": 99, "title": "book_1"},
-        "min_book_tag": {"id": 9990, "name": "book_tag_1", "user_book_id": 99},
-        "min_highlight": {"id": 111, "book_id": 99, "text": "highlight_1"},
-        "min_highlight_tag": {"id": 5555, "name": "orange", "highlight_id": 111},
-        "batch_id": 1,
+        "min_book": MIN_BOOK,
+        "min_book_tag": min_book_tag,
+        "min_highlight": min_highlight,
+        "min_highlight_tag": min_highlight_tag,
+        "batch_id": BATCH_ID,
     }
 
 
@@ -82,7 +99,14 @@ def mock_pydantic_model_dump():
             "cover_image_url": "//link/to/image",
             "unique_url": None,
             "summary": None,
-            "book_tags": [{"id": 4041, "name": "book_tag"}],
+            "book_tags": [
+                {
+                    "id": 4041,
+                    "name": "book_tag",
+                    "validated": True,
+                    "validation_errors": {},
+                }
+            ],
             "category": "books",
             "document_note": None,
             "readwise_url": "https://readwise.io/bookreview/1",
@@ -103,13 +127,24 @@ def mock_pydantic_model_dump():
                     "end_location": None,
                     "url": None,
                     "book_id": 12345,
-                    "tags": [{"id": 97654, "name": "favourite"}],
+                    "tags": [
+                        {
+                            "id": 97654,
+                            "name": "favourite",
+                            "validated": True,
+                            "validation_errors": {},
+                        }
+                    ],
                     "is_favorite": False,
                     "is_discard": False,
                     "is_deleted": False,
                     "readwise_url": "https://readwise.io/open/10",
+                    "validated": True,
+                    "validation_errors": {},
                 }
             ],
+            "validation_errors": {},
+            "validated": True,
         }
     ]
 
@@ -204,8 +239,10 @@ def mem_db_containing_unnested_minimal_objects(mem_db: DbHandle):
     Engine with a db containing minimal object records, created from unnested data.
 
     Create a database with UNNESTED entries for a book, highlight, highlight tag and a
-    readwise batch. This is a proof of concept test for the flatten API data refactor,
-    see issue #38.
+    readwise batch. Originally objects were added the db nested in a book - the tests
+    therefore reflect this approach. However, nesting or unnesting the books should
+    make no difference. Tests on this fixture prove this. Other tests were left using
+    nested data.
 
     Note
     ----

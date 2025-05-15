@@ -193,28 +193,6 @@ class HighlightSchemaUnnested(BaseModel, extra="forbid", strict=True):
     is_deleted: Optional[bool]
     readwise_url: Optional[str]
 
-    # TODO: Where do this then? As part of flatten?
-    # @field_validator("tags", mode="before")
-    # @classmethod
-    # def replace_null_with_empty_list(
-    #     cls: type["HighlightSchemaUnnested"], value: Optional[list[str]]
-    # ) -> list[str]:
-    #     """
-    #     Replace a null value with an empty list.
-
-    #     Parameters
-    #     ----------
-    #     cls: BaseModel
-    #         A Pydantic Schema that inherits from ``Pydantic.BaseModel``
-
-    #     Returns
-    #     -------
-    #     list
-    #         The passed value if it's a list, or an empty list.
-
-    #     """
-    #     return value if value else []
-
 
 class BookSchemaUnnested(BaseModel, extra="forbid", strict=True):
     """
@@ -243,14 +221,3 @@ class BookSchemaUnnested(BaseModel, extra="forbid", strict=True):
     asin: Optional[str] = Field(
         min_length=10, max_length=10, pattern="^[A-Z0-9]{10}$"
     )  # Used Amazon Standard Identification Number.
-
-    # TODO: Where do this then? As part of flatten?
-    # @field_validator("book_tags", mode="before")
-    # @classmethod
-    # def replace_null_with_empty_list(
-    #     cls: type["BookSchema"], value: Optional[list[str]]
-    # ) -> list[str]:
-    #     """
-    #     See duplicate method on HighlightSchema.
-    #     """
-    #     return value if value else []

@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "readwise-sqlalchemy"
 version = "0.1.0"
 dependencies = [
-    "faker",
     "mypy",
     "pre-commit",
     "pydantic",

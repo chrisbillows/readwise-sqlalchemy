@@ -533,7 +533,6 @@ def test_flatten_books_with_highlights(test_with_validated_keys_present: bool):
                 "is_discard": True,
                 "is_deleted": False,
                 "readwise_url": "https://readwise.io/open/10",
-                "user_book_id": 12345,
             }
         ],
         "highlight_tags": [{"id": 97654, "name": "favorite", "highlight_id": 10}],

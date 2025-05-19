@@ -19,9 +19,15 @@ from readwise_sqlalchemy.models import (
     HighlightTag,
     ReadwiseBatch,
 )
-from readwise_sqlalchemy.schemas import BookSchema
 
 logger = logging.getLogger(__name__)
+
+MODELS_BY_OBJECT = {
+    "books": Book,
+    "book_tags": BookTag,
+    "highlights": Highlight,
+    "highlight_tags": HighlightTag,
+}
 
 
 def safe_create_sqlite_engine(
@@ -92,7 +98,7 @@ class DatabasePopulaterFlattenedData:
     def __init__(
         self,
         session: Session,
-        validated_objs: dict[str, list[dict[str, Any]]],
+        validated_flattened_objs: dict[str, list[dict[str, Any]]],
         start_fetch: datetime,
         end_fetch: datetime,
     ):
@@ -102,52 +108,23 @@ class DatabasePopulaterFlattenedData:
         ----------
         session: Session
             An SQL Alchemy session.
-        validated_objs: dict[str, list[dict[str, Any]]]
-            The flattened API data in it's original form, with each individual object -
-            book, book tag, highlight, highlight_tag - given a "validated" field.
+        validated_flattened_objs: dict[str, list[dict[str, Any]]]
+            The flattened API data with each object having additional validation fields.
+            The dict keys are the object type (books, book_tags etc) and values for each
+            are a list of that type of object.
         start_fetch: datetime
             The time when the API fetch was started.
         end_fetch: datetime
             The time when the API fetch was completed.
         """
         self.session = session
-        self.validated_objs = validated_objs
+        self.validated_flattened_objs = validated_flattened_objs
         self.start_fetch = start_fetch
         self.end_fetch = end_fetch
 
     def populate_database(self) -> None:
-        pass
-
-
-class DatabasePopulater:
-    def __init__(
-        self,
-        session: Session,
-        validated_books: list[BookSchema],
-        start_fetch: datetime,
-        end_fetch: datetime,
-    ):
-        """Initialiser.
-
-        Parameters
-        ----------
-        session: Session
-            An SQL Alchemy session.
-        validated_books: list[BookSchema]
-            A list of Books and their highlights, expected to come from the Readwise
-            Export API.
-        start_fetch: datetime
-            The time when the API fetch was started.
-        end_fetch: datetime
-            The time when the API fetch was completed.
         """
-        self.session = session
-        self.validated_books = validated_books
-        self.start_fetch = start_fetch
-        self.end_fetch = end_fetch
-
-    def populate_database(self) -> None:
-        """Populate the database with books and highlights from a Readwise API response.
+        Populate the database with books and highlights from a Readwise API response.
 
         Readwise highlights are exported as books, with each book containing a list
         of highlights. If specified, only highlights created since the 'last_fetch' date
@@ -155,9 +132,9 @@ class DatabasePopulater:
         been added since the last fetch, only 1 highlight will be in the highlights
         list.
 
-        This method records the ReadwiseBatch and then iterates over each book, and each
-        list of highlights for each book, validating and adding books and highlights to
-        the passed session object. This session is then either successfully committed
+        This method records the ReadwiseBatch and then iterates over the unnested and
+        validated books, book tags, highlights and highlight tags, adding the objects
+        to the session. This session is then either successfully committed
         to the database, or the database is rolled back to it's previous state.
         """
         batch = ReadwiseBatch(
@@ -166,35 +143,95 @@ class DatabasePopulater:
             database_write_time=datetime.now(),
         )
         self.session.add(batch)
-
-        for book_as_schema in self.validated_books:
-            book_as_orm = Book(
-                **book_as_schema.model_dump(exclude={"highlights", "book_tags"}),
-                batch=batch,
-            )
-
-            for highlight in book_as_schema.highlights:
-                highlight_data = highlight.model_dump()
-                highlight_tags = [
-                    HighlightTag(**tag, batch=batch)
-                    for tag in highlight_data.pop("tags", [])
-                ]
-                highlight_as_orm = Highlight(**highlight_data, batch=batch)
-                highlight_as_orm.tags.extend(highlight_tags)
-                book_as_orm.highlights.append(highlight_as_orm)
-
-            for book_tag in book_as_schema.book_tags:
-                book_tag_data = book_tag.model_dump()
-                book_tag_as_orm = BookTag(**book_tag_data, batch=batch)
-                book_as_orm.book_tags.append(book_tag_as_orm)
-
-            self.session.add(book_as_orm)
+        for obj_name, objects in self.validated_flattened_objs.items():
+            obj_orm = MODELS_BY_OBJECT[obj_name]
+            for object in objects:
+                obj_as_orm = obj_orm(**object, batch=batch)
+                self.session.add(obj_as_orm)
         try:
             logging.info("Committing session")
             self.session.commit()
-        except Exception as e:
+        except Exception as err:
             self.session.rollback()
-            logging.info(f"Error occurred: {e}")
+            logging.info(f"Error occurred committing session: {err}")
+            raise err
+
+    # class DatabasePopulater:
+    #     def __init__(
+    #         self,
+    #         session: Session,
+    #         validated_books: list[BookSchema],
+    #         start_fetch: datetime,
+    #         end_fetch: datetime,
+    #     ):
+    #         """Initialiser.
+
+    #         Parameters
+    #         ----------
+    #         session: Session
+    #             An SQL Alchemy session.
+    #         validated_books: list[BookSchema]
+    #             A list of Books and their highlights, expected to come from the Readwise
+    #             Export API.
+    #         start_fetch: datetime
+    #             The time when the API fetch was started.
+    #         end_fetch: datetime
+    #             The time when the API fetch was completed.
+    #         """
+    #         self.session = session
+    #         self.validated_books = validated_books
+    #         self.start_fetch = start_fetch
+    #         self.end_fetch = end_fetch
+
+    #     def populate_database(self) -> None:
+    #         """Populate the database with books and highlights from a Readwise API response.
+
+    #         Readwise highlights are exported as books, with each book containing a list
+    #         of highlights. If specified, only highlights created since the 'last_fetch' date
+    #         are included. i.e. A book might have 100 highlights, but if only 1 highlight has
+    #         been added since the last fetch, only 1 highlight will be in the highlights
+    #         list.
+
+    #         This method records the ReadwiseBatch and then iterates over each book, and each
+    #         list of highlights for each book, validating and adding books and highlights to
+    #         the passed session object. This session is then either successfully committed
+    #         to the database, or the database is rolled back to it's previous state.
+    #         """
+    #         batch = ReadwiseBatch(
+    #             start_time=self.start_fetch,
+    #             end_time=self.end_fetch,
+    #             database_write_time=datetime.now(),
+    #         )
+    #         self.session.add(batch)
+
+    #         for book_as_schema in self.validated_books:
+    #             book_as_orm = Book(
+    #                 **book_as_schema.model_dump(exclude={"highlights", "book_tags"}),
+    #                 batch=batch,
+    #             )
+
+    #             for highlight in book_as_schema.highlights:
+    #                 highlight_data = highlight.model_dump()
+    #                 highlight_tags = [
+    #                     HighlightTag(**tag, batch=batch)
+    #                     for tag in highlight_data.pop("tags", [])
+    #                 ]
+    #                 highlight_as_orm = Highlight(**highlight_data, batch=batch)
+    #                 highlight_as_orm.tags.extend(highlight_tags)
+    #                 book_as_orm.highlights.append(highlight_as_orm)
+
+    #             for book_tag in book_as_schema.book_tags:
+    #                 book_tag_data = book_tag.model_dump()
+    #                 book_tag_as_orm = BookTag(**book_tag_data, batch=batch)
+    #                 book_as_orm.book_tags.append(book_tag_as_orm)
+
+    #             self.session.add(book_as_orm)
+    #         try:
+    #             logging.info("Committing session")
+    #             self.session.commit()
+    #         except Exception as e:
+    #             self.session.rollback()
+    #             logging.info(f"Error occurred: {e}")
 
     def _process_book(self, book: dict[Any, Any]) -> Book:
         """Process a book.

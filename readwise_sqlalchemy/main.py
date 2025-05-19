@@ -394,7 +394,7 @@ def flatten_books_with_highlights(
                 highlight_tags.append(tag)
 
             highlight = {k: v for k, v in highlight.items() if k != "tags"}
-            highlight["user_book_id"] = raw_book["user_book_id"]
+            highlight["book_id"] = raw_book["user_book_id"]
             highlights.append(highlight)
 
     return {
@@ -442,30 +442,34 @@ def validate_flattened_objects(
     processed_objects_by_type = {}
     for object_type, objects in flattened_api_data.items():
         processed_objects = []
-        for item in objects:
+        for object in objects:
             try:
                 schema = schemas[object_type]
-                api_fields = {k: v for k, v in item.items() if k in schema.model_fields}
+                api_fields: dict[str, Any] = {}
+                non_api_fields: dict[str, Any] = {}
+                for field, value in object.items():
+                    (api_fields if field in schema.model_fields else non_api_fields)[
+                        field
+                    ] = value
                 item_as_schema = schema(**api_fields)
                 # Capture any data integrity transformation's done by the schema.
                 # Reattach validation data.
                 item_as_schema_dumped = item_as_schema.model_dump()
-                # Reattach validation status. NOTE: If this try branch succeeds, an
-                # item's validation status doesn't change. If it was true from earlier
-                # validation, it stays true. If it was false - invalid on early checks -
-                # it remains invalid.
-                item_as_schema_dumped["validated"] = item["validated"]
-                item_as_schema_dumped["validation_errors"] = item["validation_errors"]
+                # Reattach non API fields including validation fields. NOTE: If this try
+                # branch succeeds, an item's validation status doesn't change. If it
+                # was true from earlier validation, it stays true. If it was false -
+                # invalid on early checks - it remains invalid.
+                item_as_schema_dumped.update(non_api_fields)
                 processed_objects.append(item_as_schema_dumped)
             except ValidationError as err:
-                item["validated"] = False
+                object["validated"] = False
                 validation_errors = {}
                 for detail in err.errors():
                     validation_errors[".".join(str(part) for part in detail["loc"])] = (
                         detail["msg"]
                     )
-                item["validation_errors"].update(validation_errors)
-                processed_objects.append(item)
+                object["validation_errors"].update(validation_errors)
+                processed_objects.append(object)
         processed_objects_by_type[object_type] = processed_objects
     return processed_objects_by_type
 

@@ -8,7 +8,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session
 
 from readwise_sqlalchemy.db_operations import (
-    # DatabasePopulater,
     DatabasePopulaterFlattenedData,
     create_database,
     get_session,

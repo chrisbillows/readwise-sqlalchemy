@@ -8,14 +8,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session
 
 from readwise_sqlalchemy.db_operations import (
-    DatabasePopulater,
+    # DatabasePopulater,
+    DatabasePopulaterFlattenedData,
     create_database,
     get_session,
     safe_create_sqlite_engine,
 )
 from readwise_sqlalchemy.main import UserConfig
 from readwise_sqlalchemy.models import Book, BookTag, Highlight, HighlightTag
-from readwise_sqlalchemy.schemas import BookSchema
 from tests.conftest import DbHandle
 from tests.unit.test_schemas import mock_api_response
 
@@ -23,34 +23,111 @@ START_FETCH = datetime(2025, 1, 1, 1, 0)
 END_FETCH = datetime(2025, 1, 1, 1, 0)
 
 
-def generate_list_of_objects_with_expected_fields_and_values(mock_api_response: dict):
+def flatten_mock_api_response():
     """
-    Create test scenarios from mock (or real) Readwise HIGHLIGHT endpoint API response.
+    Manually flatten a mock book in the format expected by DatabasePopulater.
 
+    Add validation and fk fields required by the flattened, unnested schema. The
+    function takes no parameters as it's effectively a pipeline for converting the
+    mock_api_response.
+
+    This operation is done manually to decouple these tests from other logic.
+
+    Returns
+    -------
+    dict
+        A dictionary where keys are the objects and values are list of those objects, in
+        the format expected for flattened, unnested objects. Each list has only one
+        object.
     """
-    params = []
-    test_cases = [
-        (Book, lambda x: x[0].items(), ["highlights", "book_tags"]),
-        (BookTag, lambda x: x[0]["book_tags"][0].items(), []),
-        (Highlight, lambda x: x[0]["highlights"][0].items(), ["tags"]),
-        (HighlightTag, lambda x: x[0]["highlights"][0]["tags"][0].items(), []),
-    ]
+    mock_book = mock_api_response()[0]
+    mock_book_tag = mock_book.pop("book_tags")[0]
+    mock_highlight = mock_book.pop("highlights")[0]
+    mock_highlight_tag = mock_highlight.pop("tags")[0]
 
-    # The following fields will be cast to datetime objects on schema verification.
-    # Update here to give the correct "expected" test values.
-    highlight = mock_api_response[0]["highlights"][0]
-    highlight["highlighted_at"] = datetime(2025, 1, 1, 0, 1)
-    highlight["created_at"] = datetime(2025, 1, 1, 0, 1, 10)
-    highlight["updated_at"] = datetime(2025, 1, 1, 0, 1, 20)
+    # Add foreign keys
+    mock_book_tag["user_book_id"] = mock_book["user_book_id"]
+    mock_highlight["book_id"] = mock_book["user_book_id"]
+    mock_highlight_tag["highlight_id"] = mock_highlight["id"]
 
-    for orm_obj, extract_expected_fields_and_values, fields_to_ignore in test_cases:
-        expected_items = [
-            (orm_obj, field, value)
-            for field, value in extract_expected_fields_and_values(mock_api_response)
-            if field not in fields_to_ignore
-        ]
-        params.extend(expected_items)
-    return params
+    # Add validation fields
+    validation = {"validated": True, "validation_errors": {}}
+    mock_book.update(validation)
+    mock_book_tag.update(validation)
+    mock_highlight.update(validation)
+    mock_highlight_tag.update(validation)
+
+    # The objects would have been pydantic validated, at which point datetime strs
+    # are cast to datetime objs.
+    mock_highlight["highlighted_at"] = datetime(2025, 1, 1, 0, 1)
+    mock_highlight["created_at"] = datetime(2025, 1, 1, 0, 1, 10)
+    mock_highlight["updated_at"] = datetime(2025, 1, 1, 0, 1, 20)
+
+    return {
+        "books": [mock_book],
+        "book_tags": [mock_book_tag],
+        "highlights": [mock_highlight],
+        "highlight_tags": [mock_highlight_tag],
+    }
+
+
+def create_test_cases_from_flattened_mock_api(mock_api_response: dict):
+    """
+    Create test scenarios from the flattened mock api response.
+
+    Parameters
+    ----------
+    mock_api_response: dict
+        A flattened mock api response in the format {"books": [{book_1}, {book_2}]} etc.
+
+    Returns
+    -------
+    list[tuple[str, str, str]]
+        A list of tuples in format (orm_model, field, expected_value).
+        E.g. ``(Book, 'user_book_id', 12345)``.
+    """
+    orm_models = {
+        "books": Book,
+        "book_tags": BookTag,
+        "highlights": Highlight,
+        "highlight_tags": HighlightTag,
+    }
+    test_cases = []
+    for object_type in mock_api_response.keys():
+        target_object = mock_api_response[object_type][0]
+        for field, value in target_object.items():
+            test_cases.append((orm_models[object_type], field, value))
+    return test_cases
+
+
+# def generate_list_of_objects_with_expected_fields_and_values(mock_api_response: dict):
+#     """
+#     Create test scenarios from mock (or real) Readwise HIGHLIGHT endpoint API response.
+
+#     """
+#     params = []
+#     test_cases = [
+#         (Book, lambda x: x[0].items(), ["highlights", "book_tags"]),
+#         (BookTag, lambda x: x[0]["book_tags"][0].items(), []),
+#         (Highlight, lambda x: x[0]["highlights"][0].items(), ["tags"]),
+#         (HighlightTag, lambda x: x[0]["highlights"][0]["tags"][0].items(), []),
+#     ]
+
+#     # The following fields will be cast to datetime objects on schema verification.
+#     # Update here to give the correct "expected" test values.
+#     highlight = mock_api_response[0]["highlights"][0]
+#     highlight["highlighted_at"] = datetime(2025, 1, 1, 0, 1)
+#     highlight["created_at"] = datetime(2025, 1, 1, 0, 1, 10)
+#     highlight["updated_at"] = datetime(2025, 1, 1, 0, 1, 20)
+
+#     for orm_obj, extract_expected_fields_and_values, fields_to_ignore in test_cases:
+#         expected_items = [
+#             (orm_obj, field, value)
+#             for field, value in extract_expected_fields_and_values(mock_api_response)
+#             if field not in fields_to_ignore
+#         ]
+#         params.extend(expected_items)
+#     return params
 
 
 def test_safe_create_sqlite_engine_raises_for_a_missing_foreign_key():
@@ -105,17 +182,61 @@ def test_get_session_attaches_to_a_database_url(mock_user_config: UserConfig):
     assert actual == "readwise.db"
 
 
-def test_database_populater_instantiates_with_expected_attrs(mem_db: DbHandle):
-    database_populater = DatabasePopulater(
-        mem_db.session, mock_api_response(), START_FETCH, END_FETCH
+# -----------------------------
+# Tests - Flattened DbPopulater
+# -----------------------------
+
+
+def test_database_populater_flattened_instantiates_with_expected_attrs(
+    mem_db: DbHandle,
+):
+    database_populater = DatabasePopulaterFlattenedData(
+        mem_db.session, flatten_mock_api_response(), START_FETCH, END_FETCH
     )
     assert list(database_populater.__dict__.keys()) == [
         "session",
-        "validated_books",
+        "validated_flattened_objs",
         "start_fetch",
         "end_fetch",
     ]
 
+
+@pytest.mark.parametrize(
+    "orm_obj, target_field, expected_value",
+    create_test_cases_from_flattened_mock_api(flatten_mock_api_response()),
+)
+def test_db_populater_flattened_populate_database(
+    mem_db: DbHandle,
+    orm_obj: Union[Book, Highlight, HighlightTag],
+    target_field: str,
+    expected_value: Union[str, int],
+):
+    validated_flattened_objs = flatten_mock_api_response()
+    database_populater = DatabasePopulaterFlattenedData(
+        mem_db.session, validated_flattened_objs, START_FETCH, END_FETCH
+    )
+    database_populater.populate_database()
+    with Session(mem_db.engine) as clean_session:
+        fetched_objects = clean_session.scalars(select(orm_obj)).all()
+        actual_obj = fetched_objects[0]
+        assert getattr(actual_obj, target_field) == expected_value
+
+
+# -----------------------------
+# Tests - Nested DbPopulater
+# -----------------------------
+
+
+# def test_database_populater_instantiates_with_expected_attrs(mem_db: DbHandle):
+#     database_populater = DatabasePopulater(
+#         mem_db.session, mock_api_response(), START_FETCH, END_FETCH
+#     )
+#     assert list(database_populater.__dict__.keys()) == [
+#         "session",
+#         "validated_books",
+#         "start_fetch",
+#         "end_fetch",
+#     ]
 
 # def test_database_populater_process_populate_database_adds_readwise_batch_to_the_session(
 #     mem_db: DbHandle,
@@ -134,25 +255,25 @@ def test_database_populater_instantiates_with_expected_attrs(mem_db: DbHandle):
 #     )
 
 
-@pytest.mark.parametrize(
-    "orm_obj, target_field, expected_value",
-    generate_list_of_objects_with_expected_fields_and_values(mock_api_response()),
-)
-def test_db_populater_populate_database(
-    mem_db: DbHandle,
-    orm_obj: Union[Book, Highlight, HighlightTag],
-    target_field: str,
-    expected_value: Union[str, int],
-):
-    validated_books = [BookSchema(**book) for book in mock_api_response()]
-    database_populater = DatabasePopulater(
-        mem_db.session, validated_books, START_FETCH, END_FETCH
-    )
-    database_populater.populate_database()
-    with Session(mem_db.engine) as clean_session:
-        fetched_objects = clean_session.scalars(select(orm_obj)).all()
-        actual_obj = fetched_objects[0]
-        assert getattr(actual_obj, target_field) == expected_value
+# @pytest.mark.parametrize(
+#     "orm_obj, target_field, expected_value",
+#     generate_list_of_objects_with_expected_fields_and_values(mock_api_response()),
+# )
+# def test_db_populater_populate_database(
+#     mem_db: DbHandle,
+#     orm_obj: Union[Book, Highlight, HighlightTag],
+#     target_field: str,
+#     expected_value: Union[str, int],
+# ):
+#     validated_books = [BookSchema(**book) for book in mock_api_response()]
+#     database_populater = DatabasePopulater(
+#         mem_db.session, validated_books, START_FETCH, END_FETCH
+#     )
+#     database_populater.populate_database()
+#     with Session(mem_db.engine) as clean_session:
+#         fetched_objects = clean_session.scalars(select(orm_obj)).all()
+#         actual_obj = fetched_objects[0]
+#         assert getattr(actual_obj, target_field) == expected_value
 
 
 # @pytest.mark.parametrize("orm_obj, extract_expected, field_to_ignore",

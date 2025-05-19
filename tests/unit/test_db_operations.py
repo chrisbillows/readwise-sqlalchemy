@@ -15,8 +15,7 @@ from readwise_sqlalchemy.db_operations import (
 )
 from readwise_sqlalchemy.main import UserConfig
 from readwise_sqlalchemy.models import Book, BookTag, Highlight, HighlightTag
-from tests.conftest import DbHandle
-from tests.unit.test_schemas import mock_api_response
+from tests.helpers import DbHandle, mock_api_response
 
 START_FETCH = datetime(2025, 1, 1, 1, 0)
 END_FETCH = datetime(2025, 1, 1, 1, 0)

@@ -2,10 +2,8 @@ from typing import Any
 
 import pytest
 
-from readwise_sqlalchemy.main import (
-    validate_nested_objects,
-)
-from tests.unit.test_schemas import mock_api_response
+from readwise_sqlalchemy.main import validate_nested_objects
+from tests.helpers import mock_api_response
 
 
 def mock_api_with_initial_validation_status() -> dict[str, Any]:

@@ -21,7 +21,7 @@ from readwise_sqlalchemy.main import (
     validation_ensure_field_is_a_list,
     validation_ensure_highlight_has_correct_book_id,
 )
-from tests.unit.test_schemas import mock_api_response
+from tests.helpers import mock_api_response
 
 
 @pytest.fixture()

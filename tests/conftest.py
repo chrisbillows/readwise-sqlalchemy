@@ -3,15 +3,13 @@ Pytest fixtures and reusable test data, helpers etc.
 
 """
 
-from dataclasses import dataclass
-
 import pytest
-from sqlalchemy import Engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from readwise_sqlalchemy.config import UserConfig
 from readwise_sqlalchemy.db_operations import safe_create_sqlite_engine
 from readwise_sqlalchemy.models import Base
+from tests.helpers import DbHandle
 
 
 @pytest.fixture
@@ -51,22 +49,6 @@ def mock_user_config_module_scoped(
     temp_env_file.write_text("READWISE_API_TOKEN = 'abc123'")
     user_config = UserConfig(temp_application_dir)
     return user_config
-
-
-@dataclass
-class DbHandle:
-    """Group SQL Alchemy database connection objects.
-
-    Attributes
-    ----------
-    engine: Engine
-        Engine bound to a database.
-    session: Session
-        Session bound to an engine.
-    """
-
-    engine: Engine
-    session: Session
 
 
 @pytest.fixture()

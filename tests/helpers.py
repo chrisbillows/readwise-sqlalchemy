@@ -1,8 +1,11 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
+
+from readwise_sqlalchemy.types import FetchFn, FlattenFn, ValidateNestedObjFn
 
 
 @dataclass
@@ -22,17 +25,20 @@ class DbHandle:
     session: Session
 
 
-def mock_api_response() -> list[dict[str, Any]]:
+def mock_api_response_one_book() -> list[dict[str, Any]]:
     """
     Mock a Readwise 'Highlight EXPORT' endpoint ``response.json()["results"]`` output.
 
-    Output contains one book with one highlight. Use a function rather than a constant
-    to ensure test isolation.
+    Output contains one book with one highlight, each with one tag. Don't use a fixture
+    so the content can be passed to other helper functions, to dynamically create
+    expected values for parametrized tests. Use a function rather than a constant to
+    ensure test isolation.
 
     Returns
     -------
     list[dict[str, Any]]
-        A list containing one dictionaries representing a Readwise book with highlights.
+        A list containing one dictionary representing a Readwise book with one
+        highlight.
     """
     return [
         {
@@ -75,3 +81,92 @@ def mock_api_response() -> list[dict[str, Any]]:
             ],
         },
     ]
+
+
+def nested_validated_mock_api_response_one_book(
+    mock_api_response_with_a_single_book_fn: FetchFn = mock_api_response_one_book,
+) -> list[dict[str, Any]]:
+    """
+    Mock the nested validation stage for mock_api_response containing a single book.
+
+    Each object has validation fields added as if the object is valid.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+
+
+
+    """
+    # Add validation fields
+    validation = {"validated": True, "validation_errors": {}}
+    mock_book = mock_api_response_with_a_single_book_fn()[0]
+    mock_book.update(validation)
+    mock_book["book_tags"][0].update(validation)
+    mock_book["highlights"][0].update(validation)
+    mock_book["highlights"][0]["tags"][0].update(validation)
+    return [mock_book]
+
+
+def flattened_nested_validated_mock_api_response_one_book(
+    nested_validated_mock_api_response_with_a_single_book_fn: ValidateNestedObjFn = nested_validated_mock_api_response_one_book(),
+) -> dict[str, list[dict[str, Any]]]:
+    """
+    Flatten a nested validated mock api response containing one book and one highlight.
+
+    A nested validated api response is still in nested form but with validation fields
+    added. This function flattens the objects and adds fk fields, matching the expected
+    output from ``flatten_books_with_highlights()``. This is done manually to decouple
+    the test logic.
+
+    Returns
+    -------
+    dict[str, list[dict[str, Any]]]
+        A dictionary where keys are the objects and values are list of those objects.
+        Each list has only one object.
+    """
+    mock_book = nested_validated_mock_api_response_with_a_single_book_fn[0]
+    mock_book_tag = mock_book.pop("book_tags")[0]
+    mock_highlight = mock_book.pop("highlights")[0]
+    mock_highlight_tag = mock_highlight.pop("tags")[0]
+
+    # Add foreign keys
+    mock_book_tag["user_book_id"] = mock_book["user_book_id"]
+    mock_highlight["book_id"] = mock_book["user_book_id"]
+    mock_highlight_tag["highlight_id"] = mock_highlight["id"]
+
+    return {
+        "books": [mock_book],
+        "book_tags": [mock_book_tag],
+        "highlights": [mock_highlight],
+        "highlight_tags": [mock_highlight_tag],
+    }
+
+
+def flattened_fully_validated_mock_api_response_one_book(
+    flattened_nested_validated_mock_api_response_single_book_fn: FlattenFn = flattened_nested_validated_mock_api_response_one_book,
+) -> dict[str, list[dict[str, Any]]]:
+    """
+    Create the final validated, flattened output expected by the database.
+
+    Manually replicate the expected output from ``validate_flattened_objects``: this
+    processes the API fields through the pydantic schema, updating the validation fields
+    as appropriate - and doing any field processing.
+
+    All objects are treated as valid.
+
+    Returns
+    -------
+    dict[str, list[dict[str, Any]]]
+        A dictionary where keys are the objects and values are list of those objects.
+        Each list has only one object.
+    """
+
+    # Mock the pydantic field transformations.
+    flattened_output = flattened_nested_validated_mock_api_response_single_book_fn()
+    mock_highlight = flattened_output["highlights"][0]
+    mock_highlight["highlighted_at"] = datetime(2025, 1, 1, 0, 1)
+    mock_highlight["created_at"] = datetime(2025, 1, 1, 0, 1, 10)
+    mock_highlight["updated_at"] = datetime(2025, 1, 1, 0, 1, 20)
+
+    return flattened_output

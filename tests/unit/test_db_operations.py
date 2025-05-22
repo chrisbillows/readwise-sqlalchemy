@@ -15,61 +15,16 @@ from readwise_sqlalchemy.db_operations import (
 )
 from readwise_sqlalchemy.main import UserConfig
 from readwise_sqlalchemy.models import Book, BookTag, Highlight, HighlightTag
-from tests.helpers import DbHandle, mock_api_response
+from tests.helpers import (
+    DbHandle,
+    flattened_nested_validated_mock_api_response_one_book,
+)
 
 START_FETCH = datetime(2025, 1, 1, 1, 0)
 END_FETCH = datetime(2025, 1, 1, 1, 0)
 
 
-def flatten_mock_api_response():
-    """
-    Manually flatten a mock book in the format expected by DatabasePopulater.
-
-    Add validation and fk fields required by the flattened, unnested schema. The
-    function takes no parameters as it's effectively a pipeline for converting the
-    mock_api_response.
-
-    This operation is done manually to decouple these tests from other logic.
-
-    Returns
-    -------
-    dict
-        A dictionary where keys are the objects and values are list of those objects, in
-        the format expected for flattened, unnested objects. Each list has only one
-        object.
-    """
-    mock_book = mock_api_response()[0]
-    mock_book_tag = mock_book.pop("book_tags")[0]
-    mock_highlight = mock_book.pop("highlights")[0]
-    mock_highlight_tag = mock_highlight.pop("tags")[0]
-
-    # Add foreign keys
-    mock_book_tag["user_book_id"] = mock_book["user_book_id"]
-    mock_highlight["book_id"] = mock_book["user_book_id"]
-    mock_highlight_tag["highlight_id"] = mock_highlight["id"]
-
-    # Add validation fields
-    validation = {"validated": True, "validation_errors": {}}
-    mock_book.update(validation)
-    mock_book_tag.update(validation)
-    mock_highlight.update(validation)
-    mock_highlight_tag.update(validation)
-
-    # The objects would have been pydantic validated, at which point datetime strs
-    # are cast to datetime objs.
-    mock_highlight["highlighted_at"] = datetime(2025, 1, 1, 0, 1)
-    mock_highlight["created_at"] = datetime(2025, 1, 1, 0, 1, 10)
-    mock_highlight["updated_at"] = datetime(2025, 1, 1, 0, 1, 20)
-
-    return {
-        "books": [mock_book],
-        "book_tags": [mock_book_tag],
-        "highlights": [mock_highlight],
-        "highlight_tags": [mock_highlight_tag],
-    }
-
-
-def create_test_cases_from_flattened_mock_api(mock_api_response: dict):
+def create_test_cases_from_flattened_mock_api(flattened_mock_api_response: dict):
     """
     Create test scenarios from the flattened mock api response.
 
@@ -91,8 +46,8 @@ def create_test_cases_from_flattened_mock_api(mock_api_response: dict):
         "highlight_tags": HighlightTag,
     }
     test_cases = []
-    for object_type in mock_api_response.keys():
-        target_object = mock_api_response[object_type][0]
+    for object_type in flattened_mock_api_response.keys():
+        target_object = flattened_mock_api_response[object_type][0]
         for field, value in target_object.items():
             test_cases.append((orm_models[object_type], field, value))
     return test_cases
@@ -189,7 +144,10 @@ def test_database_populater_flattened_instantiates_with_expected_attrs(
     mem_db: DbHandle,
 ):
     database_populater = DatabasePopulaterFlattenedData(
-        mem_db.session, flatten_mock_api_response(), START_FETCH, END_FETCH
+        mem_db.session,
+        flattened_nested_validated_mock_api_response_one_book(),
+        START_FETCH,
+        END_FETCH,
     )
     assert list(database_populater.__dict__.keys()) == [
         "session",
@@ -201,7 +159,9 @@ def test_database_populater_flattened_instantiates_with_expected_attrs(
 
 @pytest.mark.parametrize(
     "orm_obj, target_field, expected_value",
-    create_test_cases_from_flattened_mock_api(flatten_mock_api_response()),
+    create_test_cases_from_flattened_mock_api(
+        flattened_nested_validated_mock_api_response_one_book()
+    ),
 )
 def test_db_populater_flattened_populate_database(
     mem_db: DbHandle,
@@ -209,7 +169,7 @@ def test_db_populater_flattened_populate_database(
     target_field: str,
     expected_value: Union[str, int],
 ):
-    validated_flattened_objs = flatten_mock_api_response()
+    validated_flattened_objs = flattened_nested_validated_mock_api_response_one_book()
     database_populater = DatabasePopulaterFlattenedData(
         mem_db.session, validated_flattened_objs, START_FETCH, END_FETCH
     )

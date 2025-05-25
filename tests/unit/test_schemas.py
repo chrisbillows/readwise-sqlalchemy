@@ -4,8 +4,9 @@ from typing import Any, Union
 import pytest
 from pydantic import ValidationError
 
+from readwise_sqlalchemy.main import SCHEMAS_BY_OBJECT
 from readwise_sqlalchemy.schemas import BookSchemaUnnested, HighlightSchemaUnnested
-from tests.helpers import mock_api_response, flat_mock_api_response_nested_validated
+from tests.helpers import flat_mock_api_response_nested_validated, mock_api_response
 
 # Mutate dictionary values in place with ``change_nested_dict_value()``.
 PATH_TO_OBJ = {
@@ -14,6 +15,37 @@ PATH_TO_OBJ = {
     "highlight": ["highlights", 0],
     "highlight_tag": ["highlights", 0, "tags", 0],
 }
+
+
+# --------
+# Fixtures
+# --------
+
+
+@pytest.fixture
+def flat_objects_api_fields_only() -> dict[str, list[dict[str, Any]]]:
+    """
+    Extract only the API fields from an flattened API response that is nested validated.
+
+    Pydantic validation is only carried out on the API fields. Replicate that content
+    for testing pydantic schema.
+
+    Returns
+    -------
+    dict[str, list[dict[str, Any]]]
+        A dictionary where keys are object types and values are lists of objects: one
+        object per object type.
+    """
+    flattened_nested_validated_data = flat_mock_api_response_nested_validated()
+    objs_with_only_api_fields = {}
+    for obj_type, objs in flattened_nested_validated_data.items():
+        obj_schema = SCHEMAS_BY_OBJECT[obj_type]
+        for obj in objs:
+            obj_with_api_fields_only = {
+                k: v for k, v in obj.items() if k in obj_schema.model_fields.keys()
+            }
+            objs_with_only_api_fields[obj_type] = obj_with_api_fields_only
+    return objs_with_only_api_fields
 
 
 # ----------------
@@ -198,9 +230,7 @@ def test_book_fields_in_test_objects_match():
 
 
 def test_book_tag_fields_in_test_objects_match():
-    book_tags_fields_mock_api_response = mock_api_response()[0]["book_tags"][
-        0
-    ].keys()
+    book_tags_fields_mock_api_response = mock_api_response()[0]["book_tags"][0].keys()
 
     book_tag_fields_expected_types_dict = []
     for list_of_fields in expected_type_per_schema_field()["book_tag"].values():
@@ -226,9 +256,9 @@ def test_highlight_fields_in_test_objects_match():
 
 
 def test_highlight_tags_fields_in_test_objects_match():
-    highlight_tag_fields_mock_api_response = mock_api_response()[0][
-        "highlights"
-    ][0]["tags"][0].keys()
+    highlight_tag_fields_mock_api_response = mock_api_response()[0]["highlights"][0][
+        "tags"
+    ][0].keys()
 
     highlight_tag_fields_expected_types_dict = []
     for list_of_fields in expected_type_per_schema_field()["highlight_tag"].values():
@@ -264,9 +294,15 @@ def test_generate_field_nullability_test_cases():
 # -----
 
 
-def test_nested_schema_configuration_with_valid_values():
-    mock_book_with_book_tag_hl_and_hl_tag = mock_api_response_one_book()[0]
-    assert BookSchemaUnnested(**mock_book_with_book_tag_hl_and_hl_tag)
+@pytest.mark.parametrize(
+    "object_under_test", ["books", "book_tags", "highlights", "highlight_tags"]
+)
+def test_flat_schema_configuration_by_object(
+    flat_objects_api_fields_only, object_under_test
+):
+    schema = SCHEMAS_BY_OBJECT[object_under_test]
+    test_object = flat_objects_api_fields_only[object_under_test]
+    assert schema(**test_object)
 
 
 def test_nested_schema_model_dump_output():

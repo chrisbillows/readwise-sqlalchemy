@@ -96,7 +96,7 @@ def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
         field ...]}}``.
     """
     return {
-        "book": {
+        "books": {
             "string": [
                 "title",
                 "author",
@@ -116,7 +116,7 @@ def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
             "list_of_highlights": ["highlights"],
             "bool": ["is_deleted"],
         },
-        "highlight": {
+        "highlights": {
             "string": [
                 "text",
                 "location_type",
@@ -131,8 +131,8 @@ def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
             "choice_color": ["color"],
             "list_of_tags": ["tags"],
         },
-        "book_tag": {"int": ["id"], "string": ["name"]},
-        "highlight_tag": {"int": ["id"], "string": ["name"]},
+        "book_tags": {"int": ["id"], "string": ["name"]},
+        "highlight_tags": {"int": ["id"], "string": ["name"]},
     }
 
 
@@ -165,8 +165,7 @@ def generate_invalid_field_values_test_cases() -> list[
         for expected_type, fields in field_group.items():
             for field in fields:
                 for invalid_value in invalid_values[expected_type]:
-                    test_cases.append((field, PATH_TO_OBJ[obj], invalid_value))
-
+                    test_cases.append((obj, field, invalid_value))
     return test_cases
 
 
@@ -295,18 +294,18 @@ def test_generate_field_nullability_test_cases():
 
 
 @pytest.mark.parametrize(
-    "object_under_test", ["books", "book_tags", "highlights", "highlight_tags"]
+    "object_type", ["books", "book_tags", "highlights", "highlight_tags"]
 )
 def test_flat_schema_configuration_by_object(
-    flat_objects_api_fields_only, object_under_test
+    flat_objects_api_fields_only: dict[str, list[dict[str, Any]]], object_type: str
 ):
-    schema = SCHEMAS_BY_OBJECT[object_under_test]
-    test_object = flat_objects_api_fields_only[object_under_test]
+    schema = SCHEMAS_BY_OBJECT[object_type]
+    test_object = flat_objects_api_fields_only[object_type]
     assert schema(**test_object)
 
 
 @pytest.mark.parametrize(
-    "object_under_test, expected",
+    "object_type, expected",
     [
         (
             "books",
@@ -354,31 +353,32 @@ def test_flat_schema_configuration_by_object(
     ],
 )
 def test_flat_schema_model_dump_output(
-    flat_objects_api_fields_only, object_under_test, expected
+    flat_objects_api_fields_only: dict[str, list[dict[str, Any]]],
+    object_type: str,
+    expected: dict[str, Any],
 ):
-    schema = SCHEMAS_BY_OBJECT[object_under_test]
-    test_object = flat_objects_api_fields_only[object_under_test]
+    schema = SCHEMAS_BY_OBJECT[object_type]
+    test_object = flat_objects_api_fields_only[object_type]
     test_object_as_schema = schema(**test_object)
     model_dump = test_object_as_schema.model_dump()
     assert model_dump == expected
 
 
 @pytest.mark.parametrize(
-    "target_field, path_to_dict, invalid_value",
+    "object_type, target_field, invalid_value",
     generate_invalid_field_values_test_cases(),
 )
-def test_nested_schema_configuration_with_invalid_values(
-    target_field: str, path_to_dict: list[Union[str, int]], invalid_value: Any
+def test_flat_schema_configuration_with_invalid_values(
+    object_type: str,
+    target_field: str,
+    invalid_value: Any,
+    flat_objects_api_fields_only: dict,
 ):
-    valid_mock_book_with_book_tag_hl_and_hl_tag = mock_api_response()[0]
-    change_nested_dict_value(
-        valid_mock_book_with_book_tag_hl_and_hl_tag,
-        path_to_dict,
-        target_field,
-        invalid_value,
-    )
+    object_under_test = flat_objects_api_fields_only[object_type]
+    object_under_test[target_field] = invalid_value
+    schema = SCHEMAS_BY_OBJECT[object_type]
     with pytest.raises(ValidationError):
-        BookSchemaUnnested(**valid_mock_book_with_book_tag_hl_and_hl_tag)
+        schema(**object_under_test)
 
 
 @pytest.mark.parametrize(

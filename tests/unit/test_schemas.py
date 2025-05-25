@@ -5,7 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from readwise_sqlalchemy.schemas import BookSchemaUnnested, HighlightSchemaUnnested
-from tests.helpers import mock_api_response_one_book
+from tests.helpers import mock_api_response, flat_mock_api_response_nested_validated
 
 # Mutate dictionary values in place with ``change_nested_dict_value()``.
 PATH_TO_OBJ = {
@@ -162,7 +162,7 @@ def generate_field_nullability_test_cases() -> dict[str, list[tuple]]:
         "book_tag": [],
     }
 
-    mock_book = mock_api_response_one_book()[0]
+    mock_book = mock_api_response()[0]
     object_fields = {
         "book": mock_book.keys(),
         "book_tag": mock_book["book_tags"][0].keys(),
@@ -186,7 +186,7 @@ def generate_field_nullability_test_cases() -> dict[str, list[tuple]]:
 
 
 def test_book_fields_in_test_objects_match():
-    book_fields_mock_api_response = list(mock_api_response_one_book()[0].keys())
+    book_fields_mock_api_response = list(mock_api_response()[0].keys())
 
     book_fields_expected_types_dict = []
     for list_of_fields in expected_type_per_schema_field()["book"].values():
@@ -198,7 +198,7 @@ def test_book_fields_in_test_objects_match():
 
 
 def test_book_tag_fields_in_test_objects_match():
-    book_tags_fields_mock_api_response = mock_api_response_one_book()[0]["book_tags"][
+    book_tags_fields_mock_api_response = mock_api_response()[0]["book_tags"][
         0
     ].keys()
 
@@ -213,7 +213,7 @@ def test_book_tag_fields_in_test_objects_match():
 
 def test_highlight_fields_in_test_objects_match():
     highlight_fields_mock_api_response = list(
-        mock_api_response_one_book()[0]["highlights"][0].keys()
+        mock_api_response()[0]["highlights"][0].keys()
     )
 
     highlight_fields_expected_types_dict = []
@@ -226,7 +226,7 @@ def test_highlight_fields_in_test_objects_match():
 
 
 def test_highlight_tags_fields_in_test_objects_match():
-    highlight_tag_fields_mock_api_response = mock_api_response_one_book()[0][
+    highlight_tag_fields_mock_api_response = mock_api_response()[0][
         "highlights"
     ][0]["tags"][0].keys()
 
@@ -270,7 +270,7 @@ def test_nested_schema_configuration_with_valid_values():
 
 
 def test_nested_schema_model_dump_output():
-    mock_book_with_book_tag_hl_and_hl_tag = mock_api_response_one_book()[0]
+    mock_book_with_book_tag_hl_and_hl_tag = mock_api_response()[0]
     book_as_schema = BookSchemaUnnested(**mock_book_with_book_tag_hl_and_hl_tag)
     model_dump = book_as_schema.model_dump()
     expected = {
@@ -322,7 +322,7 @@ def test_nested_schema_model_dump_output():
 def test_nested_schema_configuration_with_invalid_values(
     target_field: str, path_to_dict: list[Union[str, int]], invalid_value: Any
 ):
-    valid_mock_book_with_book_tag_hl_and_hl_tag = mock_api_response_one_book()[0]
+    valid_mock_book_with_book_tag_hl_and_hl_tag = mock_api_response()[0]
     change_nested_dict_value(
         valid_mock_book_with_book_tag_hl_and_hl_tag,
         path_to_dict,
@@ -339,7 +339,7 @@ def test_nested_schema_configuration_with_invalid_values(
 def test_nested_schema_configuration_fields_allow_null(
     field_to_null: str, path_to_dict: list[Union[str, int]]
 ):
-    valid_mock_book_with_hl_and_hl_tag = mock_api_response_one_book()[0]
+    valid_mock_book_with_hl_and_hl_tag = mock_api_response()[0]
     change_nested_dict_value(
         valid_mock_book_with_hl_and_hl_tag, path_to_dict, field_to_null, None
     )
@@ -352,7 +352,7 @@ def test_nested_schema_configuration_fields_allow_null(
 def test_nested_schema_configuration_fields_error_for_null(
     field_to_null: str, path_to_dict: list[Union[str, int]]
 ):
-    valid_mock_book_with_hl_and_hl_tag = mock_api_response_one_book()[0]
+    valid_mock_book_with_hl_and_hl_tag = mock_api_response()[0]
     change_nested_dict_value(
         valid_mock_book_with_hl_and_hl_tag, path_to_dict, field_to_null, None
     )
@@ -360,80 +360,80 @@ def test_nested_schema_configuration_fields_error_for_null(
         BookSchemaUnnested(**valid_mock_book_with_hl_and_hl_tag)
 
 
-@pytest.mark.parametrize("field_to_remove", mock_api_response_one_book()[0].keys())
+@pytest.mark.parametrize("field_to_remove", mock_api_response()[0].keys())
 def test_missing_book_fields_raise_errors(field_to_remove: str):
-    mock_book = mock_api_response_one_book()[0]
+    mock_book = mock_api_response()[0]
     del mock_book[field_to_remove]
     with pytest.raises(ValidationError):
         BookSchemaUnnested(**mock_book)
 
 
 @pytest.mark.parametrize(
-    "field_to_remove", mock_api_response_one_book()[0]["highlights"][0].keys()
+    "field_to_remove", mock_api_response()[0]["highlights"][0].keys()
 )
 def test_missing_highlight_fields_raise_errors(field_to_remove: str):
-    mock_book = mock_api_response_one_book()[0]
+    mock_book = mock_api_response()[0]
     del mock_book["highlights"][0][field_to_remove]
     with pytest.raises(ValidationError):
         BookSchemaUnnested(**mock_book)
 
 
 @pytest.mark.parametrize(
-    "field_to_remove", mock_api_response_one_book()[0]["book_tags"][0].keys()
+    "field_to_remove", mock_api_response()[0]["book_tags"][0].keys()
 )
 def test_missing_book_tag_fields_do_not_raise_errors(field_to_remove: str):
-    mock_book = mock_api_response_one_book()[0]
+    mock_book = mock_api_response()[0]
     del mock_book["book_tags"][0][field_to_remove]
     BookSchemaUnnested(**mock_book)
 
 
 @pytest.mark.parametrize(
     "field_to_remove",
-    mock_api_response_one_book()[0]["highlights"][0]["tags"][0].keys(),
+    mock_api_response()[0]["highlights"][0]["tags"][0].keys(),
 )
 def test_missing_highlight_tag_fields_do_not_raise_errors(field_to_remove: str):
-    mock_book = mock_api_response_one_book()[0]
+    mock_book = mock_api_response()[0]
     del mock_book["highlights"][0]["tags"][0][field_to_remove]
     BookSchemaUnnested(**mock_book)
 
 
 def test_additional_book_field_raises_error():
-    mock_book = mock_api_response_one_book()[0]
+    mock_book = mock_api_response()[0]
     mock_book["extra_field"] = None
     with pytest.raises(ValidationError):
         BookSchemaUnnested(**mock_book)
 
 
 def test_additional_book_tag_field_raises_error():
-    mock_book = mock_api_response_one_book()[0]
+    mock_book = mock_api_response()[0]
     mock_book["book_tags"][0]["extra_field"] = None
     with pytest.raises(ValidationError):
         BookSchemaUnnested(**mock_book)
 
 
 def test_additional_highlight_field_raises_error():
-    mock_book = mock_api_response_one_book()[0]
+    mock_book = mock_api_response()[0]
     mock_book["highlights"][0]["extra_field"] = None
     with pytest.raises(ValidationError):
         BookSchemaUnnested(**mock_book)
 
 
 def test_additional_highlight_tag_field_raises_error():
-    mock_book = mock_api_response_one_book()[0]
+    mock_book = mock_api_response()[0]
     mock_book["highlights"][0]["tags"][0]["extra_field"] = None
     with pytest.raises(ValidationError):
         BookSchemaUnnested(**mock_book)
 
 
 def test_book_field_validator_replaces_null_with_an_empty_list():
-    mock_book = mock_api_response_one_book()[0]
+    mock_book = mock_api_response()[0]
     mock_book["book_tags"] = None
     book_schema = BookSchemaUnnested(**mock_book)
     assert book_schema.book_tags == []
 
 
 def test_highlight_field_validator_replaces_null_with_an_empty_list():
-    mock_book = mock_api_response_one_book()[0]
+    mock_book = mock_api_response()[0]
     mock_highlight = mock_book["highlights"][0]
     mock_highlight["tags"] = None
     highlight_schema = HighlightSchemaUnnested(**mock_highlight)

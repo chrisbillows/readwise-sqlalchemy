@@ -17,7 +17,7 @@ from readwise_sqlalchemy.main import UserConfig
 from readwise_sqlalchemy.models import Book, BookTag, Highlight, HighlightTag
 from tests.helpers import (
     DbHandle,
-    flattened_nested_validated_mock_api_response_one_book,
+    flat_mock_api_response_nested_validated,
 )
 
 START_FETCH = datetime(2025, 1, 1, 1, 0)
@@ -145,7 +145,7 @@ def test_database_populater_flattened_instantiates_with_expected_attrs(
 ):
     database_populater = DatabasePopulaterFlattenedData(
         mem_db.session,
-        flattened_nested_validated_mock_api_response_one_book(),
+        flat_mock_api_response_nested_validated(),
         START_FETCH,
         END_FETCH,
     )
@@ -160,7 +160,7 @@ def test_database_populater_flattened_instantiates_with_expected_attrs(
 @pytest.mark.parametrize(
     "orm_obj, target_field, expected_value",
     create_test_cases_from_flattened_mock_api(
-        flattened_nested_validated_mock_api_response_one_book()
+        flat_mock_api_response_nested_validated()
     ),
 )
 def test_db_populater_flattened_populate_database(
@@ -169,7 +169,7 @@ def test_db_populater_flattened_populate_database(
     target_field: str,
     expected_value: Union[str, int],
 ):
-    validated_flattened_objs = flattened_nested_validated_mock_api_response_one_book()
+    validated_flattened_objs = flat_mock_api_response_nested_validated()
     database_populater = DatabasePopulaterFlattenedData(
         mem_db.session, validated_flattened_objs, START_FETCH, END_FETCH
     )

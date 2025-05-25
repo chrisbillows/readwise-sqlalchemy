@@ -3,7 +3,7 @@ from typing import Any
 import pytest
 
 from readwise_sqlalchemy.main import validate_nested_objects
-from tests.helpers import mock_api_response_one_book
+from tests.helpers import mock_api_response
 
 
 def mock_api_with_initial_validation_status() -> dict[str, Any]:
@@ -19,7 +19,7 @@ def mock_api_with_initial_validation_status() -> dict[str, Any]:
         A mock readwise book with nested objects, with each object having had validation
         fields added.
     """
-    added_validation_fields = mock_api_response_one_book()[0]
+    added_validation_fields = mock_api_response()[0]
     added_validation_fields["validated"] = True
     added_validation_fields["validation_errors"] = {}
 
@@ -75,7 +75,7 @@ def create_invalid_readwise_objects_for_testing() -> dict[
             A function to mutate the mock_api_response book.
             E.g `lambda b: `b['field'] = "some value"
         """
-        obj = mock_api_response_one_book()[0]
+        obj = mock_api_response()[0]
         modify(obj)
         return obj
 

@@ -21,7 +21,7 @@ from readwise_sqlalchemy.main import (
     validation_ensure_field_is_a_list,
     validation_ensure_highlight_has_correct_book_id,
 )
-from tests.helpers import mock_api_response_one_book
+from tests.helpers import mock_api_response
 
 
 @pytest.fixture()
@@ -490,7 +490,7 @@ def test_validate_nested_objects_for_sample_of_invalid_objects(
 
 @pytest.mark.parametrize("test_with_validated_keys_present", [True, False])
 def test_flatten_books_with_highlights(test_with_validated_keys_present: bool):
-    mock_api_response_data = mock_api_response_one_book()
+    mock_api_response_data = mock_api_response()
     expected = {
         "books": [
             {

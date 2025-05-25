@@ -25,7 +25,7 @@ class DbHandle:
     session: Session
 
 
-def mock_api_response_one_book() -> list[dict[str, Any]]:
+def mock_api_response() -> list[dict[str, Any]]:
     """
     Mock a Readwise 'Highlight EXPORT' endpoint ``response.json()["results"]`` output.
 
@@ -83,8 +83,8 @@ def mock_api_response_one_book() -> list[dict[str, Any]]:
     ]
 
 
-def nested_validated_mock_api_response_one_book(
-    mock_api_response_with_a_single_book_fn: FetchFn = mock_api_response_one_book,
+def mock_api_response_nested_validated(
+    mock_api_response_with_a_single_book_fn: FetchFn = mock_api_response,
 ) -> list[dict[str, Any]]:
     """
     Mock the nested validation stage for mock_api_response containing a single book.
@@ -108,8 +108,8 @@ def nested_validated_mock_api_response_one_book(
     return [mock_book]
 
 
-def flattened_nested_validated_mock_api_response_one_book(
-    nested_validated_mock_api_response_with_a_single_book_fn: ValidateNestedObjFn = nested_validated_mock_api_response_one_book(),
+def flat_mock_api_response_nested_validated(
+    nested_validated_mock_api_response_with_a_single_book_fn: ValidateNestedObjFn = mock_api_response_nested_validated,
 ) -> dict[str, list[dict[str, Any]]]:
     """
     Flatten a nested validated mock api response containing one book and one highlight.
@@ -125,7 +125,7 @@ def flattened_nested_validated_mock_api_response_one_book(
         A dictionary where keys are the objects and values are list of those objects.
         Each list has only one object.
     """
-    mock_book = nested_validated_mock_api_response_with_a_single_book_fn[0]
+    mock_book = nested_validated_mock_api_response_with_a_single_book_fn()[0]
     mock_book_tag = mock_book.pop("book_tags")[0]
     mock_highlight = mock_book.pop("highlights")[0]
     mock_highlight_tag = mock_highlight.pop("tags")[0]
@@ -143,8 +143,8 @@ def flattened_nested_validated_mock_api_response_one_book(
     }
 
 
-def flattened_fully_validated_mock_api_response_one_book(
-    flattened_nested_validated_mock_api_response_single_book_fn: FlattenFn = flattened_nested_validated_mock_api_response_one_book,
+def flat_mock_api_response_fully_validated(
+    flattened_nested_validated_mock_api_response_single_book_fn: FlattenFn = flat_mock_api_response_nested_validated,
 ) -> dict[str, list[dict[str, Any]]]:
     """
     Create the final validated, flattened output expected by the database.

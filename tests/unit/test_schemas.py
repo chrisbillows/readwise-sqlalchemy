@@ -145,8 +145,8 @@ def generate_invalid_field_values_test_cases() -> list[
     Returns
     -------
     list[tuple[str, Union[str, int], str]]
-        A list of test cases where each test case is a tuple in the form ``(field,
-        path_to_dict, invalid_value)``.
+        A list of test cases where each test case is a tuple in the form ``(obj, field,
+        invalid_value)``.
     """
     invalid_values = {
         "string": [123, [123], [], ["a"], {}],
@@ -177,10 +177,10 @@ def generate_field_nullability_test_cases() -> dict[str, list[tuple]]:
     -------
     dict[str[list[tuple]]]
         A dictionary with the keys ``error`` and ``pass``. The values for each are a
-        list of test cases in the form ``(field, path_to_field)``.
+        list of test cases in the form ``(obj, field)``.
     """
     non_nullable_fields = {
-        "book": [
+        "books": [
             "user_book_id",
             "title",
             "readable_title",
@@ -188,26 +188,17 @@ def generate_field_nullability_test_cases() -> dict[str, list[tuple]]:
             "readwise_url",
             "highlights",
         ],
-        "highlight": ["id", "text", "book_id"],
-        "highlight_tag": [],
-        "book_tag": [],
+        "highlights": ["id", "text", "book_id"],
+        "highlight_tags": [],
+        "book_tags": [],
     }
-
-    mock_book = mock_api_response()[0]
-    object_fields = {
-        "book": mock_book.keys(),
-        "book_tag": mock_book["book_tags"][0].keys(),
-        "highlight": mock_book["highlights"][0].keys(),
-        "highlight_tag": mock_book["highlights"][0]["tags"][0].keys(),
-    }
-
     nullable_test_cases = {"pass": [], "error": []}
-    for obj, fields in object_fields.items():
-        for field in fields:
+    for obj, schema in SCHEMAS_BY_OBJECT.items():
+        for field in schema.model_fields.keys():
             if field in non_nullable_fields[obj]:
-                nullable_test_cases["error"].append((field, PATH_TO_OBJ[obj]))
+                nullable_test_cases["error"].append((obj, field))
             else:
-                nullable_test_cases["pass"].append((field, PATH_TO_OBJ[obj]))
+                nullable_test_cases["pass"].append((obj, field))
     return nullable_test_cases
 
 
@@ -382,30 +373,32 @@ def test_flat_schema_configuration_with_invalid_values(
 
 
 @pytest.mark.parametrize(
-    "field_to_null, path_to_dict", generate_field_nullability_test_cases()["pass"]
+    "object_type, field_to_null", generate_field_nullability_test_cases()["pass"]
 )
-def test_nested_schema_configuration_fields_allow_null(
-    field_to_null: str, path_to_dict: list[Union[str, int]]
+def test_flat_schema_configuration_fields_allow_null(
+    object_type: str,
+    field_to_null: str,
+    flat_objects_api_fields_only: dict,
 ):
-    valid_mock_book_with_hl_and_hl_tag = mock_api_response()[0]
-    change_nested_dict_value(
-        valid_mock_book_with_hl_and_hl_tag, path_to_dict, field_to_null, None
-    )
-    assert BookSchemaUnnested(**valid_mock_book_with_hl_and_hl_tag)
+    object_under_test = flat_objects_api_fields_only[object_type]
+    object_under_test[field_to_null] = None
+    schema = SCHEMAS_BY_OBJECT[object_type]
+    assert schema(**object_under_test)
 
 
 @pytest.mark.parametrize(
-    "field_to_null, path_to_dict", generate_field_nullability_test_cases()["error"]
+    "object_type, field_to_null", generate_field_nullability_test_cases()["error"]
 )
-def test_nested_schema_configuration_fields_error_for_null(
-    field_to_null: str, path_to_dict: list[Union[str, int]]
+def test_flat_schema_configuration_fields_error_for_null(
+    object_type: str,
+    field_to_null: str,
+    flat_objects_api_fields_only: dict,
 ):
-    valid_mock_book_with_hl_and_hl_tag = mock_api_response()[0]
-    change_nested_dict_value(
-        valid_mock_book_with_hl_and_hl_tag, path_to_dict, field_to_null, None
-    )
+    object_under_test = flat_objects_api_fields_only[object_type]
+    object_under_test[field_to_null] = None
+    schema = SCHEMAS_BY_OBJECT[object_type]
     with pytest.raises(ValidationError):
-        BookSchemaUnnested(**valid_mock_book_with_hl_and_hl_tag)
+        schema(**object_under_test)
 
 
 @pytest.mark.parametrize("field_to_remove", mock_api_response()[0].keys())

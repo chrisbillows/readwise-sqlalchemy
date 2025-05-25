@@ -95,9 +95,7 @@ def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
     }
 
 
-def generate_invalid_field_values_test_cases() -> list[
-    tuple[str, Union[str, int], str]
-]:
+def generate_invalid_types_test_cases() -> list[tuple[str, Union[str, int], str]]:
     """
     Generate parametrized test cases to check the configuration of invalid values.
 
@@ -178,16 +176,16 @@ def test_fields_in_expected_type_per_schema_match_object_schema(object_type: str
 
 
 def test_generate_invalid_field_values_test_cases():
-    test_cases = generate_invalid_field_values_test_cases()
-    assert test_cases[0] == ("title", [], 123)
+    test_cases = generate_invalid_types_test_cases()
+    assert test_cases[0] == ("books", "title", 123)
 
 
 def test_generate_field_nullability_test_cases():
     test_cases = generate_field_nullability_test_cases()
     assert list(test_cases.keys()) == ["pass", "error"]
-    assert test_cases["pass"][0] == ("is_deleted", [])
-    assert test_cases["pass"][1] == ("author", [])
-    assert test_cases["error"][0] == ("user_book_id", [])
+    assert test_cases["pass"][0] == ("books", "is_deleted")
+    assert test_cases["pass"][1] == ("books", "author")
+    assert test_cases["error"][0] == ("books", "user_book_id")
 
 
 # -----
@@ -268,7 +266,7 @@ def test_flat_schema_model_dump_output(
 
 @pytest.mark.parametrize(
     "object_type, target_field, invalid_value",
-    generate_invalid_field_values_test_cases(),
+    generate_invalid_types_test_cases(),
 )
 def test_flat_schema_configuration_with_invalid_values(
     object_type: str,

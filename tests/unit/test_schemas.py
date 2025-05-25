@@ -110,10 +110,8 @@ def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
                 "unique_url",
             ],
             "int": ["user_book_id"],
-            "list_of_tags": ["book_tags"],
             "choice_category": ["category"],
             "asin": ["asin"],
-            "list_of_highlights": ["highlights"],
             "bool": ["is_deleted"],
         },
         "highlights": {
@@ -129,7 +127,6 @@ def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
             "bool": ["is_favorite", "is_discard", "is_deleted"],
             "iso_string": ["highlighted_at", "created_at", "updated_at"],
             "choice_color": ["color"],
-            "list_of_tags": ["tags"],
         },
         "book_tags": {"int": ["id"], "string": ["name"]},
         "highlight_tags": {"int": ["id"], "string": ["name"]},
@@ -207,56 +204,15 @@ def generate_field_nullability_test_cases() -> dict[str, list[tuple]]:
 # --------------------------
 
 
-def test_book_fields_in_test_objects_match():
-    book_fields_mock_api_response = list(mock_api_response()[0].keys())
-
+@pytest.mark.parametrize(
+    "object_type", ["books", "book_tags", "highlights", "highlight_tags"]
+)
+def test_fields_in_expected_type_per_schema_match_object_schema(object_type: str):
+    book_fields = SCHEMAS_BY_OBJECT[object_type].model_fields
     book_fields_expected_types_dict = []
-    for list_of_fields in expected_type_per_schema_field()["book"].values():
+    for list_of_fields in expected_type_per_schema_field()[object_type].values():
         book_fields_expected_types_dict.extend(list_of_fields)
-
-    assert sorted(book_fields_mock_api_response) == sorted(
-        book_fields_expected_types_dict
-    )
-
-
-def test_book_tag_fields_in_test_objects_match():
-    book_tags_fields_mock_api_response = mock_api_response()[0]["book_tags"][0].keys()
-
-    book_tag_fields_expected_types_dict = []
-    for list_of_fields in expected_type_per_schema_field()["book_tag"].values():
-        book_tag_fields_expected_types_dict.extend(list_of_fields)
-
-    assert sorted(book_tags_fields_mock_api_response) == sorted(
-        book_tag_fields_expected_types_dict
-    )
-
-
-def test_highlight_fields_in_test_objects_match():
-    highlight_fields_mock_api_response = list(
-        mock_api_response()[0]["highlights"][0].keys()
-    )
-
-    highlight_fields_expected_types_dict = []
-    for list_of_fields in expected_type_per_schema_field()["highlight"].values():
-        highlight_fields_expected_types_dict.extend(list_of_fields)
-
-    assert sorted(highlight_fields_mock_api_response) == sorted(
-        highlight_fields_expected_types_dict
-    )
-
-
-def test_highlight_tags_fields_in_test_objects_match():
-    highlight_tag_fields_mock_api_response = mock_api_response()[0]["highlights"][0][
-        "tags"
-    ][0].keys()
-
-    highlight_tag_fields_expected_types_dict = []
-    for list_of_fields in expected_type_per_schema_field()["highlight_tag"].values():
-        highlight_tag_fields_expected_types_dict.extend(list_of_fields)
-
-    assert sorted(highlight_tag_fields_mock_api_response) == sorted(
-        highlight_tag_fields_expected_types_dict
-    )
+    assert sorted(book_fields) == sorted(book_fields_expected_types_dict)
 
 
 def test_change_nested_dict_value():

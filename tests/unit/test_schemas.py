@@ -305,27 +305,31 @@ def test_flat_schema_configuration_by_object(
     assert schema(**test_object)
 
 
-def test_nested_schema_model_dump_output():
-    mock_book_with_book_tag_hl_and_hl_tag = mock_api_response()[0]
-    book_as_schema = BookSchemaUnnested(**mock_book_with_book_tag_hl_and_hl_tag)
-    model_dump = book_as_schema.model_dump()
-    expected = {
-        "user_book_id": 12345,
-        "title": "book title",
-        "is_deleted": False,
-        "author": "name surname",
-        "readable_title": "Book Title",
-        "source": "web_clipper",
-        "cover_image_url": "https://link/to/image",
-        "unique_url": "http://the.source.url.ai",
-        "summary": None,
-        "book_tags": [{"id": 6969, "name": "arch_btw"}],
-        "category": "books",
-        "document_note": "A note added in Readwise Reader",
-        "readwise_url": "https://readwise.io/bookreview/12345",
-        "source_url": "http://the.source.url.ai",
-        "asin": None,
-        "highlights": [
+@pytest.mark.parametrize(
+    "object_under_test, expected",
+    [
+        (
+            "books",
+            {
+                "user_book_id": 12345,
+                "title": "book title",
+                "is_deleted": False,
+                "author": "name surname",
+                "readable_title": "Book Title",
+                "source": "web_clipper",
+                "cover_image_url": "https://link/to/image",
+                "unique_url": "http://the.source.url.ai",
+                "summary": None,
+                "category": "books",
+                "document_note": "A note added in Readwise Reader",
+                "readwise_url": "https://readwise.io/bookreview/12345",
+                "source_url": "http://the.source.url.ai",
+                "asin": None,
+            },
+        ),
+        ("book_tags", {"id": 6969, "name": "arch_btw"}),
+        (
+            "highlights",
             {
                 "id": 10,
                 "text": "The highlight text",
@@ -344,10 +348,18 @@ def test_nested_schema_model_dump_output():
                 "is_discard": True,
                 "is_deleted": False,
                 "readwise_url": "https://readwise.io/open/10",
-                "tags": [{"id": 97654, "name": "favorite"}],
-            }
-        ],
-    }
+            },
+        ),
+        ("highlight_tags", {"id": 97654, "name": "favorite"}),
+    ],
+)
+def test_flat_schema_model_dump_output(
+    flat_objects_api_fields_only, object_under_test, expected
+):
+    schema = SCHEMAS_BY_OBJECT[object_under_test]
+    test_object = flat_objects_api_fields_only[object_under_test]
+    test_object_as_schema = schema(**test_object)
+    model_dump = test_object_as_schema.model_dump()
     assert model_dump == expected
 
 

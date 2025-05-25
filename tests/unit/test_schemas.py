@@ -8,15 +8,6 @@ from readwise_sqlalchemy.main import SCHEMAS_BY_OBJECT
 from readwise_sqlalchemy.schemas import BookSchemaUnnested, HighlightSchemaUnnested
 from tests.helpers import flat_mock_api_response_nested_validated, mock_api_response
 
-# Mutate dictionary values in place with ``change_nested_dict_value()``.
-PATH_TO_OBJ = {
-    "book": [],
-    "book_tag": ["book_tags", 0],
-    "highlight": ["highlights", 0],
-    "highlight_tag": ["highlights", 0, "tags", 0],
-}
-
-
 # --------
 # Fixtures
 # --------
@@ -51,35 +42,6 @@ def flat_objects_api_fields_only() -> dict[str, list[dict[str, Any]]]:
 # ----------------
 # Helper Functions
 # ----------------
-
-
-def change_nested_dict_value(
-    base_dict: dict, path: list[Union[str, int]], field: str, value: Any
-) -> dict:
-    """
-    Update a value in a nested dictionary in place by following a given path.
-
-    Parameters
-    ----------
-    base_dict : dict
-        The dictionary to mutate.
-    path : list of str or int
-        Keys and/or indexes to follow to reach the target dict.
-    field : str
-        Field to update in the target dict.
-    value : Any
-        New value to assign.
-
-    Returns
-    -------
-    dict
-        The modified base_dict (mutated in place).
-    """
-    target = base_dict
-    for key in path:
-        target = target[key]
-    target[field] = value
-    return base_dict
 
 
 def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
@@ -213,13 +175,6 @@ def test_fields_in_expected_type_per_schema_match_object_schema(object_type: str
     for list_of_fields in expected_type_per_schema_field()[object_type].values():
         book_fields_expected_types_dict.extend(list_of_fields)
     assert sorted(book_fields) == sorted(book_fields_expected_types_dict)
-
-
-def test_change_nested_dict_value():
-    test_dict = {"k1": [{"k2": [{}, {"k3": "value"}]}]}
-    path_to_v2 = ["k1", 0, "k2", 1]
-    change_nested_dict_value(test_dict, path_to_v2, "k3", "changed_value")
-    assert test_dict == {"k1": [{"k2": [{}, {"k3": "changed_value"}]}]}
 
 
 def test_generate_invalid_field_values_test_cases():

@@ -5,15 +5,19 @@ import pytest
 from pydantic import ValidationError
 
 from readwise_sqlalchemy.main import SCHEMAS_BY_OBJECT
-from readwise_sqlalchemy.schemas import BookSchemaUnnested, HighlightSchemaUnnested
-from tests.helpers import flat_mock_api_response_nested_validated, mock_api_response
+from readwise_sqlalchemy.schemas import (
+    BookSchemaUnnested,
+    BookTagsSchema,
+    HighlightSchemaUnnested,
+    HighlightTagsSchema,
+)
+from tests.helpers import flat_mock_api_response_nested_validated
 
-# --------
-# Fixtures
-# --------
+# ----------------
+# Helper Functions
+# ----------------
 
 
-@pytest.fixture
 def flat_objects_api_fields_only() -> dict[str, list[dict[str, Any]]]:
     """
     Extract only the API fields from an flattened API response that is nested validated.
@@ -37,11 +41,6 @@ def flat_objects_api_fields_only() -> dict[str, list[dict[str, Any]]]:
             }
             objs_with_only_api_fields[obj_type] = obj_with_api_fields_only
     return objs_with_only_api_fields
-
-
-# ----------------
-# Helper Functions
-# ----------------
 
 
 def expected_type_per_schema_field() -> dict[str, dict[str, list[str]]]:
@@ -196,11 +195,9 @@ def test_generate_field_nullability_test_cases():
 @pytest.mark.parametrize(
     "object_type", ["books", "book_tags", "highlights", "highlight_tags"]
 )
-def test_flat_schema_configuration_by_object(
-    flat_objects_api_fields_only: dict[str, list[dict[str, Any]]], object_type: str
-):
+def test_flat_schema_configuration_by_object(object_type: str):
     schema = SCHEMAS_BY_OBJECT[object_type]
-    test_object = flat_objects_api_fields_only[object_type]
+    test_object = flat_objects_api_fields_only()[object_type]
     assert schema(**test_object)
 
 
@@ -252,13 +249,9 @@ def test_flat_schema_configuration_by_object(
         ("highlight_tags", {"id": 97654, "name": "favorite"}),
     ],
 )
-def test_flat_schema_model_dump_output(
-    flat_objects_api_fields_only: dict[str, list[dict[str, Any]]],
-    object_type: str,
-    expected: dict[str, Any],
-):
+def test_flat_schema_model_dump_output(object_type: str, expected: dict[str, Any]):
     schema = SCHEMAS_BY_OBJECT[object_type]
-    test_object = flat_objects_api_fields_only[object_type]
+    test_object = flat_objects_api_fields_only()[object_type]
     test_object_as_schema = schema(**test_object)
     model_dump = test_object_as_schema.model_dump()
     assert model_dump == expected
@@ -272,9 +265,8 @@ def test_flat_schema_configuration_with_invalid_values(
     object_type: str,
     target_field: str,
     invalid_value: Any,
-    flat_objects_api_fields_only: dict,
 ):
-    object_under_test = flat_objects_api_fields_only[object_type]
+    object_under_test = flat_objects_api_fields_only()[object_type]
     object_under_test[target_field] = invalid_value
     schema = SCHEMAS_BY_OBJECT[object_type]
     with pytest.raises(ValidationError):
@@ -287,9 +279,8 @@ def test_flat_schema_configuration_with_invalid_values(
 def test_flat_schema_configuration_fields_allow_null(
     object_type: str,
     field_to_null: str,
-    flat_objects_api_fields_only: dict,
 ):
-    object_under_test = flat_objects_api_fields_only[object_type]
+    object_under_test = flat_objects_api_fields_only()[object_type]
     object_under_test[field_to_null] = None
     schema = SCHEMAS_BY_OBJECT[object_type]
     assert schema(**object_under_test)
@@ -301,90 +292,57 @@ def test_flat_schema_configuration_fields_allow_null(
 def test_flat_schema_configuration_fields_error_for_null(
     object_type: str,
     field_to_null: str,
-    flat_objects_api_fields_only: dict,
 ):
-    object_under_test = flat_objects_api_fields_only[object_type]
+    object_under_test = flat_objects_api_fields_only()[object_type]
     object_under_test[field_to_null] = None
     schema = SCHEMAS_BY_OBJECT[object_type]
     with pytest.raises(ValidationError):
         schema(**object_under_test)
 
 
-@pytest.mark.parametrize("field_to_remove", mock_api_response()[0].keys())
+@pytest.mark.parametrize(
+    "field_to_remove", flat_objects_api_fields_only()["books"].keys()
+)
 def test_missing_book_fields_raise_errors(field_to_remove: str):
-    mock_book = mock_api_response()[0]
+    mock_book = flat_objects_api_fields_only()["books"]
     del mock_book[field_to_remove]
     with pytest.raises(ValidationError):
         BookSchemaUnnested(**mock_book)
 
 
 @pytest.mark.parametrize(
-    "field_to_remove", mock_api_response()[0]["highlights"][0].keys()
+    "field_to_remove", flat_objects_api_fields_only()["highlights"].keys()
 )
 def test_missing_highlight_fields_raise_errors(field_to_remove: str):
-    mock_book = mock_api_response()[0]
-    del mock_book["highlights"][0][field_to_remove]
+    mock_highlight = flat_objects_api_fields_only()["highlights"]
+    del mock_highlight[field_to_remove]
     with pytest.raises(ValidationError):
-        BookSchemaUnnested(**mock_book)
+        HighlightSchemaUnnested(**mock_highlight)
 
 
 @pytest.mark.parametrize(
-    "field_to_remove", mock_api_response()[0]["book_tags"][0].keys()
+    "field_to_remove", flat_objects_api_fields_only()["book_tags"].keys()
 )
 def test_missing_book_tag_fields_do_not_raise_errors(field_to_remove: str):
-    mock_book = mock_api_response()[0]
-    del mock_book["book_tags"][0][field_to_remove]
-    BookSchemaUnnested(**mock_book)
+    mock_book_tags = flat_objects_api_fields_only()["book_tags"]
+    del mock_book_tags[field_to_remove]
+    BookTagsSchema(**mock_book_tags)
 
 
 @pytest.mark.parametrize(
     "field_to_remove",
-    mock_api_response()[0]["highlights"][0]["tags"][0].keys(),
+    flat_objects_api_fields_only()["highlight_tags"].keys(),
 )
 def test_missing_highlight_tag_fields_do_not_raise_errors(field_to_remove: str):
-    mock_book = mock_api_response()[0]
-    del mock_book["highlights"][0]["tags"][0][field_to_remove]
-    BookSchemaUnnested(**mock_book)
+    mock_highlight_tags = flat_objects_api_fields_only()["book_tags"]
+    del mock_highlight_tags[field_to_remove]
+    HighlightTagsSchema(**mock_highlight_tags)
 
 
-def test_additional_book_field_raises_error():
-    mock_book = mock_api_response()[0]
-    mock_book["extra_field"] = None
+@pytest.mark.parametrize("object_under_test", flat_objects_api_fields_only().keys())
+def test_additional_object_field_raises_error(object_under_test: str):
+    mock_obj = flat_objects_api_fields_only()[object_under_test]
+    mock_obj["extra_field"] = None
+    schema = SCHEMAS_BY_OBJECT[object_under_test]
     with pytest.raises(ValidationError):
-        BookSchemaUnnested(**mock_book)
-
-
-def test_additional_book_tag_field_raises_error():
-    mock_book = mock_api_response()[0]
-    mock_book["book_tags"][0]["extra_field"] = None
-    with pytest.raises(ValidationError):
-        BookSchemaUnnested(**mock_book)
-
-
-def test_additional_highlight_field_raises_error():
-    mock_book = mock_api_response()[0]
-    mock_book["highlights"][0]["extra_field"] = None
-    with pytest.raises(ValidationError):
-        BookSchemaUnnested(**mock_book)
-
-
-def test_additional_highlight_tag_field_raises_error():
-    mock_book = mock_api_response()[0]
-    mock_book["highlights"][0]["tags"][0]["extra_field"] = None
-    with pytest.raises(ValidationError):
-        BookSchemaUnnested(**mock_book)
-
-
-def test_book_field_validator_replaces_null_with_an_empty_list():
-    mock_book = mock_api_response()[0]
-    mock_book["book_tags"] = None
-    book_schema = BookSchemaUnnested(**mock_book)
-    assert book_schema.book_tags == []
-
-
-def test_highlight_field_validator_replaces_null_with_an_empty_list():
-    mock_book = mock_api_response()[0]
-    mock_highlight = mock_book["highlights"][0]
-    mock_highlight["tags"] = None
-    highlight_schema = HighlightSchemaUnnested(**mock_highlight)
-    assert highlight_schema.tags == []
+        schema(**mock_obj)

@@ -14,7 +14,7 @@ from readwise_sqlalchemy.models import (
     HighlightTag,
     ReadwiseBatch,
 )
-from tests.conftest import DbHandle
+from tests.helpers import DbHandle
 
 # Minimal object configurations.
 MIN_HIGHLIGHT_1_TAG_2 = {"id": 5556, "name": "blue"}
@@ -75,7 +75,7 @@ def unnested_minimal_objects():
     }
 
 
-def mock_pydantic_model_dump():
+def mock_validated_flat_objs():
     """
     Mock output of ``<pydantic_schema>.model_dump()`` for a pydantic verified book.
 
@@ -164,7 +164,7 @@ def mem_db_containing_full_objects(mem_db: DbHandle):
 
     """
     batch = ReadwiseBatch(start_time=START_TIME, end_time=END_TIME)
-    book_data = mock_pydantic_model_dump()[0]
+    book_data = mock_validated_flat_objs()[0]
     book_tag = book_data.pop("book_tags")[0]
     highlight = book_data.pop("highlights")[0]
     tag = highlight.pop("tags")[0]
@@ -576,7 +576,7 @@ def test_readwise_batch_relationship_with_highlight_tag(
     "field, expected",
     [
         (field, value)
-        for field, value in mock_pydantic_model_dump()[0].items()
+        for field, value in mock_validated_flat_objs()[0].items()
         if field not in {"highlights", "book_tags"}
     ],
 )
@@ -620,7 +620,7 @@ def test_fetch_full_book_from_db_assert_mapped_objects(
     "field, expected",
     [
         (field, value)
-        for field, value in mock_pydantic_model_dump()[0]["book_tags"][0].items()
+        for field, value in mock_validated_flat_objs()[0]["book_tags"][0].items()
     ],
 )
 def test_fetch_full_book_tag_from_db_assert_standard_field_values(
@@ -639,7 +639,7 @@ def test_fetch_full_book_tag_from_db_assert_foreign_key_values(
         fetched_book_tag = clean_session.get(BookTag, 4041)
         assert (
             fetched_book_tag.user_book_id
-            == mock_pydantic_model_dump()[0]["user_book_id"]
+            == mock_validated_flat_objs()[0]["user_book_id"]
         )
         assert fetched_book_tag.batch_id == 1
 
@@ -666,7 +666,7 @@ def test_fetch_full_book_tag_from_db_assert_mapped_objects(
     "field, expected",
     [
         (field, value)
-        for field, value in mock_pydantic_model_dump()[0]["highlights"][0].items()
+        for field, value in mock_validated_flat_objs()[0]["highlights"][0].items()
         if field != "tags"
     ],
 )
@@ -685,7 +685,7 @@ def test_fetch_full_highlight_from_db_assert_foreign_key_values(
     with Session(mem_db_containing_full_objects) as clean_session:
         fetched_highlight = clean_session.get(Highlight, 10)
         assert (
-            fetched_highlight.book_id == mock_pydantic_model_dump()[0]["user_book_id"]
+            fetched_highlight.book_id == mock_validated_flat_objs()[0]["user_book_id"]
         )
         assert fetched_highlight.batch_id == 1
 
@@ -713,7 +713,7 @@ def test_fetch_full_highlight_from_db_assert_mapped_objects(
     "field, expected",
     [
         (field, value)
-        for field, value in mock_pydantic_model_dump()[0]["highlights"][0]["tags"][
+        for field, value in mock_validated_flat_objs()[0]["highlights"][0]["tags"][
             0
         ].items()
     ],
@@ -734,7 +734,7 @@ def test_fetch_full_highlight_tag_from_db_assert_foreign_keys(
         assert fetched_highlight_tag.batch_id == 1
         assert (
             fetched_highlight_tag.highlight_id
-            == mock_pydantic_model_dump()[0]["highlights"][0]["id"]
+            == mock_validated_flat_objs()[0]["highlights"][0]["id"]
         )
 
 

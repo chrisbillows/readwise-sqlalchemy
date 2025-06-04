@@ -1,17 +1,20 @@
 """
-Pytest fixtures and reusable test data, helpers etc.
+Pytest fixtures.
+
+Helper classes and functions should be placed either in their own module or, if used
+in multiple test modules, in the `tests/helpers.py` module.
 
 """
 
-from dataclasses import dataclass
+from collections.abc import Generator
 
 import pytest
-from sqlalchemy import Engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from readwise_sqlalchemy.config import UserConfig
 from readwise_sqlalchemy.db_operations import safe_create_sqlite_engine
 from readwise_sqlalchemy.models import Base
+from tests.helpers import DbHandle
 
 
 @pytest.fixture
@@ -53,24 +56,8 @@ def mock_user_config_module_scoped(
     return user_config
 
 
-@dataclass
-class DbHandle:
-    """Group SQL Alchemy database connection objects.
-
-    Attributes
-    ----------
-    engine: Engine
-        Engine bound to a database.
-    session: Session
-        Session bound to an engine.
-    """
-
-    engine: Engine
-    session: Session
-
-
 @pytest.fixture()
-def mem_db():
+def mem_db() -> Generator["DbHandle"]:
     """
     Create an in-memory SQLite database and return an engine and session.
 

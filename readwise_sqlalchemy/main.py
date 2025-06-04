@@ -1,12 +1,13 @@
 import logging
 from datetime import datetime
 from typing import Any, cast
+import sys
 
 import requests
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
-from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
+from readwise_sqlalchemy.config import USER_CONFIG, UserConfig, MissingEnvironmentFile
 from readwise_sqlalchemy.configure_logging import setup_logging
 from readwise_sqlalchemy.db_operations import (
     DatabasePopulaterFlattenedData,
@@ -30,6 +31,7 @@ from readwise_sqlalchemy.types import (
     ValidateFlatObjFn,
     ValidateNestedObjFn,
 )
+from readwise_sqlalchemy.report_invalid_db_objects import report_invalid_db_objects
 
 logger = logging.getLogger(__name__)
 
@@ -570,5 +572,32 @@ def main(user_config: UserConfig = USER_CONFIG) -> None:
     run_pipeline_flattened_objects(user_config)
 
 
+def main_cli():
+    import argparse
+    parser = argparse.ArgumentParser(description="Readwise SQLAlchemy CLI utilities.")
+    subparsers = parser.add_subparsers(dest='command')
+
+    parser_sync = subparsers.add_parser('sync', help='Run the main Readwise sync pipeline (default if no command).')
+    parser_report = subparsers.add_parser('report-invalids', help='Report books with invalid children.')
+
+    args = parser.parse_args()
+    # Default to sync if no command is given
+    command = args.command or 'sync'
+    if command == 'sync':
+        try:
+            main()
+        except MissingEnvironmentFile as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+    elif command == 'report-invalids':
+        try:
+            report_invalid_db_objects()
+        except MissingEnvironmentFile as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        parser.print_help()
+
+
 if __name__ == "__main__":
-    main()
+    main_cli()

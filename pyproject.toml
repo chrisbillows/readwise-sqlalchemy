@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-rw = "readwise_sqlalchemy.main:main"
+rw = "readwise_sqlalchemy.main:main_cli"
 
 [tool.mypy]
 # See: https://docs.pydantic.dev/latest/integrations/mypy/

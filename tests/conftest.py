@@ -1,7 +1,12 @@
 """
-Pytest fixtures and reusable test data, helpers etc.
+Pytest fixtures.
+
+Helper classes and functions should be placed either in their own module or, if used
+in multiple test modules, in the `tests/helpers.py` module.
 
 """
+
+from collections.abc import Generator
 
 import pytest
 from sqlalchemy.orm import sessionmaker
@@ -52,7 +57,7 @@ def mock_user_config_module_scoped(
 
 
 @pytest.fixture()
-def mem_db():
+def mem_db() -> Generator["DbHandle"]:
     """
     Create an in-memory SQLite database and return an engine and session.
 

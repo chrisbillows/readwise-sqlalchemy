@@ -1,3 +1,17 @@
+"""
+Test helpers used across multiple test modules.
+
+This module mirrors the main stages of the Readwise API data processing pipeline.
+Data moves from:
+
+        -> mock_api_response
+            -> mock_api_response_nested_validated
+                -> flat_mock_api_response_nested_validated
+                    -> flat_mock_api_response_fully_validated
+
+to the database, with each stage adding validation and flattening the data.
+"""
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -94,11 +108,10 @@ def mock_api_response_nested_validated(
     Returns
     -------
     list[dict[str, Any]]
-
-
-
+        A list containing one dictionary representing a Readwise book with one
+        highlight, each with one tag. This is a mock of the nested validation stage, so
+        the objects are still in nested form, but with validation fields added.
     """
-    # Add validation fields
     validation = {"validated": True, "validation_errors": {}}
     mock_book = mock_api_response_with_a_single_book_fn()[0]
     mock_book.update(validation)
@@ -123,7 +136,8 @@ def flat_mock_api_response_nested_validated(
     -------
     dict[str, list[dict[str, Any]]]
         A dictionary where keys are the objects and values are list of those objects.
-        Each list has only one object.
+        Each list has only one object. E.g.
+        ``{"books": [book], "highlights": [highlight] etc}``.
     """
     mock_book = nested_validated_mock_api_response_with_a_single_book_fn()[0]
     mock_book_tag = mock_book.pop("book_tags")[0]
@@ -151,7 +165,7 @@ def flat_mock_api_response_fully_validated(
 
     Manually replicate the expected output from ``validate_flattened_objects``: this
     processes the API fields through the pydantic schema, updating the validation fields
-    as appropriate - and doing any field processing.
+    as appropriate, and doing any field processing.
 
     All objects are treated as valid.
 
@@ -159,9 +173,9 @@ def flat_mock_api_response_fully_validated(
     -------
     dict[str, list[dict[str, Any]]]
         A dictionary where keys are the objects and values are list of those objects.
-        Each list has only one object.
+        Each list has only one object. E.g.
+        ``{"books": [book], "highlights": [highlight] etc}``.
     """
-
     # Mock the pydantic field transformations.
     flattened_output = flattened_nested_validated_mock_api_response_single_book_fn()
     mock_highlight = flattened_output["highlights"][0]

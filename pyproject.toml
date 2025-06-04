@@ -27,9 +27,6 @@ rw = "readwise_sqlalchemy.main:main"
 plugins = ['pydantic.mypy']
 strict = true
 
-[[tool.mypy.overrides]]
-module = ["faker.*"]
-ignore_missing_imports = true
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

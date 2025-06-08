@@ -81,18 +81,20 @@ def test_get_session_returns_a_session_object(mock_user_config: UserConfig):
 def test_tables_created_by_create_database(mock_user_config: UserConfig):
     create_database(mock_user_config.db_path)
     expected = [
-        ("readwise_batches",),
         ("books",),
         ("book_tags",),
+        ("book_versions",),
         ("highlights",),
+        ("highlight_versions",),
         ("highlight_tags",),
+        ("readwise_batches",),
     ]
     connection = sqlite3.connect(mock_user_config.db_path)
     cursor = connection.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     actual = cursor.fetchall()
     connection.close()
-    assert actual == expected
+    assert sorted(actual) == sorted(expected)
 
 
 def test_get_session_attaches_to_a_database_url(mock_user_config: UserConfig):

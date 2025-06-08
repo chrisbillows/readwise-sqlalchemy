@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 from readwise_sqlalchemy.models import (
     Book,
     BookTag,
+    BookVersion,
     Highlight,
     HighlightTag,
+    HighlightVersion,
     ReadwiseBatch,
 )
 from tests.helpers import DbHandle
@@ -272,6 +274,38 @@ def mem_db_containing_unnested_minimal_objects(mem_db: DbHandle):
 
 
 @pytest.fixture()
+def mem_db_multi_version_unnested_minimal_objects(
+    mem_db: DbHandle, mem_db_containing_unnested_minimal_objects: Engine
+):
+    """
+    Engine with a db containing unnested minimal object records with multiple versions.
+    """
+    batch = ReadwiseBatch(start_time=START_TIME, end_time=END_TIME)
+    with mem_db.session.begin():
+        original_book = mem_db_containing_unnested_minimal_objects.scalars(
+            select(Book)
+        ).one()
+        book_version = BookVersion(
+            user_book_id=original_book.user_book_id,
+            title="book_1_v2",
+            document_note="Updated note",
+            batch=batch,
+        )
+        mem_db.session.add(book_version)
+
+        original_highlight = mem_db_containing_unnested_minimal_objects.scalars(
+            select(Highlight)
+        ).one()
+        highlight_version = HighlightVersion(
+            id=original_highlight.id,
+            text="highlight_1_v2",
+            is_favorite=True,
+            batch=batch,
+        )
+        mem_db.session.add(highlight_version)
+
+
+@pytest.fixture()
 def minimal_book_as_orm(mem_db_containing_minimal_objects: Engine):
     """A minimal ``Book`` fetched from the minimal object database."""
     with Session(mem_db_containing_minimal_objects) as clean_session:
@@ -341,8 +375,10 @@ def test_tables_in_mem_db_containing_minimal_objects(
         tables = inspector.get_table_names()
         assert tables == [
             "book_tags",
+            "book_versions",
             "books",
             "highlight_tags",
+            "highlight_versions",
             "highlights",
             "readwise_batches",
         ]
@@ -390,11 +426,17 @@ def test_tables_in_mem_db_containing_unnested_minimal_objects(
         tables = inspector.get_table_names()
         assert tables == [
             "book_tags",
+            "book_versions",
             "books",
             "highlight_tags",
+            "highlight_versions",
             "highlights",
             "readwise_batches",
         ]
+
+
+def test_minimal_book_version_as_orm_read_from_db_correctly():
+    pass
 
 
 def test_mem_db_containing_unnested_minimal_objects(

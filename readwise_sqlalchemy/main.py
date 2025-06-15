@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, cast
 
 import requests
@@ -93,7 +93,7 @@ def fetch_from_export_api(
     full_data = []
     next_page_cursor = None
     while True:
-        params = {}
+        params = {"includeDeleted": "true"}
         if next_page_cursor:
             params["pageCursor"] = next_page_cursor
         if last_fetch:
@@ -192,6 +192,13 @@ def fetch_books_with_highlights(
     data = fetch_from_export_api(last_fetch_str)
     end_new_fetch = datetime.now()
     logger.info(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
+    for book in data:
+        for k, v in book.items():
+            if k != "highlights":
+                print(f"{k}: {v}")
+        for highlight in book.get("highlights", []):
+            for k, v in highlight.items():
+                print(f"  {k}: {v}")
     return (data, start_new_fetch, end_new_fetch)
 
 
@@ -550,12 +557,13 @@ def run_pipeline_flattened_objects(
     """
     setup_logging_func()
     session = get_session_func(user_config.db_path)
-    last_fetch = check_db_func(session, user_config)
+    # last_fetch = check_db_func(session, user_config)
+    last_fetch = datetime(2025, 6, 8, 23, 10, 0, tzinfo=timezone.utc)
     raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
-    nested_books_first_validation = validate_nested_objs_func(raw_books)
-    flat_objs_first_validation = flatten_func(nested_books_first_validation)
-    flat_objs_second_validation = validate_flat_objs_func(flat_objs_first_validation)
-    update_db_func(session, flat_objs_second_validation, start_fetch, end_fetch)
+    # nested_books_first_validation = validate_nested_objs_func(raw_books)
+    # flat_objs_first_validation = flatten_func(nested_books_first_validation)
+    # flat_objs_second_validation = validate_flat_objs_func(flat_objs_first_validation)
+    # update_db_func(session, flat_objs_second_validation, start_fetch, end_fetch)
 
 
 def main(user_config: UserConfig = USER_CONFIG) -> None:

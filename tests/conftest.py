@@ -29,8 +29,10 @@ def mock_user_config(tmp_path: pytest.TempPathFactory) -> UserConfig:
     """
     temp_application_dir = tmp_path / "readwise-sqlalchemy"
     temp_application_dir.mkdir()
+    temp_config_dir = temp_application_dir / ".config" / "rw-sql"
+    temp_config_dir.mkdir(parents=True)
 
-    temp_env_file = temp_application_dir / ".env"
+    temp_env_file = temp_config_dir / ".env"
     temp_env_file.touch()
     temp_env_file.write_text("READWISE_API_TOKEN = 'abc123'")
     user_config = UserConfig(temp_application_dir)

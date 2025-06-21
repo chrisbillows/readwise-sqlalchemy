@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import DeclarativeBase
 
-from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
+from readwise_sqlalchemy.config import UserConfig, fetch_user_config
 from readwise_sqlalchemy.main import fetch_from_export_api
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def get_columns_and_values(orm_mapped_obj: DeclarativeBase) -> dict[str, Any]:
 
 
 def create_real_user_data_json_for_end_to_end_testing(
-    user_config: UserConfig = USER_CONFIG,
+    user_config: UserConfig = fetch_user_config(),
 ) -> None:
     """
     Fetch your real Readwise highlights and store locally as test data.
@@ -73,7 +73,7 @@ def create_real_user_data_json_for_end_to_end_testing(
 
     Parameters
     ----------
-    user_config: UserConfig, default = USER_CONFIG
+    user_config: UserConfig, default = fetch_user_config()
         A UserConfig object.
     """
     target_file_path = user_config.app_dir / "my_readwise_highlights.json"

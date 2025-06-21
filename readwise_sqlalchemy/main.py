@@ -1,13 +1,15 @@
+import argparse
 import logging
 import sys
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 import requests
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
-from readwise_sqlalchemy.config import USER_CONFIG, UserConfig, MissingEnvironmentFile
+from readwise_sqlalchemy import __version__
+from readwise_sqlalchemy.config import UserConfig, fetch_user_config
 from readwise_sqlalchemy.configure_logging import setup_logging
 from readwise_sqlalchemy.db_operations import (
     DatabasePopulaterFlattenedData,
@@ -46,7 +48,7 @@ SCHEMAS_BY_OBJECT: dict[str, type[BaseModel]] = {
 
 def fetch_from_export_api(
     last_fetch: None | str = None,
-    user_config: UserConfig = USER_CONFIG,
+    user_config: UserConfig = fetch_user_config(),
 ) -> list[dict[str, Any]]:
     """
     Fetch highlights from the Readwise Highlight EXPORT endpoint.
@@ -58,7 +60,7 @@ def fetch_from_export_api(
     last_fetch: str, default = None
         An ISO formatted datetime string E.g. '2024-11-09T10:15:38.428687' indicating
         the time highlights have previously been fetched up to.
-    user_config: UserConfig, default = USER_CONFIG
+    user_config: UserConfig, default = fetch_user_config()
         A User Configuration object.
 
     Returns
@@ -116,7 +118,7 @@ def fetch_from_export_api(
 
 
 def check_database(
-    session: Session, user_config: UserConfig = USER_CONFIG
+    session: Session, user_config: Optional[UserConfig] = None
 ) -> None | datetime:
     """
     If the db exists, return the last fetch time, otherwise create the db.
@@ -125,7 +127,7 @@ def check_database(
     ----------
     session: Session
         A SQL alchemy session connected to a database.
-    user_config: UserConfig, default = USER_CONFIG
+    user_config: UserConfig, default = fetch_user_config()
         A User Config object.
 
     Returns
@@ -134,6 +136,9 @@ def check_database(
         None if the database doesn't exist. If the database exists, the time the last
         fetch was completed as a datetime object.
     """
+    if user_config is None:
+        user_config = fetch_user_config()
+
     if user_config.db_path.exists():
         logger.info("Database exists")
         last_fetch = get_last_fetch(session)
@@ -506,7 +511,7 @@ def update_database_flattened_objects(
 
 
 def run_pipeline_flattened_objects(
-    user_config: UserConfig = USER_CONFIG,
+    user_config: UserConfig = fetch_user_config(),
     setup_logging_func: LogSetupFn = setup_logging,
     get_session_func: SessionFn = get_session,
     check_db_func: CheckDBFn = check_database,
@@ -526,7 +531,7 @@ def run_pipeline_flattened_objects(
 
     Parameters
     ----------
-    user_config : UserConfig, optional, default = USER_CONFIG
+    user_config : UserConfig, optional, default = fetch_user_config()
         Configuration object.
     setup_logging_func: LogSetupFn, optional, default = setup_logging()
         A function that sets up application logging.
@@ -566,11 +571,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
     )
-    
-    # Direct CLI commands
+
+    # Direct CLI commands.
     subparsers = parser.add_subparsers(dest="command")
 
-    # Create the 'sync' command parser and group
+    # Create the 'sync' command parser and group.
     parser_sync = subparsers.add_parser(
         "sync", help="Run the main Readwise sync pipeline."
     )
@@ -580,10 +585,10 @@ def parse_args() -> argparse.Namespace:
     )
     sync_group.add_argument("--all", action="store_true", help="Run a full sync.")
 
-    # Create the 'report-invalids' command parser
+    # Create the list 'invalids' command parser.
     subparsers.add_parser(
-        "invalids", help="Report books with any invalid  book tag, highlight or" 
-        "highlight tag."
+        "invalids",
+        help="Report books with any invalid  book tag, highlight or highlight tag.",
     )
 
     args = parser.parse_args()
@@ -591,7 +596,7 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def main(user_config: "UserConfig" = None) -> None:
+def main(user_config: Optional[UserConfig] = None) -> None:
     """
     Main function that runs with the entry point.
 
@@ -611,7 +616,7 @@ def main(user_config: "UserConfig" = None) -> None:
             raise NotImplementedError(
                 "Full sync (--all) is not implemented yet. Please use --delta."
             )
-            # run_pipeline_flattened_objects(user_config) #(all=True) 
+            # run_pipeline_flattened_objects(user_config) #(all=True)
         else:
             logger.info("Running delta sync (--delta).")
             run_pipeline_flattened_objects(user_config)

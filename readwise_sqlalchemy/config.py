@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -13,9 +14,9 @@ class MissingEnvironmentFile(Exception):
 class UserConfig:
     """Object containing user configuration information."""
 
-    def __init__(self, user_dir: Path = Path.home()) -> None:
+    def __init__(self, user_dir: Path) -> None:
         """
-        Initialise object.
+        Initialise object. DO NOT USE DIRECTLY, use `fetch_user_config()` instead.
 
         Attributes
         ----------
@@ -63,4 +64,17 @@ class UserConfig:
             )
 
 
-USER_CONFIG = UserConfig()
+@lru_cache()
+def fetch_user_config(user_dir: Path = Path.home()) -> UserConfig:
+    """
+    Fetch the user configuration.
+
+    Memoize to ensure a single instance of UserConfig is used throughout the
+    application.
+
+    Returns
+    -------
+    UserConfig
+        The user configuration object.
+    """
+    return UserConfig(user_dir)

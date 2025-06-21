@@ -1,7 +1,7 @@
 import logging
+import sys
 from datetime import datetime
 from typing import Any, cast
-import sys
 
 import requests
 from pydantic import BaseModel, ValidationError
@@ -15,6 +15,7 @@ from readwise_sqlalchemy.db_operations import (
     get_last_fetch,
     get_session,
 )
+from readwise_sqlalchemy.list_invalid_db_objects import list_invalid_db_objects
 from readwise_sqlalchemy.schemas import (
     BookSchemaUnnested,
     BookTagsSchema,
@@ -31,7 +32,6 @@ from readwise_sqlalchemy.types import (
     ValidateFlatObjFn,
     ValidateNestedObjFn,
 )
-from readwise_sqlalchemy.report_invalid_db_objects import report_invalid_db_objects
 
 logger = logging.getLogger(__name__)
 
@@ -560,44 +560,69 @@ def run_pipeline_flattened_objects(
     update_db_func(session, flat_objs_second_validation, start_fetch, end_fetch)
 
 
-def main(user_config: UserConfig = USER_CONFIG) -> None:
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Readwise CLI sync tool")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
+    
+    # Direct CLI commands
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Create the 'sync' command parser and group
+    parser_sync = subparsers.add_parser(
+        "sync", help="Run the main Readwise sync pipeline."
+    )
+    sync_group = parser_sync.add_mutually_exclusive_group()
+    sync_group.add_argument(
+        "--delta", action="store_true", help="Run a delta sync (default)."
+    )
+    sync_group.add_argument("--all", action="store_true", help="Run a full sync.")
+
+    # Create the 'report-invalids' command parser
+    subparsers.add_parser(
+        "invalids", help="Report books with any invalid  book tag, highlight or" 
+        "highlight tag."
+    )
+
+    args = parser.parse_args()
+    args.command = args.command or "sync"  # Default to 'sync' if no command
+    return args
+
+
+def main(user_config: "UserConfig" = None) -> None:
     """
     Main function that runs with the entry point.
 
     Parameters
     ----------
-    user_config
+    user_config, default = None
         A UserConfig object.
     """
-    run_pipeline_flattened_objects(user_config)
+    if user_config is None:
+        user_config = fetch_user_config()
 
+    args = parse_args()
 
-def main_cli():
-    import argparse
-    parser = argparse.ArgumentParser(description="Readwise SQLAlchemy CLI utilities.")
-    subparsers = parser.add_subparsers(dest='command')
+    if args.command == "sync":
+        if args.all:
+            logger.info("Running full sync (--all).")
+            raise NotImplementedError(
+                "Full sync (--all) is not implemented yet. Please use --delta."
+            )
+            # run_pipeline_flattened_objects(user_config) #(all=True) 
+        else:
+            logger.info("Running delta sync (--delta).")
+            run_pipeline_flattened_objects(user_config)
 
-    parser_sync = subparsers.add_parser('sync', help='Run the main Readwise sync pipeline (default if no command).')
-    parser_report = subparsers.add_parser('report-invalids', help='Report books with invalid children.')
+    elif args.command == "invalids":
+        list_invalid_db_objects()
 
-    args = parser.parse_args()
-    # Default to sync if no command is given
-    command = args.command or 'sync'
-    if command == 'sync':
-        try:
-            main()
-        except MissingEnvironmentFile as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
-    elif command == 'report-invalids':
-        try:
-            report_invalid_db_objects()
-        except MissingEnvironmentFile as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
     else:
-        parser.print_help()
+        logger.error("Unknown command. Use --help for usage.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    main_cli()
+    main()

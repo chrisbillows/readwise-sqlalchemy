@@ -44,5 +44,8 @@ def list_invalid_db_objects(user_config: Optional[UserConfig] = None) -> None:
     print(f"{len(invalids)} invalid objects found:")
     for name, instance in invalids:
         print(f"[{name}] {instance}")
+        for field, error in instance.validation_errors.items():
+            print(f"  - {field}: {error}")
+        print()
 
     session.close()

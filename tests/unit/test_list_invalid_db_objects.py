@@ -60,15 +60,11 @@ def test_list_invalid_db_objects(capsys: pytest.CaptureFixture[str]):
                 f"4 invalid objects found:\n"
                 f"[Book] {orm_models[0]}\n"
                 f"  - mock_field: mock_error\n"
-                f"\n"
                 f"[BookTag] {orm_models[1]}\n"
                 f"  - mock_field: mock_error\n"
-                f"\n"
                 f"[Highlight] {orm_models[2]}\n"
                 f"  - mock_field: mock_error\n"
-                f"\n"
                 f"[HighlightTag] {orm_models[3]}\n"
                 f"  - mock_field: mock_error\n"
-                f"\n"
             )
             assert actual == expected

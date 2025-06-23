@@ -46,6 +46,5 @@ def list_invalid_db_objects(user_config: Optional[UserConfig] = None) -> None:
         print(f"[{name}] {instance}")
         for field, error in instance.validation_errors.items():
             print(f"  - {field}: {error}")
-        print()
 
     session.close()

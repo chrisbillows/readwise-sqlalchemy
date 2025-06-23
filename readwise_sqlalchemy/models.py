@@ -60,7 +60,30 @@ class ValidationMixin:
     validation_errors: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
 
 
-class Book(Base, ValidationMixin):
+class BookBase(Base, ValidationMixin):
+    """
+    Abstract base class for Book fields (excluding relationships).
+    """
+
+    __abstract__ = True
+
+    user_book_id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[Optional[str]]
+    is_deleted: Mapped[Optional[bool]]
+    author: Mapped[Optional[str]]
+    readable_title: Mapped[Optional[str]]
+    source: Mapped[Optional[str]]
+    cover_image_url: Mapped[Optional[str]]
+    unique_url: Mapped[Optional[str]]
+    summary: Mapped[Optional[str]]
+    category: Mapped[Optional[str]]
+    document_note: Mapped[Optional[str]]
+    readwise_url: Mapped[Optional[str]]
+    source_url: Mapped[Optional[str]]
+    asin: Mapped[Optional[str]]
+
+
+class Book(BookBase):
     """
     Readwise book as a SQL Alchemy ORM Mapped class.
 
@@ -154,21 +177,6 @@ class Book(Base, ValidationMixin):
 
     __tablename__ = "books"
 
-    user_book_id: Mapped[int] = mapped_column(primary_key=True)
-    title: Mapped[Optional[str]]
-    is_deleted: Mapped[Optional[bool]]
-    author: Mapped[Optional[str]]
-    readable_title: Mapped[Optional[str]]
-    source: Mapped[Optional[str]]
-    cover_image_url: Mapped[Optional[str]]
-    unique_url: Mapped[Optional[str]]
-    summary: Mapped[Optional[str]]
-    category: Mapped[Optional[str]]
-    document_note: Mapped[Optional[str]]
-    readwise_url: Mapped[Optional[str]]
-    source_url: Mapped[Optional[str]]
-    asin: Mapped[Optional[str]]
-
     batch_id: Mapped[int] = mapped_column(ForeignKey("readwise_batches.id"))
 
     book_tags: Mapped[list["BookTag"]] = relationship(back_populates="book")
@@ -179,6 +187,36 @@ class Book(Base, ValidationMixin):
         return (
             f"Book(user_book_id={self.user_book_id!r}, title={self.title!r}, "
             f"highlights={len(self.highlights)})"
+        )
+
+
+class BookVersion(BookBase):
+    """
+    A version of a book with additional fields for versioning.
+
+    This class extends the BookBase class to include versioning information.
+
+    Attributes
+    ----------
+    version : int
+        The version number of the book entry.
+    """
+
+    __tablename__ = "book_versions"
+
+    user_book_id: Mapped[int] = mapped_column(
+        ForeignKey("books.user_book_id"), primary_key=True
+    )
+    version: Mapped[int]
+    recorded_at: Mapped[datetime] = mapped_column(default=datetime.now)
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("readwise_batches.id"), nullable=True
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"BookVersion(user_book_id={self.user_book_id!r}, "
+            f"title={self.title!r}, version={self.version!r})"
         )
 
 
@@ -236,7 +274,32 @@ class BookTag(Base, ValidationMixin):
         return f"BookTag(name={self.name!r}, id={self.id!r})"
 
 
-class Highlight(Base, ValidationMixin):
+class HighlightBase(Base, ValidationMixin):
+    """
+    Abstract base class for Highlight fields (excluding relationships).
+    """
+
+    __abstract__ = True
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    text: Mapped[str] = mapped_column(String(8191))
+    location: Mapped[Optional[int]]
+    location_type: Mapped[Optional[str]]
+    note: Mapped[Optional[str]]
+    color: Mapped[Optional[str]]
+    highlighted_at: Mapped[Optional[datetime]]
+    created_at: Mapped[Optional[datetime]]
+    updated_at: Mapped[Optional[datetime]]
+    external_id: Mapped[Optional[str]]
+    end_location: Mapped[Optional[int]]
+    url: Mapped[Optional[str]]
+    is_favorite: Mapped[Optional[bool]]
+    is_discard: Mapped[Optional[bool]]
+    is_deleted: Mapped[Optional[bool]]
+    readwise_url: Mapped[Optional[str]]
+
+
+class Highlight(HighlightBase):
     """
     Readwise highlight as a SQL Alchemy ORM Mapped class.
 
@@ -306,23 +369,6 @@ class Highlight(Base, ValidationMixin):
 
     __tablename__ = "highlights"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    text: Mapped[str] = mapped_column(String(8191))
-    location: Mapped[Optional[int]]
-    location_type: Mapped[Optional[str]]
-    note: Mapped[Optional[str]]
-    color: Mapped[Optional[str]]
-    highlighted_at: Mapped[Optional[datetime]]
-    created_at: Mapped[Optional[datetime]]
-    updated_at: Mapped[Optional[datetime]]
-    external_id: Mapped[Optional[str]]
-    end_location: Mapped[Optional[int]]
-    url: Mapped[Optional[str]]
-    is_favorite: Mapped[Optional[bool]]
-    is_discard: Mapped[Optional[bool]]
-    is_deleted: Mapped[Optional[bool]]
-    readwise_url: Mapped[Optional[str]]
-
     book_id: Mapped[int] = mapped_column(
         ForeignKey("books.user_book_id"), nullable=False
     )
@@ -346,6 +392,32 @@ class Highlight(Base, ValidationMixin):
         else:
             parts.append(f"text={self.text!r}")
         return ", ".join(parts) + ")"
+
+
+class HighlightVersion(Highlight, ValidationMixin):
+    """
+    A version of a highlight with additional fields for versioning.
+
+    This class extends the Highlight class to include versioning information.
+
+    Attributes
+    ----------
+    version : int
+        The version number of the highlight entry.
+    """
+
+    __tablename__ = "highlight_versions"
+
+    version: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(
+        ForeignKey("highlights.book_id"), nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"HighlightVersion(id={self.id!r}, book={self.book.title!r}, "
+            f"text={self.text[:30]!r}, version={self.version!r})"
+        )
 
 
 class HighlightTag(Base, ValidationMixin):

@@ -1,3 +1,5 @@
+import argparse
+import sys
 from datetime import datetime
 from typing import Any, Callable
 from unittest.mock import ANY, MagicMock, Mock, patch
@@ -13,6 +15,7 @@ from readwise_sqlalchemy.main import (
     fetch_from_export_api,
     flatten_books_with_highlights,
     main,
+    parse_args,
     run_pipeline_flattened_objects,
     update_database_flattened_objects,
     validate_flattened_objects,
@@ -689,8 +692,56 @@ def test_run_pipeline_flattened_objects_return_value(
     assert run_pipeline_return_value is None
 
 
+@pytest.mark.parametrize(
+    "passed_args, expected_command",
+    [
+        (["rw", "sync"], "sync"),
+        (["rw", "sync", "--all"], "sync"),
+        (["rw", "sync", "--delta"], "sync"),
+        (["rw", "invalids"], "invalids"),
+    ],
+)
+def test_parse_args_main_command(passed_args, expected_command):
+    sys.argv = passed_args
+    actual = parse_args()
+    assert isinstance(actual, argparse.Namespace)
+    assert actual.command == expected_command
+
+
+@pytest.mark.parametrize(
+    "passed_sub_arg, expected_delta, expected_all",
+    [
+        ("rw sync --delta", True, False),
+        ("rw sync --all", False, True),
+        ("rw sync", False, False),
+    ],
+)
+def test_parse_args_sync_subparser(passed_sub_arg, expected_delta, expected_all):
+    sys.argv = passed_sub_arg.split(" ")
+    actual = parse_args()
+    assert actual.delta is expected_delta
+    assert actual.all is expected_all
+
+
+def test_parse_args_default_value_for_sync():
+    sys.argv = ["rw", "sync"]
+    actual = parse_args()
+    assert actual.command == "sync"
+    # This will result in --delta being called.
+    assert actual.all is False
+
+
+@patch("readwise_sqlalchemy.main.parse_args")
 @patch("readwise_sqlalchemy.main.run_pipeline_flattened_objects")
-def test_main(mock_run_pipeline: MagicMock):
+def test_main(mock_run_pipeline: MagicMock, mock_parse_args: MagicMock):
+    mocked_parsed_args = Mock()
+    # Mock the sync command with either --delta or None defaulting to --delta.
+    mocked_parsed_args.command = "sync"
+    mocked_parsed_args.all = False
+    mock_parse_args.return_value = mocked_parsed_args
+
     mock_user_config = Mock()
+
     main(mock_user_config)
+
     mock_run_pipeline.assert_called_once_with(mock_user_config)

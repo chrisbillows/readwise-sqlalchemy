@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
+from readwise_sqlalchemy.config import UserConfig, fetch_user_config
 from readwise_sqlalchemy.db_operations import get_session
 from readwise_sqlalchemy.main import main
 from readwise_sqlalchemy.models import (
@@ -24,7 +24,7 @@ from readwise_sqlalchemy.models import (
 logger = logging.getLogger(__name__)
 
 
-E2E_TEST_DATA_PATH = USER_CONFIG.app_dir / "my_readwise_highlights.json"
+E2E_TEST_DATA_PATH = fetch_user_config().app_dir / "my_readwise_highlights.json"
 
 pytestmark = pytest.mark.skipif(
     not E2E_TEST_DATA_PATH.exists(),

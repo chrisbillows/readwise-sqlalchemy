@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -13,23 +14,35 @@ class MissingEnvironmentFile(Exception):
 class UserConfig:
     """Object containing user configuration information."""
 
-    def __init__(self, application_dir: Path = Path.home() / "readwise-sqlalchemy"):
+    def __init__(self, user_dir: Path) -> None:
         """
-        Initialise object.
+        Initialise object. DO NOT USE DIRECTLY, use `fetch_user_config()` instead.
 
         Attributes
         ----------
-        APPLICATION_DIR: pathlib.Path
-
-        ENV_FILE: pathlib.Path
-
-        READWISE_API_TOKEN: str
-
+        user_dir : pathlib.Path, default = ``Path.home()``
+            The user's home directory.
+        app_dir : pathlib.Path
+            The application directory where the database/log files etc. are stored.
+        log_path : pathlib.Path
+            The path to the log file.
+        config_dir : pathlib.Path
+            The directory for configuration files, set to `~/.config/rw-sql`.
+        env_file : pathlib.Path
+            The path to the environment variables file in the config_dir, set to
+            ``~/.config/rw-sql/.env``.
+        readwise_api_token : str | None
+            The Readwise API token loaded from the environment variables.
+        db_path : pathlib.Path
+            The path to the SQLite database file, defaults to
+            ``~/.readwise-sqlalchemy/readwise.db``.
         """
-        self.app_dir: Path = application_dir
-        self.app_dir.mkdir(exist_ok=True)
+        self.user_dir = user_dir
+        self.app_dir: Path = user_dir / "readwise-sqlalchemy"
+        self.app_dir.mkdir(exist_ok=True, parents=True)
         self.log_path = self.app_dir / "logs" / "app.log"
-        self.env_file: Path = self.app_dir / ".env"
+        self.config_dir = user_dir / ".config" / "rw-sql"
+        self.env_file: Path = self.config_dir / ".env"
         self.load_environment_variables_file()
         self.readwise_api_token: str | None = os.getenv("READWISE_API_TOKEN")
         self.db_path: Path = self.app_dir / "readwise.db"
@@ -47,9 +60,21 @@ class UserConfig:
             load_dotenv(self.env_file, override=True)
         else:
             raise MissingEnvironmentFile(
-                "A `.env` file is expected in the `~/readwise-sqlalchemy-application` "
-                "directory."
+                "A '.env' file is expected in the '~/.config/rw-sql' directory."
             )
 
 
-USER_CONFIG = UserConfig()
+@lru_cache()
+def fetch_user_config(user_dir: Path = Path.home()) -> UserConfig:
+    """
+    Fetch the user configuration.
+
+    Memoize to ensure a single instance of UserConfig is used throughout the
+    application.
+
+    Returns
+    -------
+    UserConfig
+        The user configuration object.
+    """
+    return UserConfig(user_dir)

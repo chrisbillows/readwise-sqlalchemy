@@ -1,12 +1,15 @@
+import argparse
 import logging
+import sys
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 import requests
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
-from readwise_sqlalchemy.config import USER_CONFIG, UserConfig
+from readwise_sqlalchemy import __version__
+from readwise_sqlalchemy.config import UserConfig, fetch_user_config
 from readwise_sqlalchemy.configure_logging import setup_logging
 from readwise_sqlalchemy.db_operations import (
     DatabasePopulaterFlattenedData,
@@ -14,6 +17,7 @@ from readwise_sqlalchemy.db_operations import (
     get_last_fetch,
     get_session,
 )
+from readwise_sqlalchemy.list_invalid_db_objects import list_invalid_db_objects
 from readwise_sqlalchemy.schemas import (
     BookSchemaUnnested,
     BookTagsSchema,
@@ -44,7 +48,7 @@ SCHEMAS_BY_OBJECT: dict[str, type[BaseModel]] = {
 
 def fetch_from_export_api(
     last_fetch: None | str = None,
-    user_config: UserConfig = USER_CONFIG,
+    user_config: UserConfig = fetch_user_config(),
 ) -> list[dict[str, Any]]:
     """
     Fetch highlights from the Readwise Highlight EXPORT endpoint.
@@ -56,7 +60,7 @@ def fetch_from_export_api(
     last_fetch: str, default = None
         An ISO formatted datetime string E.g. '2024-11-09T10:15:38.428687' indicating
         the time highlights have previously been fetched up to.
-    user_config: UserConfig, default = USER_CONFIG
+    user_config: UserConfig, default = fetch_user_config()
         A User Configuration object.
 
     Returns
@@ -114,7 +118,7 @@ def fetch_from_export_api(
 
 
 def check_database(
-    session: Session, user_config: UserConfig = USER_CONFIG
+    session: Session, user_config: Optional[UserConfig] = None
 ) -> None | datetime:
     """
     If the db exists, return the last fetch time, otherwise create the db.
@@ -123,7 +127,7 @@ def check_database(
     ----------
     session: Session
         A SQL alchemy session connected to a database.
-    user_config: UserConfig, default = USER_CONFIG
+    user_config: UserConfig, default = fetch_user_config()
         A User Config object.
 
     Returns
@@ -132,6 +136,9 @@ def check_database(
         None if the database doesn't exist. If the database exists, the time the last
         fetch was completed as a datetime object.
     """
+    if user_config is None:
+        user_config = fetch_user_config()
+
     if user_config.db_path.exists():
         logger.info("Database exists")
         last_fetch = get_last_fetch(session)
@@ -504,7 +511,7 @@ def update_database_flattened_objects(
 
 
 def run_pipeline_flattened_objects(
-    user_config: UserConfig = USER_CONFIG,
+    user_config: UserConfig = fetch_user_config(),
     setup_logging_func: LogSetupFn = setup_logging,
     get_session_func: SessionFn = get_session,
     check_db_func: CheckDBFn = check_database,
@@ -524,7 +531,7 @@ def run_pipeline_flattened_objects(
 
     Parameters
     ----------
-    user_config : UserConfig, optional, default = USER_CONFIG
+    user_config : UserConfig, optional, default = fetch_user_config()
         Configuration object.
     setup_logging_func: LogSetupFn, optional, default = setup_logging()
         A function that sets up application logging.
@@ -558,16 +565,68 @@ def run_pipeline_flattened_objects(
     update_db_func(session, flat_objs_second_validation, start_fetch, end_fetch)
 
 
-def main(user_config: UserConfig = USER_CONFIG) -> None:
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Readwise CLI sync tool")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
+
+    # Direct CLI commands.
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Create the 'sync' command parser and group.
+    parser_sync = subparsers.add_parser(
+        "sync", help="Run the main Readwise sync pipeline."
+    )
+    sync_group = parser_sync.add_mutually_exclusive_group()
+    sync_group.add_argument(
+        "--delta", action="store_true", help="Run a delta sync (default)."
+    )
+    sync_group.add_argument("--all", action="store_true", help="Run a full sync.")
+
+    # Create the list 'invalids' command parser.
+    subparsers.add_parser(
+        "invalids",
+        help="Report books with any invalid  book tag, highlight or highlight tag.",
+    )
+
+    args = parser.parse_args()
+    args.command = args.command or "sync"  # Default to 'sync' if no command
+    return args
+
+
+def main(user_config: Optional[UserConfig] = None) -> None:
     """
     Main function that runs with the entry point.
 
     Parameters
     ----------
-    user_config
+    user_config, default = None
         A UserConfig object.
     """
-    run_pipeline_flattened_objects(user_config)
+    if user_config is None:
+        user_config = fetch_user_config()
+
+    args = parse_args()
+
+    if args.command == "sync":
+        if args.all:
+            logger.info("Running full sync (--all).")
+            raise NotImplementedError(
+                "Full sync (--all) is not implemented yet. Please use --delta."
+            )
+            # run_pipeline_flattened_objects(user_config) #(all=True)
+        else:
+            logger.info("Running delta sync (--delta).")
+            run_pipeline_flattened_objects(user_config)
+
+    elif args.command == "invalids":
+        list_invalid_db_objects()
+
+    else:
+        logger.error("Unknown command. Use --help for usage.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

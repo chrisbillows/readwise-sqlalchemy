@@ -6,10 +6,10 @@ import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Type, Union, cast
 
 from sqlalchemy import Engine, create_engine, desc, event, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, class_mapper, sessionmaker
 
 from readwise_sqlalchemy.models import (
     Base,
@@ -19,15 +19,9 @@ from readwise_sqlalchemy.models import (
     HighlightTag,
     ReadwiseBatch,
 )
+from readwise_sqlalchemy.types import VersionableORM
 
 logger = logging.getLogger(__name__)
-
-MODELS_BY_OBJECT = {
-    "books": Book,
-    "book_tags": BookTag,
-    "highlights": Highlight,
-    "highlight_tags": HighlightTag,
-}
 
 
 def safe_create_sqlite_engine(
@@ -143,11 +137,16 @@ class DatabasePopulaterFlattenedData:
             database_write_time=datetime.now(),
         )
         self.session.add(batch)
-        for obj_name, objects in self.validated_flattened_objs.items():
-            obj_orm = MODELS_BY_OBJECT[obj_name]
-            for object in objects:
-                obj_as_orm = obj_orm(**object, batch=batch)
+
+        ORM_TABLE_MAP = {
+            cls.__tablename__: cls for cls in [Book, BookTag, Highlight, HighlightTag]
+        }
+        for obj_name, raw_objs in self.validated_flattened_objs.items():
+            orm_model = ORM_TABLE_MAP[obj_name]
+            for raw_obj in raw_objs:
+                obj_as_orm = self.process_obj(raw_obj, orm_model, batch)
                 self.session.add(obj_as_orm)
+
         try:
             logging.info("Committing session")
             self.session.commit()
@@ -155,6 +154,40 @@ class DatabasePopulaterFlattenedData:
             self.session.rollback()
             logging.info(f"Error occurred committing session: {err}")
             raise err
+
+    def process_obj(
+        self, raw_obj: dict[str, Any], orm_model: Type[Base], batch: ReadwiseBatch
+    ) -> VersionableORM | Base:
+        """Process obj to create a new ORM instance or update an existing one."""
+        pk_name = class_mapper(orm_model).primary_key[0].name
+        raw_obj_pk = raw_obj[pk_name]
+
+        current_version_orm = self.session.get(orm_model, raw_obj_pk)
+
+        if current_version_orm and hasattr(orm_model, "version_class"):
+            versionable = cast(VersionableORM, current_version_orm)
+
+            version_model = orm_model.version_class
+            version_pk_attr = getattr(version_model, pk_name)
+            stmt = select(version_model).where(version_pk_attr == raw_obj_pk)
+            previous_entries = self.session.execute(stmt).scalars().all()
+            version_num = len(previous_entries) + 1
+            version_snapshot_orm = version_model(
+                **versionable.dump_column_data(exclude={"batch_id"}),
+                version=version_num,
+                batch_id_when_new=versionable.batch_id,
+                batch_when_versioned=batch,
+            )
+            self.session.add(version_snapshot_orm)
+
+            for field, value in raw_obj.items():
+                setattr(versionable, field, value)
+
+            versionable.batch = batch
+            return versionable
+
+        else:
+            return orm_model(**raw_obj, batch=batch)
 
 
 def get_last_fetch(session: Session) -> datetime | None:

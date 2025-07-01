@@ -1,6 +1,7 @@
 import json
 import logging
 import random
+import sys
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -194,14 +195,17 @@ def test_find_a_highlight_tag():
 @pytest.fixture(scope="module")
 @patch("readwise_sqlalchemy.main.fetch_from_export_api")
 def initial_populate_of_db_from_user_data(
-    mock_fetch_from_export_api: MagicMock, mock_user_config_module_scoped: UserConfig
+    mock_fetch_from_export_api: MagicMock,
+    mock_user_config_module_scoped: UserConfig,
 ) -> tuple[UsersReadwiseData, Session]:
     """
     Write initial fetch to a new tmp_dir database via the ``mock_user_config`` fixture.
     """
+
     rw_data = get_users_readwise_data()
     mock_fetch_from_export_api.return_value = rw_data.full_content
 
+    sys.argv = ["rw", "sync", "--delta"]
     main(mock_user_config_module_scoped)
 
     # Cheeky assert just as a double check while passing through.

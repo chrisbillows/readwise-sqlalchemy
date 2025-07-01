@@ -27,7 +27,13 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import JSON, Boolean, ForeignKey, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    object_mapper,
+    relationship,
+)
 
 
 class Base(DeclarativeBase):
@@ -60,14 +66,24 @@ class ValidationMixin:
     validation_errors: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
 
 
-class BookBase(Base, ValidationMixin):
+class ModelDumperMixin:
+    def dump_column_data(self, exclude: Optional[set[str]] = None) -> dict[str, str]:
+        """Dump column fields and values to a dict."""
+        exclude = exclude or set()
+        return {
+            column.key: getattr(self, column.key)
+            for column in object_mapper(self).columns
+            if column.key not in exclude
+        }
+
+
+class BookBase(Base, ValidationMixin, ModelDumperMixin):
     """
     Abstract base class for Book fields (excluding relationships).
     """
 
     __abstract__ = True
 
-    user_book_id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[Optional[str]]
     is_deleted: Mapped[Optional[bool]]
     author: Mapped[Optional[str]]
@@ -81,6 +97,45 @@ class BookBase(Base, ValidationMixin):
     readwise_url: Mapped[Optional[str]]
     source_url: Mapped[Optional[str]]
     asin: Mapped[Optional[str]]
+
+
+class BookVersion(BookBase):
+    """
+    A version of a book with additional fields for versioning.
+
+    This class extends the BookBase class to include versioning information.
+
+    Attributes
+    ----------
+    version : int
+        The version number of the book entry.
+    """
+
+    __tablename__ = "book_versions"
+    batch_name = "versioned_books"
+
+    version_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    version: Mapped[int]
+    versioned_at: Mapped[datetime] = mapped_column(default=datetime.now)
+
+    batch_id_when_versioned: Mapped[int] = mapped_column(
+        ForeignKey("readwise_batches.id"), nullable=False
+    )
+    user_book_id: Mapped[int] = mapped_column(ForeignKey("books.user_book_id"))
+    batch_id_when_new: Mapped[int] = mapped_column(
+        ForeignKey("readwise_batches.id"), nullable=False
+    )
+
+    batch_when_versioned: Mapped["ReadwiseBatch"] = relationship(
+        back_populates="versioned_books",
+        foreign_keys=[batch_id_when_versioned],
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"BookVersion(user_book_id={self.user_book_id!r}, "
+            f"title={self.title!r}, version={self.version!r})"
+        )
 
 
 class Book(BookBase):
@@ -176,7 +231,9 @@ class Book(BookBase):
     """
 
     __tablename__ = "books"
+    version_class = BookVersion
 
+    user_book_id: Mapped[int] = mapped_column(primary_key=True)
     batch_id: Mapped[int] = mapped_column(ForeignKey("readwise_batches.id"))
 
     book_tags: Mapped[list["BookTag"]] = relationship(back_populates="book")
@@ -190,37 +247,7 @@ class Book(BookBase):
         )
 
 
-class BookVersion(BookBase):
-    """
-    A version of a book with additional fields for versioning.
-
-    This class extends the BookBase class to include versioning information.
-
-    Attributes
-    ----------
-    version : int
-        The version number of the book entry.
-    """
-
-    __tablename__ = "book_versions"
-
-    user_book_id: Mapped[int] = mapped_column(
-        ForeignKey("books.user_book_id"), primary_key=True
-    )
-    version: Mapped[int]
-    recorded_at: Mapped[datetime] = mapped_column(default=datetime.now)
-    batch_id: Mapped[int] = mapped_column(
-        ForeignKey("readwise_batches.id"), nullable=True
-    )
-
-    def __repr__(self) -> str:
-        return (
-            f"BookVersion(user_book_id={self.user_book_id!r}, "
-            f"title={self.title!r}, version={self.version!r})"
-        )
-
-
-class BookTag(Base, ValidationMixin):
+class BookTag(Base, ValidationMixin, ModelDumperMixin):
     """
     Readwise book tag as a SQL Alchemy ORM Mapped class.
 
@@ -257,7 +284,7 @@ class BookTag(Base, ValidationMixin):
 
     __tablename__ = "book_tags"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(512))
 
     user_book_id: Mapped[int] = mapped_column(
@@ -274,14 +301,13 @@ class BookTag(Base, ValidationMixin):
         return f"BookTag(name={self.name!r}, id={self.id!r})"
 
 
-class HighlightBase(Base, ValidationMixin):
+class HighlightBase(Base, ValidationMixin, ModelDumperMixin):
     """
     Abstract base class for Highlight fields (excluding relationships).
     """
 
     __abstract__ = True
 
-    id: Mapped[int] = mapped_column(primary_key=True)
     text: Mapped[str] = mapped_column(String(8191))
     location: Mapped[Optional[int]]
     location_type: Mapped[Optional[str]]
@@ -297,6 +323,49 @@ class HighlightBase(Base, ValidationMixin):
     is_discard: Mapped[Optional[bool]]
     is_deleted: Mapped[Optional[bool]]
     readwise_url: Mapped[Optional[str]]
+
+
+class HighlightVersion(HighlightBase):
+    """
+    A version of a highlight with additional fields for versioning.
+
+    This class extends the Highlight class to include versioning information.
+
+    Attributes
+    ----------
+    version : int
+        The version number of the highlight entry.
+    """
+
+    __tablename__ = "highlight_versions"
+    batch_name = "versioned_highlights"
+
+    version_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    version: Mapped[int]
+    versioned_at: Mapped[datetime] = mapped_column(default=datetime.now)
+    batch_id_when_versioned: Mapped[int] = mapped_column(
+        ForeignKey("readwise_batches.id"), nullable=False
+    )
+    id: Mapped[int] = mapped_column(ForeignKey("highlights.id"))
+    book_id: Mapped[int] = mapped_column(
+        ForeignKey("books.user_book_id"), nullable=False
+    )
+    batch_id_when_new: Mapped[int] = mapped_column(
+        ForeignKey("readwise_batches.id"), nullable=False
+    )
+
+    batch_when_versioned: Mapped["ReadwiseBatch"] = relationship(
+        back_populates="versioned_highlights",
+        foreign_keys=[batch_id_when_versioned],
+    )
+
+    book: Mapped["Book"] = relationship("Book", viewonly=True, foreign_keys=[book_id])
+
+    def __repr__(self) -> str:
+        return (
+            f"HighlightVersion(id={self.id!r}, book={self.book.title!r}, "
+            f"text={self.text[:30]!r}, version={self.version!r})"
+        )
 
 
 class Highlight(HighlightBase):
@@ -368,7 +437,9 @@ class Highlight(HighlightBase):
     """
 
     __tablename__ = "highlights"
+    version_class = HighlightVersion
 
+    id: Mapped[int] = mapped_column(primary_key=True)
     book_id: Mapped[int] = mapped_column(
         ForeignKey("books.user_book_id"), nullable=False
     )
@@ -394,33 +465,7 @@ class Highlight(HighlightBase):
         return ", ".join(parts) + ")"
 
 
-class HighlightVersion(Highlight, ValidationMixin):
-    """
-    A version of a highlight with additional fields for versioning.
-
-    This class extends the Highlight class to include versioning information.
-
-    Attributes
-    ----------
-    version : int
-        The version number of the highlight entry.
-    """
-
-    __tablename__ = "highlight_versions"
-
-    version: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    book_id: Mapped[int] = mapped_column(
-        ForeignKey("highlights.book_id"), nullable=False
-    )
-
-    def __repr__(self) -> str:
-        return (
-            f"HighlightVersion(id={self.id!r}, book={self.book.title!r}, "
-            f"text={self.text[:30]!r}, version={self.version!r})"
-        )
-
-
-class HighlightTag(Base, ValidationMixin):
+class HighlightTag(Base, ValidationMixin, ModelDumperMixin):
     """
     Readwise highlight tag as a SQL Alchemy ORM Mapped class.
 
@@ -456,7 +501,7 @@ class HighlightTag(Base, ValidationMixin):
 
     __tablename__ = "highlight_tags"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(512))
 
     highlight_id: Mapped[int] = mapped_column(
@@ -473,7 +518,7 @@ class HighlightTag(Base, ValidationMixin):
         return f"HighlightTag(name={self.name!r}, id={self.id!r})"
 
 
-class ReadwiseBatch(Base):
+class ReadwiseBatch(Base, ModelDumperMixin):
     """
     A batch of database updates from the Readwise API.
 
@@ -511,12 +556,23 @@ class ReadwiseBatch(Base):
     highlights: Mapped[list["Highlight"]] = relationship(back_populates="batch")
     highlight_tags: Mapped[list["HighlightTag"]] = relationship(back_populates="batch")
 
+    versioned_books: Mapped[list["BookVersion"]] = relationship(
+        back_populates="batch_when_versioned",
+        foreign_keys="[BookVersion.batch_id_when_versioned]",
+    )
+    versioned_highlights: Mapped[list["HighlightVersion"]] = relationship(
+        back_populates="batch_when_versioned",
+        foreign_keys="[HighlightVersion.batch_id_when_versioned]",
+    )
+
     def __repr__(self) -> str:
         parts = [f"ReadwiseBatch(id={self.id!r}"]
         parts.append(f"books={len(self.books)}")
         parts.append(f"highlights={len(self.highlights)}")
         parts.append(f"book_tags={len(self.book_tags)}")
         parts.append(f"highlight_tags={len(self.highlight_tags)}")
+        parts.append(f"versioned_books={len(self.versioned_books)}")
+        parts.append(f"versioned_highlights={len(self.versioned_highlights)}")
         if self.start_time:
             parts.append(f"start={self.start_time.isoformat()}")
         if self.end_time:

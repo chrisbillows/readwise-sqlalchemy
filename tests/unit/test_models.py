@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from readwise_sqlalchemy.models import (
+    Base,
     Book,
     BookTag,
     BookVersion,
@@ -151,6 +152,14 @@ def mock_validated_flat_objs():
     ]
 
 
+def versioning_test_objs() -> dict[Base, dict[str, str]]:
+    """Return object to version and fields to change."""
+    return {
+        Book: {"title": "book_1_v2", "document_note": "Updated note"},
+        Highlight: {"text": "highlight_1_v2", "is_favorite": True},
+    }
+
+
 # ----------
 #  Fixtures
 # ----------
@@ -275,34 +284,46 @@ def mem_db_containing_unnested_minimal_objects(mem_db: DbHandle):
 
 @pytest.fixture()
 def mem_db_multi_version_unnested_minimal_objects(
-    mem_db: DbHandle, mem_db_containing_unnested_minimal_objects: Engine
+    mem_db_containing_unnested_minimal_objects: Engine,
 ):
     """
     Engine with a db containing unnested minimal object records with multiple versions.
     """
     batch = ReadwiseBatch(start_time=START_TIME, end_time=END_TIME)
-    with mem_db.session.begin():
-        original_book = mem_db_containing_unnested_minimal_objects.scalars(
-            select(Book)
-        ).one()
-        book_version = BookVersion(
-            user_book_id=original_book.user_book_id,
-            title="book_1_v2",
-            document_note="Updated note",
-            batch=batch,
-        )
-        mem_db.session.add(book_version)
 
-        original_highlight = mem_db_containing_unnested_minimal_objects.scalars(
-            select(Highlight)
-        ).one()
-        highlight_version = HighlightVersion(
-            id=original_highlight.id,
-            text="highlight_1_v2",
-            is_favorite=True,
-            batch=batch,
-        )
-        mem_db.session.add(highlight_version)
+    with Session(mem_db_containing_unnested_minimal_objects) as session:
+        test_objs = versioning_test_objs()
+
+        for obj, test_values in test_objs.items():
+            stmt = select(obj).limit(1)
+            current_obj = session.execute(stmt).scalars().first()
+            obj_snapshot = obj.version_class(
+                **current_obj.dump_column_data(exclude={"batch_id"}),
+                version=1,
+                batch_id_when_new=current_obj.batch_id,
+                batch_when_versioned=batch,
+            )
+            session.add(obj_snapshot)
+
+            for field, new_value in test_values.items():
+                setattr(current_obj, field, new_value)
+            current_obj.batch = batch
+            session.add(current_obj)
+
+        session.commit()
+
+        yield mem_db_containing_unnested_minimal_objects.engine
+
+
+@pytest.fixture()
+def minimal_orm_object_model_dump(
+    mem_db_multi_version_unnested_minimal_objects: Engine,
+):
+    def _fetch(cls: type):
+        with Session(mem_db_multi_version_unnested_minimal_objects) as session:
+            return session.scalars(select(cls)).first().dump_column_data()
+
+    return _fetch
 
 
 @pytest.fixture()
@@ -346,6 +367,26 @@ def minimal_batch_as_orm(mem_db_containing_minimal_objects: Engine):
     """A minimal ``ReadwiseBatch`` fetched from the minimal object database."""
     with Session(mem_db_containing_minimal_objects) as clean_session:
         fetched_batches = clean_session.scalars(select(ReadwiseBatch)).all()
+        test_batch = fetched_batches[0]
+        yield test_batch
+
+
+@pytest.fixture()
+def minimal_book_version_as_orm(mem_db_multi_version_unnested_minimal_objects: Engine):
+    """A minimal ``BookVersion`` fetched from the minimal object database."""
+    with Session(mem_db_multi_version_unnested_minimal_objects) as clean_session:
+        fetched_batches = clean_session.scalars(select(BookVersion)).all()
+        test_batch = fetched_batches[0]
+        yield test_batch
+
+
+@pytest.fixture()
+def minimal_highlight_version_as_orm(
+    mem_db_multi_version_unnested_minimal_objects: Engine,
+):
+    """A minimal ``BookVersion`` fetched from the minimal object database."""
+    with Session(mem_db_multi_version_unnested_minimal_objects) as clean_session:
+        fetched_batches = clean_session.scalars(select(HighlightVersion)).all()
         test_batch = fetched_batches[0]
         yield test_batch
 
@@ -418,6 +459,34 @@ def test_minimal_readwise_batch_read_from_db_correctly(
     assert minimal_batch_as_orm.database_write_time == DATABASE_WRITE_TIME
 
 
+def test_minimal_book_version_as_orm_and_updated_book(minimal_orm_object_model_dump):
+    updated_book = minimal_orm_object_model_dump(Book)
+    changed_fields = versioning_test_objs()[Book]
+    assert updated_book["user_book_id"] == 99
+    for field, value in changed_fields.items():
+        assert updated_book.get(field) == value
+
+    book_version = minimal_orm_object_model_dump(BookVersion)
+    assert book_version["user_book_id"] == 99
+    assert book_version["title"] == MIN_BOOK["title"]
+    assert book_version["document_note"] is None
+
+
+def test_minimal_highlight_version_as_orm_and_updated_highlight(
+    minimal_orm_object_model_dump,
+):
+    updated_highlight = minimal_orm_object_model_dump(Highlight)
+    changed_fields = versioning_test_objs()[Highlight]
+    assert updated_highlight["id"] == 111
+    for field, value in changed_fields.items():
+        assert updated_highlight.get(field) == value
+
+    highlight_version = minimal_orm_object_model_dump(HighlightVersion)
+    assert highlight_version["id"] == 111
+    assert highlight_version["text"] == "highlight_1"
+    assert highlight_version.get("is_favourite") is None
+
+
 def test_tables_in_mem_db_containing_unnested_minimal_objects(
     mem_db_containing_unnested_minimal_objects: Engine,
 ):
@@ -433,10 +502,6 @@ def test_tables_in_mem_db_containing_unnested_minimal_objects(
             "highlights",
             "readwise_batches",
         ]
-
-
-def test_minimal_book_version_as_orm_read_from_db_correctly():
-    pass
 
 
 def test_mem_db_containing_unnested_minimal_objects(
@@ -611,7 +676,49 @@ def test_readwise_batch_relationship_with_highlight_tag(
     assert minimal_batch_as_orm.highlight_tags[0].id == MIN_HIGHLIGHT_1_TAG_1["id"]
 
     assert minimal_batch_as_orm.highlight_tags[0].batch_id == BATCH_ID
-    assert minimal_batch_as_orm.highlight_tags[0].batch.id == BATCH_ID
+    assert minimal_batch_as_orm.highlight_tags[1].batch.id == BATCH_ID
+
+
+@pytest.mark.parametrize(
+    "orm_class, expected_pk_value",
+    [
+        (Book, 99),
+        (Highlight, 111),
+    ],
+)
+def test_readwise_batch_relationships_with_version_objects(
+    mem_db_multi_version_unnested_minimal_objects,
+    orm_class,
+    expected_pk_value,
+):
+    with Session(mem_db_multi_version_unnested_minimal_objects) as session:
+        # The book is added in batch 1 and updated in batch 2.
+        batch = session.get(ReadwiseBatch, 2)
+
+        # Check the updated object is in the batch.
+        updated_objs = getattr(batch, orm_class.__tablename__)
+        assert len(updated_objs) == 1
+        updated_obj = updated_objs[0]
+        assert isinstance(updated_obj, orm_class)
+        obj_pk = inspect(orm_class).primary_key[0].name
+        assert getattr(updated_obj, obj_pk) == expected_pk_value
+        assert updated_obj.batch_id == 2
+
+        # Check the book version is in the batch.
+        versioned_objs = getattr(batch, orm_class.version_class.batch_name)
+        assert len(versioned_objs) == 1
+        version_obj = versioned_objs[0]
+        assert isinstance(version_obj, orm_class.version_class)
+
+        # Foreign Keys
+        assert version_obj.batch_id_when_versioned == 2
+        assert version_obj.batch_id_when_new == 1
+        assert getattr(version_obj, obj_pk) == expected_pk_value
+
+        # Relationships
+        batch_when_versioned = version_obj.batch_when_versioned
+        assert isinstance(batch_when_versioned, ReadwiseBatch)
+        assert batch_when_versioned.id == 2
 
 
 @pytest.mark.parametrize(
@@ -848,12 +955,12 @@ def test_fetch_full_readwise_batch_from_db_assert_mapped_objects(
             ReadwiseBatch,
             1,
             "ReadwiseBatch(id=1, books=1, highlights=1, book_tags=1, highlight_tags=1, "
-            "start=2025-01-01T10:10:10, end=2025-01-01T10:10:20, "
-            "write=2025-01-01T10:10:22)",
+            "versioned_books=0, versioned_highlights=0, start=2025-01-01T10:10:10, "
+            "end=2025-01-01T10:10:20, write=2025-01-01T10:10:22)",
         ),
     ],
 )
-def test_orm_mapped_class_repr_methods_for_full_objects(
+def test_repr_methods_for_full_objects(
     mem_db_containing_full_objects: Engine, target_obj: type, obj_id: int, expected: str
 ):
     with Session(mem_db_containing_full_objects) as clean_session:
@@ -861,7 +968,29 @@ def test_orm_mapped_class_repr_methods_for_full_objects(
         assert repr(fetched_obj) == expected
 
 
-def test_highlight_repr_for_long_highlights(mem_db_containing_full_objects: Engine):
+@pytest.mark.parametrize(
+    "target_obj, obj_id, expected",
+    [
+        (BookVersion, 1, "BookVersion(user_book_id=99, title='book_1', version=1)"),
+        (
+            HighlightVersion,
+            1,
+            "HighlightVersion(id=111, book='book_1_v2', text='highlight_1', version=1)",
+        ),
+    ],
+)
+def test_repr_methods_for_version_objects(
+    mem_db_multi_version_unnested_minimal_objects: Engine,
+    target_obj: type,
+    obj_id: int,
+    expected: str,
+):
+    with Session(mem_db_multi_version_unnested_minimal_objects) as clean_session:
+        fetched_obj = clean_session.get(target_obj, obj_id)
+        assert repr(fetched_obj) == expected
+
+
+def test_repr_for_long_highlights(mem_db_containing_full_objects: Engine):
     with Session(mem_db_containing_full_objects) as clean_session:
         fetched_highlight = clean_session.get(Highlight, 10)
         fetched_highlight.text = "This is highlight text longer than 30 characters."
@@ -882,7 +1011,7 @@ def test_highlight_repr_for_long_highlights(mem_db_containing_full_objects: Engi
         (
             ReadwiseBatch,
             "ReadwiseBatch(id=None, books=0, highlights=0, book_tags=0, "
-            "highlight_tags=0)",
+            "highlight_tags=0, versioned_books=0, versioned_highlights=0)",
         ),
     ],
 )

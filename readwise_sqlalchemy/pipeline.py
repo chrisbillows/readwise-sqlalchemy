@@ -73,7 +73,7 @@ def check_database(
         return None
 
 
-def datetime_to_isoformat_str(datetime: datetime) -> str:
+def datetime_to_isoformat_str(dt: datetime) -> str:
     """
     Convert a datetime object to an ISO 8601 string.
 
@@ -90,7 +90,7 @@ def datetime_to_isoformat_str(datetime: datetime) -> str:
     str
         An ISO 8601 formatted datetime string E.g. '2024-11-09T10:15:38.428687'.
     """
-    return datetime.isoformat()
+    return dt.isoformat()
 
 
 def fetch_books_with_highlights(

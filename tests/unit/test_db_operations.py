@@ -8,13 +8,13 @@ from sqlalchemy import Column, ForeignKey, Integer, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session
 
+from readwise_sqlalchemy.config import UserConfig
 from readwise_sqlalchemy.db_operations import (
     DatabasePopulaterFlattenedData,
     create_database,
     get_session,
     safe_create_sqlite_engine,
 )
-from readwise_sqlalchemy.main import UserConfig
 from readwise_sqlalchemy.models import (
     Base,
     Book,

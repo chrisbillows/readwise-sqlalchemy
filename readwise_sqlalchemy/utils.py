@@ -145,10 +145,8 @@ def log_to_stdout_readwise_api_fetch_since_custom_date(
             extra={"markup": True},
         )
         for highlight in highlights:
-            logger.info(
-                f"text: {highlight['text'][:80].replace('\n', ' ').strip()} (id: "
-                f"{highlight['id']})"
-            )
+            clean_text = highlight["text"][:80].replace("\n", " ").strip()
+            logger.info(f"text: {clean_text} (id: {highlight['id']})")
             logger.info(
                 f"h-lighted: {highlight.get('highlighted_at')}\n"
                 f"created  : {highlight.get('created_at')}\n"

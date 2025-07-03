@@ -33,7 +33,11 @@ else:
 
 def parse_iso_datetime(value: str) -> str:
     try:
-        datetime.fromisoformat(value)
+        # Datetime.fromisoformat does not accept 'Z' as a timezone before Python 3.11.
+        # We validate without it, but use the Z if it is present when using the value.
+        if value.endswith("Z"):
+            test_value = value.replace("Z", "+00:00")
+        datetime.fromisoformat(test_value)
     except ValueError:
         raise argparse.ArgumentTypeError(
             f"Not an ISOformat string: '{value}'. Must be ISO 8601 e.g. "

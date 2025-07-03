@@ -11,9 +11,9 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from readwise_sqlalchemy.cli import main
 from readwise_sqlalchemy.config import UserConfig, fetch_user_config
 from readwise_sqlalchemy.db_operations import get_session
-from readwise_sqlalchemy.main import main
 from readwise_sqlalchemy.models import (
     Book,
     BookTag,
@@ -193,7 +193,7 @@ def test_find_a_highlight_tag():
 
 
 @pytest.fixture(scope="module")
-@patch("readwise_sqlalchemy.main.fetch_from_export_api")
+@patch("readwise_sqlalchemy.pipeline.fetch_from_export_api")
 def initial_populate_of_db_from_user_data(
     mock_fetch_from_export_api: MagicMock,
     mock_user_config_module_scoped: UserConfig,
@@ -224,7 +224,6 @@ def test_total_books(
     initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
 ):
     rw_data, session = initial_populate_of_db_from_user_data
-
     stmt = select(func.count()).select_from(Book)
     actual_total_books = session.execute(stmt).scalar()
 

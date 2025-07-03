@@ -1,5 +1,3 @@
-import argparse
-import sys
 from datetime import datetime
 from typing import Any, Callable
 from unittest.mock import ANY, MagicMock, Mock, patch
@@ -8,14 +6,11 @@ import pytest
 from pydantic import BaseModel
 
 from readwise_sqlalchemy.config import UserConfig
-from readwise_sqlalchemy.main import (
+from readwise_sqlalchemy.pipeline import (
     check_database,
     datetime_to_isoformat_str,
     fetch_books_with_highlights,
-    fetch_from_export_api,
     flatten_books_with_highlights,
-    main,
-    parse_args,
     run_pipeline_flattened_objects,
     update_database_flattened_objects,
     validate_flattened_objects,
@@ -31,7 +26,6 @@ from tests.helpers import mock_api_response
 def mock_run_pipeline_flattened_objs() -> tuple[dict, Any]:
     # Strings are used as simplified return values. They are not the real return types.
     mocks = {
-        "mock_setup_logging": MagicMock(),
         "mock_get_session": MagicMock(return_value="session"),
         "mock_check_database": MagicMock(return_value="last_fetch"),
         "mock_fetch_books_with_highlights": MagicMock(
@@ -55,7 +49,6 @@ def mock_run_pipeline_flattened_objs() -> tuple[dict, Any]:
     }
     actual = run_pipeline_flattened_objects(
         user_config=MagicMock(DB="db"),
-        setup_logging_func=mocks["mock_setup_logging"],
         get_session_func=mocks["mock_get_session"],
         check_db_func=mocks["mock_check_database"],
         fetch_func=mocks["mock_fetch_books_with_highlights"],
@@ -67,48 +60,7 @@ def mock_run_pipeline_flattened_objs() -> tuple[dict, Any]:
     return mocks, actual
 
 
-@patch("readwise_sqlalchemy.main.requests")
-def test_fetch_from_export_api(mock_requests: MagicMock):
-    # Helper to build a mock response object
-    def make_mock_response(json_data):
-        mock_response = Mock()
-        mock_response.json.return_value = json_data
-        return mock_response
-
-    # Set side_effect to return these responses on consecutive calls
-    mock_requests.get.side_effect = [
-        make_mock_response(
-            {
-                "count": 2,  # Page counter.
-                "nextPageCursor": 98765432,  # Seem to be long ints.
-                "results": [{"a": 1}, {"b": 2}],
-            }
-        ),
-        make_mock_response(
-            {
-                "count": 1,
-                "nextPageCursor": 87654321,
-                "results": [{"c": 3}],
-            }
-        ),
-        make_mock_response(
-            {
-                "count": 0,
-                "nextPageCursor": None,
-                "results": [],
-            },
-        ),
-    ]
-    last_fetch = "2025-04-14T20:28:21.589651"
-    mock_user_config = Mock()
-    mock_user_config.READWISE_API_TOKEN = "abc123"
-
-    actual = fetch_from_export_api(last_fetch, mock_user_config)
-
-    assert actual == [{"a": 1}, {"b": 2}, {"c": 3}]
-
-
-@patch("readwise_sqlalchemy.main.create_database")
+@patch("readwise_sqlalchemy.pipeline.create_database")
 def test_check_database_when_database_doesnt_exist(
     mock_create_database: MagicMock, mock_user_config: UserConfig
 ):
@@ -118,8 +70,8 @@ def test_check_database_when_database_doesnt_exist(
     assert actual is None
 
 
-@patch("readwise_sqlalchemy.main.create_database")
-@patch("readwise_sqlalchemy.main.get_last_fetch")
+@patch("readwise_sqlalchemy.pipeline.create_database")
+@patch("readwise_sqlalchemy.pipeline.get_last_fetch")
 def test_check_database_when_database_exists(
     mock_query_last_fetch: MagicMock,
     mock_create_database: MagicMock,
@@ -148,9 +100,9 @@ def test_datetime_to_iso_format_str():
     assert actual == expected
 
 
-@patch("readwise_sqlalchemy.main.datetime")
-@patch("readwise_sqlalchemy.main.fetch_from_export_api")
-@patch("readwise_sqlalchemy.main.datetime_to_isoformat_str")
+@patch("readwise_sqlalchemy.pipeline.datetime")
+@patch("readwise_sqlalchemy.pipeline.fetch_from_export_api")
+@patch("readwise_sqlalchemy.pipeline.datetime_to_isoformat_str")
 def test_fetch_books_with_highlights_no_last_fetch(
     mock_str_to_iso_format: MagicMock,
     mock_fetch_from_export_api: MagicMock,
@@ -172,8 +124,8 @@ def test_fetch_books_with_highlights_no_last_fetch(
     assert actual == (mock_api_response, mock_start_new_fetch, mock_end_new_fetch)
 
 
-@patch("readwise_sqlalchemy.main.datetime")
-@patch("readwise_sqlalchemy.main.fetch_from_export_api")
+@patch("readwise_sqlalchemy.pipeline.datetime")
+@patch("readwise_sqlalchemy.pipeline.fetch_from_export_api")
 def test_fetch_books_with_highlights_last_fetch_exists(
     mock_fetch_from_export_api: MagicMock,
     mock_datetime: MagicMock,
@@ -623,7 +575,7 @@ def test_validate_flattened_objects():
     assert actual == expected
 
 
-@patch("readwise_sqlalchemy.main.DatabasePopulaterFlattenedData")
+@patch("readwise_sqlalchemy.pipeline.DatabasePopulaterFlattenedData")
 def test_update_database_flattened_objects(mock_db_populater_flattened_data: MagicMock):
     mock_instance = mock_db_populater_flattened_data.return_value
 
@@ -638,7 +590,6 @@ def test_update_database_flattened_objects(mock_db_populater_flattened_data: Mag
 @pytest.mark.parametrize(
     "mock_name, assertion",
     [
-        ("mock_setup_logging", lambda m: m.assert_called_once_with()),
         ("mock_get_session", lambda m: m.assert_called_once()),
         # `Any` avoids passing in mock_user_config from mock_run_pipeline fixture.
         ("mock_check_database", lambda m: m.assert_called_once_with("session", ANY)),
@@ -690,58 +641,3 @@ def test_run_pipeline_flattened_objects_return_value(
 ):
     mocks, run_pipeline_return_value = mock_run_pipeline_flattened_objs
     assert run_pipeline_return_value is None
-
-
-@pytest.mark.parametrize(
-    "passed_args, expected_command",
-    [
-        (["rw", "sync"], "sync"),
-        (["rw", "sync", "--all"], "sync"),
-        (["rw", "sync", "--delta"], "sync"),
-        (["rw", "invalids"], "invalids"),
-    ],
-)
-def test_parse_args_main_command(passed_args, expected_command):
-    sys.argv = passed_args
-    actual = parse_args()
-    assert isinstance(actual, argparse.Namespace)
-    assert actual.command == expected_command
-
-
-@pytest.mark.parametrize(
-    "passed_sub_arg, expected_delta, expected_all",
-    [
-        ("rw sync --delta", True, False),
-        ("rw sync --all", False, True),
-        ("rw sync", False, False),
-    ],
-)
-def test_parse_args_sync_subparser(passed_sub_arg, expected_delta, expected_all):
-    sys.argv = passed_sub_arg.split(" ")
-    actual = parse_args()
-    assert actual.delta is expected_delta
-    assert actual.all is expected_all
-
-
-def test_parse_args_default_value_for_sync():
-    sys.argv = ["rw", "sync"]
-    actual = parse_args()
-    assert actual.command == "sync"
-    # This will result in --delta being called.
-    assert actual.all is False
-
-
-@patch("readwise_sqlalchemy.main.parse_args")
-@patch("readwise_sqlalchemy.main.run_pipeline_flattened_objects")
-def test_main(mock_run_pipeline: MagicMock, mock_parse_args: MagicMock):
-    mocked_parsed_args = Mock()
-    # Mock the sync command with either --delta or None defaulting to --delta.
-    mocked_parsed_args.command = "sync"
-    mocked_parsed_args.all = False
-    mock_parse_args.return_value = mocked_parsed_args
-
-    mock_user_config = Mock()
-
-    main(mock_user_config)
-
-    mock_run_pipeline.assert_called_once_with(mock_user_config)

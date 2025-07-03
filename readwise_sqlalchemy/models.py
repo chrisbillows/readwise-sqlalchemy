@@ -96,6 +96,7 @@ class BookBase(Base, ValidationMixin, ModelDumperMixin):
     document_note: Mapped[Optional[str]]
     readwise_url: Mapped[Optional[str]]
     source_url: Mapped[Optional[str]]
+    external_id: Mapped[Optional[str]]
     asin: Mapped[Optional[str]]
 
 

@@ -10,7 +10,6 @@ from readwise_sqlalchemy.models import Base, ReadwiseBatch
 CheckDBFn = Callable[[Session, UserConfig], datetime | None]
 FetchFn = Callable[[datetime | None], tuple[list[dict[str, Any]], datetime, datetime]]
 FlattenFn = Callable[[list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]
-LogSetupFn = Callable[[], None]
 SessionFn = Callable[[str | Path], Session]
 UpdateDbFlatObjFn = Callable[
     [Session, dict[str, list[dict[str, Any]]], datetime, datetime], None
@@ -19,6 +18,20 @@ ValidateNestedObjFn = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
 ValidateFlatObjFn = Callable[
     [dict[str, list[dict[str, Any]]]], dict[str, list[dict[str, Any]]]
 ]
+
+
+@runtime_checkable
+class ValidatedModel(Protocol):
+    """
+    Protocol for ORM models that include validation fields.
+
+    This protocol is used for static typing (e.g. with mypy) to indicate that an ORM
+    model defines both `validated` and `validation_errors` attributes. One off usage
+    in this module. If this reoccurs, consider creating a ValidatedBase orm class.
+    """
+
+    validated: bool
+    validation_errors: dict[str, str]
 
 
 @runtime_checkable

@@ -150,7 +150,7 @@ def log_to_stdout_readwise_api_fetch_since_custom_date(
                 f"{highlight['id']})"
             )
             logger.info(
-                f"h/lighted: {highlight.get('highlighted_at')}\n"
+                f"h-lighted: {highlight.get('highlighted_at')}\n"
                 f"created  : {highlight.get('created_at')}\n"
                 f"updated  : {highlight.get('updated_at')}\n"
             )

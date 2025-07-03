@@ -82,7 +82,7 @@ def datetime_to_isoformat_str(dt: datetime) -> str:
 
     Parameters
     ----------
-    datetime: datetime
+    dt: datetime
         A valid datetime object.
 
     Returns

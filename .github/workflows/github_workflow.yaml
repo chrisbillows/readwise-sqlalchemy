@@ -58,7 +58,7 @@ jobs:
           name: build-artifacts
 
       - name: Show build artifacts again
-        run: ls -l dist/
+        run: ls -l build-artifacts/
 
       - name: Install built package (wheel preferred)
         run: |

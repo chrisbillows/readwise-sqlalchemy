@@ -1,4 +1,4 @@
-"""CLI for Readwise SQLAlchemy sync tool."""
+"""Application CLI."""
 
 import argparse
 import logging
@@ -7,11 +7,11 @@ from argparse import _SubParsersAction
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from readwise_sqlalchemy import __version__
-from readwise_sqlalchemy.config import UserConfig, fetch_user_config
-from readwise_sqlalchemy.configure_logging import setup_logging
-from readwise_sqlalchemy.pipeline import run_pipeline_flattened_objects
-from readwise_sqlalchemy.utils import (
+from readwise_local_plus import __version__
+from readwise_local_plus.config import UserConfig, fetch_user_config
+from readwise_local_plus.configure_logging import setup_logging
+from readwise_local_plus.pipeline import run_pipeline_flattened_objects
+from readwise_local_plus.utils import (
     fetch_real_user_data_json_for_end_to_end_testing,
     list_invalid_db_objects,
     readwise_api_fetch_since_custom_date,
@@ -66,15 +66,15 @@ def setup_readwise_api_subparser(subparsers: "SubParsersAction") -> None:
         "--log-output",
         "-l",
         action="store_true",
-        help="If set, writes the fetched data to a file named to your application dir.",
+        help="Write fetched data to a file named to your application dir.",
     )
 
 
 def setup_e2e_data_subparser(subparsers: "SubParsersAction") -> None:
     subparsers.add_parser(
         "e2e-data",
-        help="Create a JSON file of *YOUR* user data for rigorous end-2-end testing. "
-        "The data never leaves your machine.",
+        help="(For developers) Create a JSON file of your user data for end-2-end "
+        "testing. The data never leaves your machine.",
     )
 
 
@@ -85,17 +85,26 @@ def setup_invalids_subparser(subparsers: "SubParsersAction") -> None:
 
 def setup_sync_subparser(subparsers: "SubParsersAction") -> None:
     """Setup the 'sync' subparser for the CLI."""
-    sync = subparsers.add_parser("sync", help="Run the main Readwise sync pipeline.")
+    sync = subparsers.add_parser("sync", help="Sync Readwise highlights.")
     group = sync.add_mutually_exclusive_group()
     group.add_argument(
-        "--delta", action="store_true", help="Run a delta sync (default)."
+        "--delta",
+        action="store_true",
+        help="Run a delta sync (default). E.g only new highlights.",
     )
-    group.add_argument("--all", action="store_true", help="Run a full sync.")
+    group.add_argument(
+        "--all",
+        action="store_true",
+        help="Run a full sync. E.g. Fetch or refetch all highlights.",
+    )
 
 
 def setup_parser() -> argparse.ArgumentParser:
     """Setup the main argument parser for the CLI."""
-    parser = argparse.ArgumentParser(description="Readwise CLI sync tool")
+    parser = argparse.ArgumentParser(
+        prog="Readwise Local Plus",
+        description="Your Readwise Highlights, local and with superpowers",
+    )
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
     )

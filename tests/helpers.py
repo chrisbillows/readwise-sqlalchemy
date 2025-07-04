@@ -19,7 +19,7 @@ from typing import Any
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from readwise_sqlalchemy.types import FetchFn, FlattenFn, ValidateNestedObjFn
+from readwise_local_plus.types import FetchFn, FlattenFn, ValidateNestedObjFn
 
 
 @dataclass

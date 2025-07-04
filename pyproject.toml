@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "readwise-sqlalchemy"
+name = "readwise-local-plus"
 version = "0.1.0"
 dependencies = [
     "mypy",
@@ -20,7 +20,8 @@ dependencies = [
 ]
 
 [project.scripts]
-rw = "readwise_sqlalchemy.main:main"
+rwlp = "readwise_local_plus.main:main"
+readwise-local-plus = "readwise_local_plus.main:main"
 
 [tool.mypy]
 # See: https://docs.pydantic.dev/latest/integrations/mypy/

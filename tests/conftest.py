@@ -11,9 +11,9 @@ from collections.abc import Generator
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from readwise_sqlalchemy.config import UserConfig
-from readwise_sqlalchemy.db_operations import safe_create_sqlite_engine
-from readwise_sqlalchemy.models import Base
+from readwise_local_plus.config import UserConfig
+from readwise_local_plus.db_operations import safe_create_sqlite_engine
+from readwise_local_plus.models import Base
 from tests.helpers import DbHandle
 
 
@@ -27,9 +27,9 @@ def mock_user_config(tmp_path: pytest.TempPathFactory) -> UserConfig:
     Use a `tmp_path` as the User's home directory. Create the directory and create the
     required .env file with required synthetic data.
     """
-    temp_application_dir = tmp_path / "readwise-sqlalchemy"
+    temp_application_dir = tmp_path / "readwise-local-plus"
     temp_application_dir.mkdir()
-    temp_config_dir = temp_application_dir / ".config" / "rw-sql"
+    temp_config_dir = temp_application_dir / ".config" / "readwise-local-plus"
     temp_config_dir.mkdir(parents=True)
 
     temp_env_file = temp_config_dir / ".env"
@@ -49,8 +49,8 @@ def mock_user_config_module_scoped(
     Use a `tmp_path` as the User's home directory. Create the directory and create the
     required .env file with required synthetic data.
     """
-    temp_application_dir = tmp_path_factory.mktemp("readwise-sqlalchemy")
-    temp_config_dir = temp_application_dir / ".config" / "rw-sql"
+    temp_application_dir = tmp_path_factory.mktemp("readwise-local-plus")
+    temp_config_dir = temp_application_dir / ".config" / "readwise-local-plus"
     temp_config_dir.mkdir(parents=True)
 
     temp_env_file = temp_config_dir / ".env"

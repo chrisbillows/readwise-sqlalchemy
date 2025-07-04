@@ -1,6 +1,6 @@
 import pytest
 
-from readwise_sqlalchemy.config import (
+from readwise_local_plus.config import (
     MissingEnvironmentFile,
     UserConfig,
     fetch_user_config,
@@ -44,6 +44,7 @@ def test_missing_env_file_raises_exception(
 ):
     with pytest.raises(
         MissingEnvironmentFile,
-        match="A '.env' file is expected in the '~/.config/rw-sql' directory.",
+        match="A '.env' file is expected in the '~/.config/readwise-local-plus' "
+        "directory.",
     ):
         UserConfig(tmp_path)

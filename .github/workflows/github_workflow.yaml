@@ -35,9 +35,9 @@ jobs:
 
     - name: Create mock .env file
       run: |
-        mkdir -p $HOME/.config/rw-sql/
-        echo "READWISE_API_TOKEN=abc123" > $HOME/.config/rw-sql/.env
-        cat $HOME/.config/rw-sql/.env
+        mkdir -p $HOME/.config/readwise_local_plus/
+        echo "READWISE_API_TOKEN=abc123" > $HOME/.config/readwise_local_plus/.env
+        cat $HOME/.config/readwise_local_plus/.env
 
     - name: Install the package
       run: |
@@ -54,7 +54,7 @@ jobs:
       run: ruff format --diff
 
     - name: Run mypy
-      run: mypy readwise_sqlalchemy --strict --config-file=pyproject.toml
+      run: mypy readwise_local_plus --strict --config-file=pyproject.toml
 
     - name: Run pytest
       run: pytest
@@ -65,7 +65,7 @@ jobs:
 
     - name: List installed package files for debugging
       run: |
-        pip show -f readwise_sqlalchemy
+        pip show -f readwise_local_plus
 
     - name: Run pytest-cov
-      run: pytest --cov=readwise_sqlalchemy tests/
+      run: pytest --cov=readwise_local_plus tests/

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from readwise_sqlalchemy.cli import main, parse_args
+from readwise_local_plus.cli import main, parse_args
 
 
 @pytest.mark.parametrize(
@@ -36,11 +36,11 @@ def test_parse_args_default_value_for_sync():
 
 def test_version_flag_exits_and_prints_version(capsys):
     with pytest.raises(SystemExit):
-        sys.argv = ["rw", "--version"]
+        sys.argv = ["", "--version"]
         parse_args()
 
     captured = capsys.readouterr()
-    assert "rw" in captured.out
+    assert "Readwise Local Plus" in captured.out
 
 
 @pytest.mark.parametrize(
@@ -73,8 +73,8 @@ def test_parse_args_main_command(passed_args, expected_command):
     assert actual.command == expected_command
 
 
-@patch("readwise_sqlalchemy.cli.parse_args")
-@patch("readwise_sqlalchemy.cli.run_pipeline_flattened_objects")
+@patch("readwise_local_plus.cli.parse_args")
+@patch("readwise_local_plus.cli.run_pipeline_flattened_objects")
 def test_cli_main_sync(mock_run_pipeline: MagicMock, mock_parse_args: MagicMock):
     mocked_parsed_args = Mock()
     # Mock the sync command with either --delta or None defaulting to --delta.
@@ -89,8 +89,8 @@ def test_cli_main_sync(mock_run_pipeline: MagicMock, mock_parse_args: MagicMock)
     mock_run_pipeline.assert_called_once_with(mock_user_config)
 
 
-@patch("readwise_sqlalchemy.cli.parse_args")
-@patch("readwise_sqlalchemy.cli.list_invalid_db_objects")
+@patch("readwise_local_plus.cli.parse_args")
+@patch("readwise_local_plus.cli.list_invalid_db_objects")
 def test_cli_main_list_invalids(mock_func: MagicMock, mock_parse_args: MagicMock):
     mocked_parsed_args = Mock()
     # Mock the sync command with either --delta or None defaulting to --delta.

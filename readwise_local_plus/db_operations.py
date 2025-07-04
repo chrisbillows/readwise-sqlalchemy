@@ -11,7 +11,7 @@ from typing import Any, Type, Union, cast
 from sqlalchemy import Engine, create_engine, desc, event, select
 from sqlalchemy.orm import Session, class_mapper, sessionmaker
 
-from readwise_sqlalchemy.models import (
+from readwise_local_plus.models import (
     Base,
     Book,
     BookTag,
@@ -19,7 +19,7 @@ from readwise_sqlalchemy.models import (
     HighlightTag,
     ReadwiseBatch,
 )
-from readwise_sqlalchemy.types import VersionableORM
+from readwise_local_plus.types import VersionableORM
 
 logger = logging.getLogger(__name__)
 

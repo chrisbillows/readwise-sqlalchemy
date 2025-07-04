@@ -61,7 +61,7 @@ def fetch_real_user_data_json_for_end_to_end_testing(
 
     *THE FUNCTION MUST BE INVOKED BY YOU. YOUR DATA NEVER LEAVES YOUR MACHINE*
 
-    Your data is saved locally as `~/readwise-sqlalchemy/my_readwise_highlights.json`.
+    Your data is saved locally as `~/readwise-local-plus/my_readwise_highlights.json`.
     When pytest is invoked, if `my_readwise_highlights.json` exists, an end-to-end test
     is run. See the test at `tests/e2e/test_main.py`.
 

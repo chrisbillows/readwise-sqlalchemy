@@ -20,7 +20,7 @@ from tests.helpers import DbHandle
 @pytest.fixture
 def mock_user_config(tmp_path: pytest.TempPathFactory) -> UserConfig:
     """
-    Return a temporary readwise-sqlalchemy user configuration.
+    Return a temporary user configuration.
 
     This is function scoped version.
 
@@ -44,7 +44,7 @@ def mock_user_config_module_scoped(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> UserConfig:
     """
-    Return a temporary readwise-sqlalchemy user configuration.
+    Return a temporary user configuration.
 
     Use a `tmp_path` as the User's home directory. Create the directory and create the
     required .env file with required synthetic data.

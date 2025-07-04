@@ -72,7 +72,7 @@ jobs:
 
       - name: Install built package (wheel preferred)
         run: |
-          pip install dist/*.whl || pip install dist/*.tar.gz
+          pip install *.whl || pip install *.tar.gz
 
       - name: Install dev dependencies
         run: pip install ".[dev]"

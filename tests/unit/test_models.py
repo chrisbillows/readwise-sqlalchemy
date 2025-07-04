@@ -7,7 +7,7 @@ from sqlalchemy import Engine, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from readwise_sqlalchemy.models import (
+from readwise_local_plus.models import (
     Base,
     Book,
     BookTag,

@@ -4,8 +4,8 @@ from typing import Any, Callable, Protocol, Type, TypeVar, runtime_checkable
 
 from sqlalchemy.orm import Session
 
-from readwise_sqlalchemy.config import UserConfig
-from readwise_sqlalchemy.models import Base, ReadwiseBatch
+from readwise_local_plus.config import UserConfig
+from readwise_local_plus.models import Base, ReadwiseBatch
 
 CheckDBFn = Callable[[Session, UserConfig], datetime | None]
 FetchFn = Callable[[datetime | None], tuple[list[dict[str, Any]], datetime, datetime]]

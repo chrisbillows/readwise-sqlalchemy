@@ -8,14 +8,14 @@ from sqlalchemy import Column, ForeignKey, Integer, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session
 
-from readwise_sqlalchemy.config import UserConfig
-from readwise_sqlalchemy.db_operations import (
+from readwise_local_plus.config import UserConfig
+from readwise_local_plus.db_operations import (
     DatabasePopulaterFlattenedData,
     create_database,
     get_session,
     safe_create_sqlite_engine,
 )
-from readwise_sqlalchemy.models import (
+from readwise_local_plus.models import (
     Base,
     Book,
     BookTag,
@@ -156,7 +156,7 @@ def test_get_session_attaches_to_a_database_url(mock_user_config: UserConfig):
     session = get_session(mock_user_config.db_path)
     database_url: str = session.bind.url
     actual = str(database_url).split("/")[-1]
-    assert actual == "readwise.db"
+    assert actual == "readwise-local-plus.db"
 
 
 def test_database_populater_flattened_instantiates_with_expected_attrs(

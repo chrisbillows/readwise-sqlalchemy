@@ -5,21 +5,21 @@ from typing import Any, Optional, cast
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
-from readwise_sqlalchemy.config import UserConfig, fetch_user_config
-from readwise_sqlalchemy.db_operations import (
+from readwise_local_plus.config import UserConfig, fetch_user_config
+from readwise_local_plus.db_operations import (
     DatabasePopulaterFlattenedData,
     create_database,
     get_last_fetch,
     get_session,
 )
-from readwise_sqlalchemy.integrations.readwise import fetch_from_export_api
-from readwise_sqlalchemy.schemas import (
+from readwise_local_plus.integrations.readwise import fetch_from_export_api
+from readwise_local_plus.schemas import (
     BookSchemaUnnested,
     BookTagsSchema,
     HighlightSchemaUnnested,
     HighlightTagsSchema,
 )
-from readwise_sqlalchemy.types import (
+from readwise_local_plus.types import (
     CheckDBFn,
     FetchFn,
     FlattenFn,

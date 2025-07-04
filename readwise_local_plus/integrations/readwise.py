@@ -3,7 +3,7 @@ from typing import Any
 
 import requests
 
-from readwise_sqlalchemy.config import UserConfig, fetch_user_config
+from readwise_local_plus.config import UserConfig, fetch_user_config
 
 logger = logging.getLogger(__name__)
 

@@ -4,8 +4,8 @@ from typing import Any, Union
 import pytest
 from pydantic import ValidationError
 
-from readwise_sqlalchemy.pipeline import SCHEMAS_BY_OBJECT
-from readwise_sqlalchemy.schemas import (
+from readwise_local_plus.pipeline import SCHEMAS_BY_OBJECT
+from readwise_local_plus.schemas import (
     BookSchemaUnnested,
     BookTagsSchema,
     HighlightSchemaUnnested,

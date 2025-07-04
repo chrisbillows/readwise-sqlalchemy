@@ -3,7 +3,7 @@ from logging.handlers import RotatingFileHandler
 
 from rich.logging import RichHandler
 
-from readwise_sqlalchemy.config import UserConfig, fetch_user_config
+from readwise_local_plus.config import UserConfig, fetch_user_config
 
 
 def setup_logging(user_config: UserConfig = fetch_user_config()) -> None:

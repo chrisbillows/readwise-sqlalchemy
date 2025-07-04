@@ -5,8 +5,8 @@ from unittest.mock import ANY, MagicMock, Mock, patch
 import pytest
 from pydantic import BaseModel
 
-from readwise_sqlalchemy.config import UserConfig
-from readwise_sqlalchemy.pipeline import (
+from readwise_local_plus.config import UserConfig
+from readwise_local_plus.pipeline import (
     check_database,
     datetime_to_isoformat_str,
     fetch_books_with_highlights,
@@ -60,7 +60,7 @@ def mock_run_pipeline_flattened_objs() -> tuple[dict, Any]:
     return mocks, actual
 
 
-@patch("readwise_sqlalchemy.pipeline.create_database")
+@patch("readwise_local_plus.pipeline.create_database")
 def test_check_database_when_database_doesnt_exist(
     mock_create_database: MagicMock, mock_user_config: UserConfig
 ):
@@ -70,8 +70,8 @@ def test_check_database_when_database_doesnt_exist(
     assert actual is None
 
 
-@patch("readwise_sqlalchemy.pipeline.create_database")
-@patch("readwise_sqlalchemy.pipeline.get_last_fetch")
+@patch("readwise_local_plus.pipeline.create_database")
+@patch("readwise_local_plus.pipeline.get_last_fetch")
 def test_check_database_when_database_exists(
     mock_query_last_fetch: MagicMock,
     mock_create_database: MagicMock,
@@ -100,9 +100,9 @@ def test_datetime_to_iso_format_str():
     assert actual == expected
 
 
-@patch("readwise_sqlalchemy.pipeline.datetime")
-@patch("readwise_sqlalchemy.pipeline.fetch_from_export_api")
-@patch("readwise_sqlalchemy.pipeline.datetime_to_isoformat_str")
+@patch("readwise_local_plus.pipeline.datetime")
+@patch("readwise_local_plus.pipeline.fetch_from_export_api")
+@patch("readwise_local_plus.pipeline.datetime_to_isoformat_str")
 def test_fetch_books_with_highlights_no_last_fetch(
     mock_str_to_iso_format: MagicMock,
     mock_fetch_from_export_api: MagicMock,
@@ -124,8 +124,8 @@ def test_fetch_books_with_highlights_no_last_fetch(
     assert actual == (mock_api_response, mock_start_new_fetch, mock_end_new_fetch)
 
 
-@patch("readwise_sqlalchemy.pipeline.datetime")
-@patch("readwise_sqlalchemy.pipeline.fetch_from_export_api")
+@patch("readwise_local_plus.pipeline.datetime")
+@patch("readwise_local_plus.pipeline.fetch_from_export_api")
 def test_fetch_books_with_highlights_last_fetch_exists(
     mock_fetch_from_export_api: MagicMock,
     mock_datetime: MagicMock,
@@ -575,7 +575,7 @@ def test_validate_flattened_objects():
     assert actual == expected
 
 
-@patch("readwise_sqlalchemy.pipeline.DatabasePopulaterFlattenedData")
+@patch("readwise_local_plus.pipeline.DatabasePopulaterFlattenedData")
 def test_update_database_flattened_objects(mock_db_populater_flattened_data: MagicMock):
     mock_instance = mock_db_populater_flattened_data.return_value
 

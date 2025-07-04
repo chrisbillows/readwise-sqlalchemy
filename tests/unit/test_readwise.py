@@ -1,9 +1,9 @@
 from unittest.mock import MagicMock, Mock, patch
 
-from readwise_sqlalchemy.integrations.readwise import fetch_from_export_api
+from readwise_local_plus.integrations.readwise import fetch_from_export_api
 
 
-@patch("readwise_sqlalchemy.integrations.readwise.requests")
+@patch("readwise_local_plus.integrations.readwise.requests")
 def test_fetch_from_export_api(mock_requests: MagicMock):
     # Helper to build a mock response object
     def make_mock_response(json_data):

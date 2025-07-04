@@ -8,8 +8,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from readwise_sqlalchemy.config import UserConfig
-from readwise_sqlalchemy.models import (
+from readwise_local_plus.config import UserConfig
+from readwise_local_plus.models import (
     Base,
     Book,
     BookTag,
@@ -17,7 +17,7 @@ from readwise_sqlalchemy.models import (
     HighlightTag,
     ReadwiseBatch,
 )
-from readwise_sqlalchemy.utils import (
+from readwise_local_plus.utils import (
     fetch_real_user_data_json_for_end_to_end_testing,
     get_columns_and_values,
     list_invalid_db_objects,
@@ -54,7 +54,7 @@ def test_get_columns_and_values(minimal_book_as_orm):
     assert actual == expected
 
 
-@patch("readwise_sqlalchemy.utils.fetch_from_export_api")
+@patch("readwise_local_plus.utils.fetch_from_export_api")
 def test_fetch_real_user_data_json_for_end_to_end_testing(
     mock_fetch_from_export_api: MagicMock, mock_user_config: UserConfig
 ):
@@ -69,7 +69,7 @@ def test_fetch_real_user_data_json_for_end_to_end_testing(
         assert actual is None
 
 
-@patch("readwise_sqlalchemy.utils.FileHandler.write_json")
+@patch("readwise_local_plus.utils.FileHandler.write_json")
 def test_write_to_json_readwise_api_fetch_since_custom_date(
     mock_write_json, mock_user_config
 ):
@@ -119,10 +119,10 @@ def test_log_to_stdout_readwise_api_fetch_since_custom_date(caplog):
     assert f"{highlight.get('updated_at')}" in logs
 
 
-@patch("readwise_sqlalchemy.utils.fetch_from_export_api")
-@patch("readwise_sqlalchemy.utils.fetch_user_config")
-@patch("readwise_sqlalchemy.utils.log_to_stdout_readwise_api_fetch_since_custom_date")
-@patch("readwise_sqlalchemy.utils.write_to_json_readwise_api_fetch_since_custom_date")
+@patch("readwise_local_plus.utils.fetch_from_export_api")
+@patch("readwise_local_plus.utils.fetch_user_config")
+@patch("readwise_local_plus.utils.log_to_stdout_readwise_api_fetch_since_custom_date")
+@patch("readwise_local_plus.utils.write_to_json_readwise_api_fetch_since_custom_date")
 def test_readwise_api_fetch_since_custom_date(
     mock_write_json,
     mock_log_stdout,

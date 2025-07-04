@@ -6,11 +6,11 @@ from typing import Any, Optional, cast
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import DeclarativeBase
 
-from readwise_sqlalchemy.config import UserConfig, fetch_user_config
-from readwise_sqlalchemy.db_operations import get_session
-from readwise_sqlalchemy.integrations.readwise import fetch_from_export_api
-from readwise_sqlalchemy.models import Book, BookTag, Highlight, HighlightTag
-from readwise_sqlalchemy.types import ValidatedModel
+from readwise_local_plus.config import UserConfig, fetch_user_config
+from readwise_local_plus.db_operations import get_session
+from readwise_local_plus.integrations.readwise import fetch_from_export_api
+from readwise_local_plus.models import Book, BookTag, Highlight, HighlightTag
+from readwise_local_plus.types import ValidatedModel
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ def fetch_real_user_data_json_for_end_to_end_testing(
 
     *THE FUNCTION MUST BE INVOKED BY YOU. YOUR DATA NEVER LEAVES YOUR MACHINE*
 
-    Your data is saved locally as `~/readwise-sqlalchemy/my_readwise_highlights.json`.
+    Your data is saved locally as `~/readwise-local-plus/my_readwise_highlights.json`.
     When pytest is invoked, if `my_readwise_highlights.json` exists, an end-to-end test
     is run. See the test at `tests/e2e/test_main.py`.
 

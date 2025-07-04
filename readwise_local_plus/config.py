@@ -27,25 +27,26 @@ class UserConfig:
         log_path : pathlib.Path
             The path to the log file.
         config_dir : pathlib.Path
-            The directory for configuration files, set to `~/.config/rw-sql`.
+            The directory for configuration files, set to
+            ``~/.config/readwise-local-plus``.
         env_file : pathlib.Path
             The path to the environment variables file in the config_dir, set to
-            ``~/.config/rw-sql/.env``.
+            ``~/.config/readwise-local-plus/.env``.
         readwise_api_token : str | None
             The Readwise API token loaded from the environment variables.
         db_path : pathlib.Path
             The path to the SQLite database file, defaults to
-            ``~/.readwise-sqlalchemy/readwise.db``.
+            ``~/.readwise-local-plus/readwise.db``.
         """
         self.user_dir = user_dir
-        self.app_dir: Path = user_dir / "readwise-sqlalchemy"
+        self.app_dir: Path = user_dir / "readwise-local-plus"
         self.app_dir.mkdir(exist_ok=True, parents=True)
         self.log_path = self.app_dir / "logs" / "app.log"
-        self.config_dir = user_dir / ".config" / "rw-sql"
+        self.config_dir = user_dir / ".config" / "readwise-local-plus"
         self.env_file: Path = self.config_dir / ".env"
         self.load_environment_variables_file()
         self.readwise_api_token: str | None = os.getenv("READWISE_API_TOKEN")
-        self.db_path: Path = self.app_dir / "readwise.db"
+        self.db_path: Path = self.app_dir / "readwise-local-plus.db"
 
     def load_environment_variables_file(self) -> None:
         """
@@ -60,7 +61,8 @@ class UserConfig:
             load_dotenv(self.env_file, override=True)
         else:
             raise MissingEnvironmentFile(
-                "A '.env' file is expected in the '~/.config/rw-sql' directory."
+                "A '.env' file is expected in the '~/.config/readwise-local-plus' "
+                "directory."
             )
 
 

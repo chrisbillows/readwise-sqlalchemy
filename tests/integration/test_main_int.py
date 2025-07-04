@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from readwise_sqlalchemy.pipeline import validate_nested_objects
+from readwise_local_plus.pipeline import validate_nested_objects
 from tests.helpers import mock_api_response
 
 

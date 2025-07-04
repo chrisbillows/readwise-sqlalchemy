@@ -35,9 +35,9 @@ jobs:
 
     - name: Create mock .env file
       run: |
-        mkdir -p $HOME/.config/readwise_local_plus/
-        echo "READWISE_API_TOKEN=abc123" > $HOME/.config/readwise_local_plus/.env
-        cat $HOME/.config/readwise_local_plus/.env
+        mkdir -p $HOME/.config/readwise-local-plus/
+        echo "READWISE_API_TOKEN=abc123" > $HOME/.config/readwise-local-plus/.env
+        cat $HOME/.config/readwise-local-plus/.env
 
     - name: Install the package
       run: |

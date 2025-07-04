@@ -59,9 +59,8 @@ jobs:
     - name: Run pytest
       run: pytest
 
-    # TODO: See #2: Run CLI help in GitHub action
-    # - name: Run ldm --help
-    #   run: ldm --help
+    - name: Run help
+      run: rwlp --help
 
     - name: List installed package files for debugging
       run: |

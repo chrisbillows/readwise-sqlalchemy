@@ -33,7 +33,7 @@ jobs:
           if-no-files-found: error
           path: dist/
 
-      - name: Show built artifacts
+      - name: Show build artifacts (for debugging)
         run: ls -l dist/
 
   test:
@@ -56,19 +56,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: build-artifacts
-
-      - name: Figuring out env commands
-        run: |
-          pwd
-          ls -l
-          echo "GITHUB_WORKSPACE: ${{ github.workspace }}"
-          echo contents of root:
-          ls /
-          echo HOME:
-          echo $HOME
-          ls $HOME
-          echo /home/runner/work/_temp/
-          ls /home/runner/work/_temp/
 
       - name: Install built package (wheel preferred)
         run: |

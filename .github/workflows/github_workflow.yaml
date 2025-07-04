@@ -52,13 +52,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Show build artifacts again
-        run: ls -l dist/
-
       - name: Download built artifacts
         uses: actions/download-artifact@v4
         with:
           name: build-artifacts
+
+      - name: Show build artifacts again
+        run: ls -l dist/
 
       - name: Install built package (wheel preferred)
         run: |

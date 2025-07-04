@@ -32,6 +32,9 @@ jobs:
           name: dist
           path: dist/
 
+      - name: Show built artifacts
+        run: ls -l dist/
+
   test:
     name: Test on Python ${{ matrix.python-version }}
     needs: build
@@ -51,7 +54,7 @@ jobs:
       - name: Download built artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: dist/
 
       - name: Install built package (wheel preferred)
         run: |

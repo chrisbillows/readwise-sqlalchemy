@@ -21,7 +21,7 @@ jobs:
       - name: Install build tools
         run: |
           python -m pip install --upgrade pip
-          pip install build
+          pip install build twine
 
       - name: Build sdist and wheel
         run: python -m build
@@ -29,7 +29,8 @@ jobs:
       - name: Upload built artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: build-artifacts
+          if-no-files-found: error
           path: dist/
 
       - name: Show built artifacts
@@ -51,10 +52,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Show build artifacts again
+        run: ls -l dist/
+
       - name: Download built artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist/
+          name: build-artifacts
 
       - name: Install built package (wheel preferred)
         run: |

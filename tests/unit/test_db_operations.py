@@ -195,6 +195,7 @@ def test_db_populater_flattened_populate_database(
         fetched_objects = clean_session.scalars(select(orm_obj)).all()
         actual_obj = fetched_objects[0]
         assert getattr(actual_obj, target_field) == expected_value
+        clean_session.close()
 
 
 def test_book_versioning(setup_db, mock_book):

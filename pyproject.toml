@@ -22,6 +22,7 @@ dependencies = [
 dev = [
     "mypy",
     "pre-commit",
+    "pydata-sphinx-theme",
     "pytest",
     "pytest-cov",
     "ruff",

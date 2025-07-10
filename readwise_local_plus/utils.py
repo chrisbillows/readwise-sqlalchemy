@@ -10,7 +10,7 @@ from readwise_local_plus.config import UserConfig, fetch_user_config
 from readwise_local_plus.db_operations import get_session
 from readwise_local_plus.integrations.readwise import fetch_from_export_api
 from readwise_local_plus.models import Book, BookTag, Highlight, HighlightTag
-from readwise_local_plus.types import ValidatedModel
+from readwise_local_plus.types import ReadwiseAPIObject
 
 logger = logging.getLogger(__name__)
 
@@ -206,10 +206,10 @@ def list_invalid_db_objects(user_config: Optional[UserConfig] = None) -> None:
 
     session = get_session(user_config.db_path)
 
-    objs: list[type[ValidatedModel]] = cast(
-        list[type[ValidatedModel]], [Book, BookTag, Highlight, HighlightTag]
+    objs: list[type[ReadwiseAPIObject]] = cast(
+        list[type[ReadwiseAPIObject]], [Book, BookTag, Highlight, HighlightTag]
     )
-    invalids: list[tuple[str, ValidatedModel]] = []
+    invalids: list[tuple[str, ReadwiseAPIObject]] = []
 
     for obj in objs:
         results = session.query(obj).where(obj.validated.is_(False)).all()  # type: ignore[attr-defined]

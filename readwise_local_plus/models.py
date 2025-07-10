@@ -36,7 +36,34 @@ from sqlalchemy.orm import (
 )
 
 
-class Base(DeclarativeBase):
+class ModelDumperMixin:
+    """Mixin to dump column data to a dictionary."""
+
+    def dump_column_data(self, exclude: Optional[set[str]] = None) -> dict[str, str]:
+        """
+        Dump column fields and values to a dict.
+
+        Returns
+        -------
+        dict[str, str]
+            A dictionary where keys are column names and values are the corresponding
+            values from the ORM mapped class instance.
+
+        Parameters
+        ----------
+        exclude : Optional[set[str]]
+            A set of column names to exclude from the output. If None, no columns are
+            excluded.
+        """
+        exclude = exclude or set()
+        return {
+            column.key: getattr(self, column.key)
+            for column in object_mapper(self).columns
+            if column.key not in exclude
+        }
+
+
+class Base(DeclarativeBase, ModelDumperMixin):
     """
     Subclass SQLAlchemy ``DeclarativeBase`` base class.
 
@@ -66,18 +93,7 @@ class ValidationMixin:
     validation_errors: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
 
 
-class ModelDumperMixin:
-    def dump_column_data(self, exclude: Optional[set[str]] = None) -> dict[str, str]:
-        """Dump column fields and values to a dict."""
-        exclude = exclude or set()
-        return {
-            column.key: getattr(self, column.key)
-            for column in object_mapper(self).columns
-            if column.key not in exclude
-        }
-
-
-class BookBase(Base, ValidationMixin, ModelDumperMixin):
+class BookBase(Base, ValidationMixin):
     """
     Abstract base class for Book fields (excluding relationships).
     """
@@ -248,7 +264,7 @@ class Book(BookBase):
         )
 
 
-class BookTag(Base, ValidationMixin, ModelDumperMixin):
+class BookTag(Base, ValidationMixin):
     """
     Readwise book tag as a SQL Alchemy ORM Mapped class.
 
@@ -302,7 +318,7 @@ class BookTag(Base, ValidationMixin, ModelDumperMixin):
         return f"BookTag(name={self.name!r}, id={self.id!r})"
 
 
-class HighlightBase(Base, ValidationMixin, ModelDumperMixin):
+class HighlightBase(Base, ValidationMixin):
     """
     Abstract base class for Highlight fields (excluding relationships).
     """
@@ -466,7 +482,7 @@ class Highlight(HighlightBase):
         return ", ".join(parts) + ")"
 
 
-class HighlightTag(Base, ValidationMixin, ModelDumperMixin):
+class HighlightTag(Base, ValidationMixin):
     """
     Readwise highlight tag as a SQL Alchemy ORM Mapped class.
 
@@ -519,7 +535,7 @@ class HighlightTag(Base, ValidationMixin, ModelDumperMixin):
         return f"HighlightTag(name={self.name!r}, id={self.id!r})"
 
 
-class ReadwiseBatch(Base, ModelDumperMixin):
+class ReadwiseBatch(Base):
     """
     A batch of database updates from the Readwise API.
 

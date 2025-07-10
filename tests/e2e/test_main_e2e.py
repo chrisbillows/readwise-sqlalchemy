@@ -220,151 +220,188 @@ def initial_populate_of_db_from_user_data(
 # -----------------------------
 
 
-def test_total_books(
-    initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
-):
-    rw_data, session = initial_populate_of_db_from_user_data
-    stmt = select(func.count()).select_from(Book)
-    actual_total_books = session.execute(stmt).scalar()
+class TestInitialPopulateOfDBFromUserData:
+    """
+    Tests that the initial population of the database from user data works as expected.
+    """
 
-    assert actual_total_books == rw_data.total_books
+    def test_initial_populate_of_db_from_user_data(
+        self, initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session]
+    ):
+        rw_data, session = initial_populate_of_db_from_user_data
+        assert rw_data.total_books > 0
+        assert rw_data.total_book_tags > 0
+        assert rw_data.total_highlights > 0
+        assert rw_data.total_highlight_tags > 0
+        assert session is not None
+
+    def test_total_books(
+        self,
+        initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
+    ):
+        rw_data, session = initial_populate_of_db_from_user_data
+        stmt = select(func.count()).select_from(Book)
+        actual_total_books = session.execute(stmt).scalar()
+
+        assert actual_total_books == rw_data.total_books
+
+    def test_sample_book(
+        self,
+        initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
+    ):
+        rw_data, session = initial_populate_of_db_from_user_data
+        random.seed(1)
+        sample_book = random.choice(rw_data.full_content)
+        stmt = select(Book).where(Book.title == sample_book["title"])
+        result = session.execute(stmt).scalars().all()
+
+        # Check only 1 item matches query.
+        assert len(result) == 1
+
+        fetched_book = result[0]
+        assert fetched_book.title == sample_book["title"]
+        assert len(fetched_book.highlights) == len(sample_book["highlights"])
+
+    def test_total_book_tags(
+        self,
+        initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
+    ):
+        rw_data, session = initial_populate_of_db_from_user_data
+
+        stmt = select(func.count()).select_from(BookTag)
+        actual_total_book_tags = session.execute(stmt).scalar()
+
+        assert actual_total_book_tags == rw_data.total_book_tags
+
+    def test_sample_book_tag(
+        self,
+        initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
+    ):
+        rw_data, session = initial_populate_of_db_from_user_data
+
+        # Find a highlight with tags.
+        sample_book, sample_book_tag = find_a_sample_book_tag(rw_data.full_content)
+        if sample_book is None and sample_book_tag is None:
+            pytest.skip("No books with tags found in Readwise user data")
+
+        stmt = select(BookTag).where(BookTag.id == sample_book_tag["id"])
+        result = session.execute(stmt).scalars().all()
+
+        # Check only 1 item matches query.
+        assert len(result) == 1
+
+        fetched_book_tag = result[0]
+        assert fetched_book_tag.name == sample_book_tag["name"]
+        assert fetched_book_tag.id == sample_book_tag["id"]
+        assert fetched_book_tag.book.user_book_id == sample_book["user_book_id"]
+
+    def test_total_highlights(
+        self,
+        initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
+    ):
+        rw_data, session = initial_populate_of_db_from_user_data
+
+        stmt = select(func.count()).select_from(Highlight)
+        actual_total_highlights = session.execute(stmt).scalar()
+
+        assert actual_total_highlights == rw_data.total_highlights
+
+    def test_sample_highlight(
+        self,
+        initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
+    ):
+        rw_data, session = initial_populate_of_db_from_user_data
+        random.seed(2)
+        sample_book = random.choice(rw_data.full_content)
+        sample_highlight = random.choice(sample_book["highlights"])
+
+        stmt = select(Highlight).where(Highlight.id == sample_highlight["id"])
+        result = session.execute(stmt).scalars().all()
+
+        # Check only 1 item matches query.
+        assert len(result) == 1
+
+        fetched_highlight = result[0]
+        assert fetched_highlight.text == sample_highlight["text"]
+
+    def test_total_readwise_batches(
+        self,
+        initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
+    ):
+        _, session = initial_populate_of_db_from_user_data
+        stmt = select(func.count()).select_from(ReadwiseBatch)
+        actual_readwise_batches = session.execute(stmt).scalar()
+        assert actual_readwise_batches == 1
+
+    def test_sample_readwise_batch(
+        self,
+        initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
+    ):
+        rw_data, session = initial_populate_of_db_from_user_data
+
+        stmt = select(ReadwiseBatch)
+        result = session.execute(stmt).scalars().all()
+
+        # Check only 1 item matches query.
+        assert len(result) == 1
+
+        fetched_batch = result[0]
+        assert fetched_batch.id == 1
+        assert len(fetched_batch.books) == rw_data.total_books
+        assert len(fetched_batch.highlights) == rw_data.total_highlights
+        assert len(fetched_batch.highlight_tags) == rw_data.total_highlight_tags
+        # Not mocked so should be today's date unless ran at midnight.
+        assert fetched_batch.start_time.date() == date.today(), (
+            "Expected to fail around midnight..."
+        )
+
+    def test_total_highlight_tags(
+        self,
+        initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
+    ):
+        rw_data, session = initial_populate_of_db_from_user_data
+
+        stmt = select(func.count()).select_from(HighlightTag)
+        actual_total_highlights = session.execute(stmt).scalar()
+
+        assert actual_total_highlights == rw_data.total_highlight_tags
+
+    def test_sample_highlight_tag(
+        self,
+        initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
+    ):
+        rw_data, session = initial_populate_of_db_from_user_data
+
+        # Find a highlight with tags.
+        _, sample_hl, sample_hl_tag = find_a_sample_highlight_tag(rw_data.full_content)
+
+        stmt = select(HighlightTag).where(HighlightTag.id == sample_hl_tag["id"])
+        result = session.execute(stmt).scalars().all()
+
+        # Check only 1 item matches query.
+        assert len(result) == 1
+
+        fetched_hl_tag = result[0]
+        assert fetched_hl_tag.name == sample_hl_tag["name"]
+        assert fetched_hl_tag.highlight_id == sample_hl["id"]
 
 
-def test_sample_book(
-    initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
-):
-    rw_data, session = initial_populate_of_db_from_user_data
-    random.seed(1)
-    sample_book = random.choice(rw_data.full_content)
-    stmt = select(Book).where(Book.title == sample_book["title"])
-    result = session.execute(stmt).scalars().all()
+class TestResyncAllHighlightsWithNoChanges:
+    """
+    Tests that the resyncing of all highlights with no changes works as expected.
+    """
 
-    # Check only 1 item matches query.
-    assert len(result) == 1
+    def test_resync_all_highlights_with_no_changes(
+        self,
+        initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
+    ):
+        rw_data, session = initial_populate_of_db_from_user_data
 
-    fetched_book = result[0]
-    assert fetched_book.title == sample_book["title"]
-    assert len(fetched_book.highlights) == len(sample_book["highlights"])
+        # Run the sync command again with no changes.
+        sys.argv = ["rw", "sync", "--delta"]
+        main(fetch_user_config())
 
-
-def test_total_book_tags(
-    initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
-):
-    rw_data, session = initial_populate_of_db_from_user_data
-
-    stmt = select(func.count()).select_from(BookTag)
-    actual_total_book_tags = session.execute(stmt).scalar()
-
-    assert actual_total_book_tags == rw_data.total_book_tags
-
-
-def test_sample_book_tag(
-    initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
-):
-    rw_data, session = initial_populate_of_db_from_user_data
-
-    # Find a highlight with tags.
-    sample_book, sample_book_tag = find_a_sample_book_tag(rw_data.full_content)
-    if sample_book is None and sample_book_tag is None:
-        pytest.skip("No books with tags found in Readwise user data")
-
-    stmt = select(BookTag).where(BookTag.id == sample_book_tag["id"])
-    result = session.execute(stmt).scalars().all()
-
-    # Check only 1 item matches query.
-    assert len(result) == 1
-
-    fetched_book_tag = result[0]
-    assert fetched_book_tag.name == sample_book_tag["name"]
-    assert fetched_book_tag.id == sample_book_tag["id"]
-    assert fetched_book_tag.book.user_book_id == sample_book["user_book_id"]
-
-
-def test_total_highlights(
-    initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
-):
-    rw_data, session = initial_populate_of_db_from_user_data
-
-    stmt = select(func.count()).select_from(Highlight)
-    actual_total_highlights = session.execute(stmt).scalar()
-
-    assert actual_total_highlights == rw_data.total_highlights
-
-
-def test_sample_highlight(
-    initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
-):
-    rw_data, session = initial_populate_of_db_from_user_data
-    random.seed(2)
-    sample_book = random.choice(rw_data.full_content)
-    sample_highlight = random.choice(sample_book["highlights"])
-
-    stmt = select(Highlight).where(Highlight.id == sample_highlight["id"])
-    result = session.execute(stmt).scalars().all()
-
-    # Check only 1 item matches query.
-    assert len(result) == 1
-
-    fetched_highlight = result[0]
-    assert fetched_highlight.text == sample_highlight["text"]
-
-
-def test_total_readwise_batches(
-    initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
-):
-    _, session = initial_populate_of_db_from_user_data
-    stmt = select(func.count()).select_from(ReadwiseBatch)
-    actual_readwise_batches = session.execute(stmt).scalar()
-    assert actual_readwise_batches == 1
-
-
-def test_sample_readwise_batch(
-    initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
-):
-    rw_data, session = initial_populate_of_db_from_user_data
-
-    stmt = select(ReadwiseBatch)
-    result = session.execute(stmt).scalars().all()
-
-    # Check only 1 item matches query.
-    assert len(result) == 1
-
-    fetched_batch = result[0]
-    assert fetched_batch.id == 1
-    assert len(fetched_batch.books) == rw_data.total_books
-    assert len(fetched_batch.highlights) == rw_data.total_highlights
-    assert len(fetched_batch.highlight_tags) == rw_data.total_highlight_tags
-    # Not mocked so should be today's date unless ran at midnight.
-    assert fetched_batch.start_time.date() == date.today(), (
-        "Expected to fail around midnight..."
-    )
-
-
-def test_total_highlight_tags(
-    initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
-):
-    rw_data, session = initial_populate_of_db_from_user_data
-
-    stmt = select(func.count()).select_from(HighlightTag)
-    actual_total_highlights = session.execute(stmt).scalar()
-
-    assert actual_total_highlights == rw_data.total_highlight_tags
-
-
-def test_sample_highlight_tag(
-    initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
-):
-    rw_data, session = initial_populate_of_db_from_user_data
-
-    # Find a highlight with tags.
-    _, sample_hl, sample_hl_tag = find_a_sample_highlight_tag(rw_data.full_content)
-
-    stmt = select(HighlightTag).where(HighlightTag.id == sample_hl_tag["id"])
-    result = session.execute(stmt).scalars().all()
-
-    # Check only 1 item matches query.
-    assert len(result) == 1
-
-    fetched_hl_tag = result[0]
-    assert fetched_hl_tag.name == sample_hl_tag["name"]
-    assert fetched_hl_tag.highlight_id == sample_hl["id"]
+        # Check the batch count is still 1.
+        stmt = select(func.count()).select_from(ReadwiseBatch)
+        actual_readwise_batches = session.execute(stmt).scalar()
+        assert actual_readwise_batches == 1

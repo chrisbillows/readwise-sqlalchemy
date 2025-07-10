@@ -1,15 +1,13 @@
 import logging
 from datetime import datetime
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
-from readwise_local_plus.config import UserConfig, fetch_user_config
+from readwise_local_plus.config import UserConfig
 from readwise_local_plus.db_operations import (
     DatabasePopulaterFlattenedData,
-    create_database,
-    get_last_fetch,
     get_session,
 )
 from readwise_local_plus.integrations.readwise import fetch_from_export_api
@@ -20,7 +18,6 @@ from readwise_local_plus.schemas import (
     HighlightTagsSchema,
 )
 from readwise_local_plus.types import (
-    CheckDBFn,
     FetchFn,
     FlattenFn,
     SessionFn,
@@ -38,39 +35,6 @@ SCHEMAS_BY_OBJECT: dict[str, type[BaseModel]] = {
     "highlights": HighlightSchemaUnnested,
     "highlight_tags": HighlightTagsSchema,
 }
-
-
-def check_database(
-    session: Session, user_config: Optional[UserConfig] = None
-) -> None | datetime:
-    """
-    If the db exists, return the last fetch time, otherwise create the db.
-
-    Parameters
-    ----------
-    session: Session
-        A SQL alchemy session connected to a database.
-    user_config: UserConfig, default = fetch_user_config()
-        A User Config object.
-
-    Returns
-    -------
-    None | datetime
-        None if the database doesn't exist. If the database exists, the time the last
-        fetch was completed as a datetime object.
-    """
-    if user_config is None:
-        user_config = fetch_user_config()
-
-    if user_config.db_path.exists():
-        logger.info("Database exists")
-        last_fetch = get_last_fetch(session)
-        logger.info(f"Last fetch: {last_fetch}")
-        return last_fetch
-    else:
-        logger.info(f"Creating database at {user_config.db_path}")
-        create_database(user_config.db_path)
-        return None
 
 
 def datetime_to_isoformat_str(dt: datetime) -> str:
@@ -434,9 +398,9 @@ def update_database_flattened_objects(
 
 
 def run_pipeline_flattened_objects(
-    user_config: UserConfig = fetch_user_config(),
+    user_config: UserConfig,
+    last_fetch: datetime | None = None,
     get_session_func: SessionFn = get_session,
-    check_db_func: CheckDBFn = check_database,
     fetch_func: FetchFn = fetch_books_with_highlights,
     validate_nested_objs_func: ValidateNestedObjFn = validate_nested_objects,
     flatten_func: FlattenFn = flatten_books_with_highlights,
@@ -453,15 +417,14 @@ def run_pipeline_flattened_objects(
 
     Parameters
     ----------
-    user_config : UserConfig, optional, default = fetch_user_config()
+    user_config : UserConfig, optional
         Configuration object.
+    last_fetch: datetime | None, optional
+        The last fetch datetime, if only new highlights are required    .
     setup_logging_func: LogSetupFn, optional, default = setup_logging()
         A function that sets up application logging.
     get_session_func: SessionFn, optional, get_session()
         A function that returns a SQLAlchemy database Session.
-    check_db_func: CheckDBFn, optional, default = check_database()
-        A function that creates the database or returns the last fetch datetime (or
-        None if it just creates the db).
     fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
         Function that fetches highlights and returns them as a tuple with the start
         and end times of the fetch as datetimes.
@@ -478,7 +441,6 @@ def run_pipeline_flattened_objects(
         Function that populates the database with the flattened objects.
     """
     session = get_session_func(user_config.db_path)
-    last_fetch = check_db_func(session, user_config)
     raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
     nested_books_first_validation = validate_nested_objs_func(raw_books)
     flat_objs_first_validation = flatten_func(nested_books_first_validation)

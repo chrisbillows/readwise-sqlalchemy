@@ -1,13 +1,11 @@
 from datetime import datetime
 from typing import Any, Callable
-from unittest.mock import ANY, MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import BaseModel
 
-from readwise_local_plus.config import UserConfig
 from readwise_local_plus.pipeline import (
-    check_database,
     datetime_to_isoformat_str,
     fetch_books_with_highlights,
     flatten_books_with_highlights,
@@ -27,7 +25,6 @@ def mock_run_pipeline_flattened_objs() -> tuple[dict, Any]:
     # Strings are used as simplified return values. They are not the real return types.
     mocks = {
         "mock_get_session": MagicMock(return_value="session"),
-        "mock_check_database": MagicMock(return_value="last_fetch"),
         "mock_fetch_books_with_highlights": MagicMock(
             return_value=("raw_data", "start", "end")
         ),
@@ -50,7 +47,6 @@ def mock_run_pipeline_flattened_objs() -> tuple[dict, Any]:
     actual = run_pipeline_flattened_objects(
         user_config=MagicMock(DB="db"),
         get_session_func=mocks["mock_get_session"],
-        check_db_func=mocks["mock_check_database"],
         fetch_func=mocks["mock_fetch_books_with_highlights"],
         validate_nested_objs_func=mocks["mock_validate_nested_objects"],
         flatten_func=mocks["mock_flatten_books_with_highlights"],
@@ -58,39 +54,6 @@ def mock_run_pipeline_flattened_objs() -> tuple[dict, Any]:
         update_db_func=mocks["mock_update_database_flattened_objects"],
     )
     return mocks, actual
-
-
-@patch("readwise_local_plus.pipeline.create_database")
-def test_check_database_when_database_doesnt_exist(
-    mock_create_database: MagicMock, mock_user_config: UserConfig
-):
-    mock_session = Mock()
-    actual = check_database(mock_session, mock_user_config)
-    mock_create_database.assert_called_once_with(mock_user_config.db_path)
-    assert actual is None
-
-
-@patch("readwise_local_plus.pipeline.create_database")
-@patch("readwise_local_plus.pipeline.get_last_fetch")
-def test_check_database_when_database_exists(
-    mock_query_last_fetch: MagicMock,
-    mock_create_database: MagicMock,
-):
-    mock_session = MagicMock()
-
-    mock_user_config = MagicMock()
-    # Mock the database existing.
-    mock_user_config.db_path.exists.return_value = True
-
-    mock_last_fetch = datetime(2025, 1, 1, 1, 1, 1)
-    mock_query_last_fetch.return_value = mock_last_fetch
-
-    result = check_database(mock_session, mock_user_config)
-
-    mock_user_config.db_path.exists.assert_called_once()
-    mock_query_last_fetch.assert_called_once_with(mock_session)
-    mock_create_database.assert_not_called()
-    assert result == mock_last_fetch
 
 
 def test_datetime_to_iso_format_str():
@@ -592,10 +555,9 @@ def test_update_database_flattened_objects(mock_db_populater_flattened_data: Mag
     [
         ("mock_get_session", lambda m: m.assert_called_once()),
         # `Any` avoids passing in mock_user_config from mock_run_pipeline fixture.
-        ("mock_check_database", lambda m: m.assert_called_once_with("session", ANY)),
         (
             "mock_fetch_books_with_highlights",
-            lambda m: m.assert_called_once_with("last_fetch"),
+            lambda m: m.assert_called_once_with(None),
         ),
         (
             "mock_validate_nested_objects",

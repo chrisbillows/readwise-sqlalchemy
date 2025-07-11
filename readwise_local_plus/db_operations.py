@@ -111,6 +111,7 @@ def check_database(user_config: Optional[UserConfig] = None) -> None | datetime:
         logger.info("Database exists")
         session = get_session(user_config.db_path)
         last_fetch = get_last_fetch(session)
+        session.close()
         logger.info(f"Last fetch: {last_fetch}")
         return last_fetch
     else:
@@ -315,7 +316,5 @@ def get_last_fetch(session: Session) -> datetime | None:
     """
     stmt = select(ReadwiseBatch).order_by(desc(ReadwiseBatch.start_time)).limit(1)
     result = session.execute(stmt).scalars().first()
-    if result:
-        return result.database_write_time
-    else:
-        return None
+    last_fetch = result.database_write_time if result else None
+    return last_fetch

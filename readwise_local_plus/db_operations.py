@@ -121,6 +121,17 @@ def check_database(user_config: Optional[UserConfig] = None) -> None | datetime:
 
 
 class DatabasePopulaterFlattenedData:
+    """
+    Class to populate the database with flattened data from Readwise API responses.
+
+    Attributes
+    ----------
+    READWISE_API_OBJECTS : list[Type[Base]]
+        A list of Readwise API objects that are used to populate the database.
+    ORM_TABLE_MAP : dict[str, Type[Base]]
+        A mapping of object type names to their corresponding ORM model classes.
+    """
+
     READWISE_API_OBJECTS = [Book, BookTag, Highlight, HighlightTag]
     ORM_TABLE_MAP: dict[str, Type[Base]] = {
         cls.__tablename__: cls for cls in READWISE_API_OBJECTS
@@ -151,7 +162,8 @@ class DatabasePopulaterFlattenedData:
         Attributes
         ----------
         batch: ReadwiseBatch
-            A ReadwiseBatch object representing the batch of data being processed.
+            A ReadwiseBatch object, added to the session and representing the batch of
+            data being processed.
         """
         self.session = session
         self.validated_flattened_objs = validated_flattened_objs
@@ -200,7 +212,7 @@ class DatabasePopulaterFlattenedData:
         ----------
         raw_obj : dict[str, Any]
             The raw object data to be processed.
-        orm_model : Type[BatchedModel]
+        orm_model : Type[Base]
             The ORM model class to which the raw object should be mapped.
         """
         obj_pk_field = class_mapper(orm_model).primary_key[0].name
@@ -241,7 +253,7 @@ class DatabasePopulaterFlattenedData:
 
         Parameters
         ----------
-        existing_obj : Type[Base]
+        existing_obj : ReadwiseAPIObject
             The existing ORM object to check against.
         raw_obj : dict[str, Any]
             The raw object data to compare with the existing object.
@@ -262,7 +274,18 @@ class DatabasePopulaterFlattenedData:
         orm_model: Type[Base],
     ) -> None:
         """
-        Create a version snapshot of the existing object.
+        Create a version snapshot if the object is versionable.
+
+        Parameters
+        ----------
+        existing_obj : ReadwiseAPIObject
+            The existing ORM object.
+        obj_pk_field : str
+            The primary key field of the ORM model.
+        raw_obj_pk_value : int
+            The primary key value of the raw object.
+        orm_model : Type[Base]
+            The ORM model class of the existing object.
         """
         if hasattr(orm_model, "version_class"):
             version_num = self.iterate_version_number(
@@ -282,7 +305,16 @@ class DatabasePopulaterFlattenedData:
         existing_obj: ReadwiseAPIObject,
         raw_obj: dict[str, Any],
     ) -> None:
-        """Create a new version of the object with the updated data."""
+        """
+        Update the existing object with changed data and add to the session.
+
+        Parameters
+        ----------
+        existing_obj : ReadwiseAPIObject
+            The existing ORM object to update.
+        raw_obj : dict[str, Any]
+            The raw object data to update the existing object with.
+        """
         for field, value in raw_obj.items():
             setattr(existing_obj, field, value)
         existing_obj.batch = self.batch
@@ -291,6 +323,18 @@ class DatabasePopulaterFlattenedData:
     def iterate_version_number(
         self, version_model: Type[Base], version_pk_attr: str, raw_obj_pk: Any
     ) -> int:
+        """
+        Get the next version number for a versionable object.
+
+        Parameters
+        ----------
+        version_model : Type[Base]
+            The ORM model class for the versionable object.
+        version_pk_attr : str
+            The primary key attribute of the version model.
+        raw_obj_pk : Any
+            The primary key value of the raw object to check for existing versions.
+        """
         stmt = select(version_model).where(version_pk_attr == raw_obj_pk)
         previous_entries = self.session.execute(stmt).scalars().all()
         version_num = len(previous_entries) + 1

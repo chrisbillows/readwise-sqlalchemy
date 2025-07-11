@@ -419,25 +419,26 @@ def run_pipeline_flattened_objects(
     ----------
     user_config : UserConfig, optional
         Configuration object.
-    last_fetch: datetime | None, optional
-        The last fetch datetime, if only new highlights are required    .
-    setup_logging_func: LogSetupFn, optional, default = setup_logging()
-        A function that sets up application logging.
+    last_fetch: datetime | None, optional, default = None
+        The last fetch datetime, if available and if only new highlights are required.
     get_session_func: SessionFn, optional, get_session()
         A function that returns a SQLAlchemy database Session.
     fetch_func: FetchFn, optional, default = fetch_books_with_highlights()
         Function that fetches highlights and returns them as a tuple with the start
         and end times of the fetch as datetimes.
-    validate_nested_objs_func: ValidateNestedObjFn, optional, default = validate_nested_objects()
+    validate_nested_objs_func: ValidateNestedObjFn, optional,
+            default = validate_nested_objects()
         The first layer of validation, performed on the nested Readwise objects output
         by the API. Adds fields "validated" and "validation_errors" to each obj.
     flatten_func: FlattenFn, optional, default = flatten_books_with_highlights()
         A function that flattens the nested API response into a dict of lists of
         unnested objects, associated by fk.
-    validate_flattened_objs_func: ValidateFetchFlattenedObjFn, default = validate_flattened_objects()
+    validate_flattened_objs_func: ValidateFetchFlattenedObjFn, optional,
+            default = validate_flattened_objects()
         The second layer of validation, performed on unnested objects using Pydantic
         schema.
-    update_func: UpdateDbFlattenedDataFn, optional, default = update_database_flattened_objects()
+    update_db_func: UpdateDbFlattenedDataFn, optional,
+            default = update_database_flattened_objects()
         Function that populates the database with the flattened objects.
     """
     session = get_session_func(user_config.db_path)

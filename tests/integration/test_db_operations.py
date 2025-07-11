@@ -184,8 +184,7 @@ def test_highlight_versioning_for_a_changed_highlight(
         assert versions[0].text != highlights[0].text
 
 
-@pytest.mark.skip()
-def test_book_versioning_book_no_changes(setup_db, mock_book):
+def test_book_versioning_no_changes(setup_db, mock_book):
     db_path = setup_db
 
     # Add original book
@@ -207,11 +206,36 @@ def test_book_versioning_book_no_changes(setup_db, mock_book):
     with session_check.begin():
         books = session_check.scalars(select(Book)).all()
         assert len(books) == 1
-        assert books[0].author == "Updated Author"
+        assert books[0].author == "name surname"
 
         versions = session_check.scalars(select(BookVersion)).all()
         assert len(versions) == 0
 
 
-def test_highlight_versioning_highlight_no_changes():
-    pass
+def test_highlight_versioning_no_changes(setup_db, mock_book, mock_highlight):
+    db_path = setup_db
+
+    # Add original highlight
+    batch_1, session_1 = add_batch(db_path)
+    with session_1.begin():
+        book = Book(**mock_book, batch=batch_1)
+        highlight = Highlight(**mock_highlight, batch=batch_1)
+        session_1.add_all([book, highlight])
+
+    batch_2, session_2 = add_batch(db_path)
+    dbp = DatabasePopulaterFlattenedData(
+        session_2,
+        {"books": [mock_book], "highlights": [mock_highlight]},
+        ANYTIME,
+        ANYTIME,
+    )
+    dbp.populate_database()
+
+    session_check = get_session(db_path)
+    with session_check.begin():
+        highlights = session_check.scalars(select(Highlight)).all()
+        assert len(highlights) == 1
+        assert highlights[0].text == "The highlight text"
+
+        versions = session_check.scalars(select(HighlightVersion)).all()
+        assert len(versions) == 0

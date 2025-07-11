@@ -426,6 +426,7 @@ def test_flatten_books_with_highlights(test_with_validated_keys_present: bool):
                 "readwise_url": "https://readwise.io/bookreview/12345",
                 "source_url": "http://the.source.url.ai",
                 "asin": None,
+                "external_id": None,
             }
         ],
         "book_tags": [{"id": 6969, "name": "arch_btw", "user_book_id": 12345}],

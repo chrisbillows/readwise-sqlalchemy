@@ -70,6 +70,7 @@ def mock_api_response() -> list[dict[str, Any]]:
             "document_note": "A note added in Readwise Reader",
             "readwise_url": "https://readwise.io/bookreview/12345",
             "source_url": "http://the.source.url.ai",
+            "external_id": None,
             "asin": None,
             "highlights": [
                 {

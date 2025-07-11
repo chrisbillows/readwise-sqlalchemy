@@ -26,7 +26,7 @@ class ReadwiseAPIObject(Protocol):
     Protocol for Readwise API objects.
 
     This protocol is used for static typing (e.g. with mypy) to indicate that an object
-    has validation fields, batch fields and a 'model_dump' method.
+    has validation fields, batch fields and a 'dump_column_data' method.
     """
 
     validated: bool

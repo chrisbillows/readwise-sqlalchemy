@@ -362,9 +362,9 @@ class TestInitialPopulateOfDBFromUserData:
         rw_data, session = initial_populate_of_db_from_user_data
 
         stmt = select(func.count()).select_from(HighlightTag)
-        actual_total_highlights = session.execute(stmt).scalar()
+        actual_total_highlight_tags = session.execute(stmt).scalar()
 
-        assert actual_total_highlights == rw_data.total_highlight_tags
+        assert actual_total_highlight_tags == rw_data.total_highlight_tags
 
     def test_sample_highlight_tag(
         self,

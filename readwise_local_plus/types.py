@@ -1,11 +1,11 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Protocol, Type, TypeVar, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, runtime_checkable
 
 from sqlalchemy.orm import Session
 
 from readwise_local_plus.config import UserConfig
-from readwise_local_plus.models import Base, ReadwiseBatch
+from readwise_local_plus.models import ReadwiseBatch
 
 CheckDBFn = Callable[[Session, UserConfig], datetime | None]
 FetchFn = Callable[[datetime | None], tuple[list[dict[str, Any]], datetime, datetime]]
@@ -21,26 +21,19 @@ ValidateFlatObjFn = Callable[
 
 
 @runtime_checkable
-class ValidatedModel(Protocol):
+class ReadwiseAPIObject(Protocol):
     """
-    Protocol for ORM models that include validation fields.
+    Protocol for Readwise API objects.
 
-    This protocol is used for static typing (e.g. with mypy) to indicate that an ORM
-    model defines both `validated` and `validation_errors` attributes. One off usage
-    in this module. If this reoccurs, consider creating a ValidatedBase orm class.
+    This protocol is used for static typing (e.g. with mypy) to indicate that an object
+    has validation fields, batch fields and a 'dump_column_data' method.
     """
 
     validated: bool
     validation_errors: dict[str, str]
-
-
-@runtime_checkable
-class VersionableORM(Protocol):
-    def dump_column_data(self, exclude: set[str] = ...) -> dict[str, object]: ...
-
     batch_id: int
-    batch: ReadwiseBatch
-    version_class: Type[Base]
+    batch: "ReadwiseBatch"
 
-
-VersionableT = TypeVar("VersionableT", bound=VersionableORM)
+    def dump_column_data(self, exclude: Optional[set[str]] = None) -> dict[str, str]:
+        """Dump column fields and values to a dict."""
+        ...

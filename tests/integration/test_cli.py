@@ -73,20 +73,40 @@ def test_parse_args_main_command(passed_args, expected_command):
     assert actual.command == expected_command
 
 
+@pytest.mark.parametrize(
+    "command, expected_value", [(True, None), (False, "ISO 8601 datetime string")]
+)
+@patch("readwise_local_plus.cli.check_database")
 @patch("readwise_local_plus.cli.parse_args")
 @patch("readwise_local_plus.cli.run_pipeline_flattened_objects")
-def test_cli_main_sync(mock_run_pipeline: MagicMock, mock_parse_args: MagicMock):
+def test_cli_main_sync(
+    mock_run_pipeline: MagicMock,
+    mock_parse_args: MagicMock,
+    mock_check_database: MagicMock,
+    command: bool,
+    expected_value: bool,
+):
+    mock_user_config = Mock()
+
     mocked_parsed_args = Mock()
-    # Mock the sync command with either --delta or None defaulting to --delta.
     mocked_parsed_args.command = "sync"
-    mocked_parsed_args.all = False
+    mocked_parsed_args.all = command
     mock_parse_args.return_value = mocked_parsed_args
 
-    mock_user_config = Mock()
+    mock_check_database.return_value = expected_value
 
     main(mock_user_config)
 
-    mock_run_pipeline.assert_called_once_with(mock_user_config)
+    mock_parse_args.assert_called_once()
+
+    if not command:
+        mock_check_database.assert_called_once_with(mock_user_config)
+    else:
+        mock_check_database.assert_not_called()
+
+    mock_run_pipeline.assert_called_once_with(
+        mock_user_config, last_fetch=expected_value
+    )
 
 
 @patch("readwise_local_plus.cli.parse_args")

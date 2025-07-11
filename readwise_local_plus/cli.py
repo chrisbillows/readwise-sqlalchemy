@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Optional
 from readwise_local_plus import __version__
 from readwise_local_plus.config import UserConfig, fetch_user_config
 from readwise_local_plus.configure_logging import setup_logging
+from readwise_local_plus.db_operations import check_database
 from readwise_local_plus.pipeline import run_pipeline_flattened_objects
 from readwise_local_plus.utils import (
     fetch_real_user_data_json_for_end_to_end_testing,
@@ -151,13 +152,11 @@ def main(user_config: Optional[UserConfig] = None) -> None:
     if args.command == "sync":
         if args.all:
             logger.info("Running full sync (--all).")
-            raise NotImplementedError(
-                "Full sync (--all) is not implemented yet. Please use --delta."
-            )
-            # run_pipeline_flattened_objects(user_config) #(all=True)
+            run_pipeline_flattened_objects(user_config, last_fetch=None)
         else:
             logger.info("Running delta sync (--delta).")
-            run_pipeline_flattened_objects(user_config)
+            last_fetch = check_database(user_config)
+            run_pipeline_flattened_objects(user_config, last_fetch=last_fetch)
 
     elif args.command == "list-invalids":
         list_invalid_db_objects(user_config)

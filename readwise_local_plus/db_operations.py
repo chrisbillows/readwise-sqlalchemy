@@ -4,7 +4,7 @@ Logic for interacting with the database.
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Type, Union, cast
 
@@ -172,7 +172,7 @@ class DatabasePopulaterFlattenedData:
         self.batch = ReadwiseBatch(
             start_time=self.start_fetch,
             end_time=self.end_fetch,
-            database_write_time=datetime.now(),
+            database_write_time=datetime.now(tz=timezone.utc),
         )
         self.session.add(self.batch)
 

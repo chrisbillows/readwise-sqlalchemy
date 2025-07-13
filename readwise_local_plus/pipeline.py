@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, cast
 
 from pydantic import BaseModel, ValidationError
@@ -82,9 +82,9 @@ def fetch_books_with_highlights(
     if last_fetch:
         last_fetch_str = datetime_to_isoformat_str(last_fetch)
 
-    start_new_fetch = datetime.now()
+    start_new_fetch = datetime.now(tz=timezone.utc)
     data = fetch_from_export_api(last_fetch_str)
-    end_new_fetch = datetime.now()
+    end_new_fetch = datetime.now(tz=timezone.utc)
     logger.info(f"Fetch contains highlights for {len(data)} books/articles/tweets etc.")
     return (data, start_new_fetch, end_new_fetch)
 

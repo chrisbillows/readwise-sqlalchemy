@@ -93,6 +93,19 @@ class ValidationMixin:
     validation_errors: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
 
 
+class ReadwiseLastFetch(Base):
+    """
+    Singleton table to store the last successful fetch time from the Readwise API.
+
+    Used for incremental syncing with the `updatedAfter` parameter.
+    """
+
+    __tablename__ = "readwise_last_fetch"
+
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    last_successful_fetch: Mapped[datetime] = mapped_column(nullable=False)
+
+
 class BookBase(Base, ValidationMixin):
     """
     Abstract base class for Book fields (excluding relationships).

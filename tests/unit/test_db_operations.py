@@ -111,6 +111,7 @@ def test_create_database_tables_created(mock_user_config: UserConfig):
         ("highlight_versions",),
         ("highlight_tags",),
         ("readwise_batches",),
+        ("readwise_last_fetch",),
     ]
     connection = sqlite3.connect(mock_user_config.db_path)
     cursor = connection.cursor()

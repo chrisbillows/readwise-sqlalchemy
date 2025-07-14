@@ -455,7 +455,7 @@ def run_pipeline_flattened_objects(
 
         # Always update the readwise_last_fetch table with the start and end fetch
         # times, even if no new data was fetched.
-        update_readwise_last_fetch(session, start_fetch=start_fetch)
+        update_readwise_last_fetch(session, start_current_fetch=start_fetch)
 
         try:
             logging.info("Committing session")

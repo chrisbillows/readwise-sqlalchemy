@@ -370,7 +370,7 @@ class DatabasePopulaterFlattenedData:
         return version_num
 
 
-def update_readwise_last_fetch(session: Session, start_fetch: datetime) -> None:
+def update_readwise_last_fetch(session: Session, start_current_fetch: datetime) -> None:
     """
     Update the readwise_last_fetch table with the start and end fetch times.
 
@@ -389,18 +389,18 @@ def update_readwise_last_fetch(session: Session, start_fetch: datetime) -> None:
     logger.info("Updating Readwise Last Fetch table")
     existing = session.get(ReadwiseLastFetch, 1)
     if existing:
-        existing.last_successful_fetch = start_fetch
+        existing.last_successful_fetch = start_current_fetch
     else:
-        existing = ReadwiseLastFetch(id=1, last_successful_fetch=start_fetch)
+        existing = ReadwiseLastFetch(id=1, last_successful_fetch=start_current_fetch)
         session.add(existing)
 
 
 def get_last_fetch(session: Session) -> datetime | None:
     """
-    Get the time of the last Readwise API fetch from the database.
+    Get the UTC time of the last Readwise API fetch from the database.
 
     The 'last fetch' uses the *start* time of the previous fetch, to allow for an
-    overlap. Validation removes duplicated book ids/highlights.
+    overlap.
 
     Parameters
     ----------
@@ -410,9 +410,15 @@ def get_last_fetch(session: Session) -> datetime | None:
     Returns
     -------
     datetime | None
-        A datetime object representing the start time of the last fetch, or None.
+        A datetime object representing the UTC start time of the last fetch, or None.
     """
-    stmt = select(ReadwiseBatch).order_by(desc(ReadwiseBatch.start_time)).limit(1)
+    # Only a single entry is expected in the ReadwiseLastFetch table.
+    logger.info("Fetching last Readwise fetch time from database")
+    stmt = (
+        select(ReadwiseLastFetch)
+        .order_by(desc(ReadwiseLastFetch.last_successful_fetch))
+        .limit(1)
+    )
     result = session.execute(stmt).scalars().first()
-    last_fetch = result.database_write_time if result else None
+    last_fetch = result.last_successful_fetch if result else None
     return last_fetch

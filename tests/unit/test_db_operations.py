@@ -13,13 +13,12 @@ from readwise_local_plus.db_operations import (
     DatabasePopulaterFlattenedData,
     check_database,
     create_database,
+    get_last_fetch,
     get_session,
     safe_create_sqlite_engine,
+    update_readwise_last_fetch,
 )
-from readwise_local_plus.models import (
-    Base,
-    ReadwiseBatch,
-)
+from readwise_local_plus.models import Base, ReadwiseBatch, ReadwiseLastFetch
 from tests.helpers import DbHandle, flat_mock_api_response_fully_validated
 
 logger = logging.getLogger(__name__)
@@ -111,6 +110,7 @@ def test_create_database_tables_created(mock_user_config: UserConfig):
         ("highlight_versions",),
         ("highlight_tags",),
         ("readwise_batches",),
+        ("readwise_last_fetch",),
     ]
     connection = sqlite3.connect(mock_user_config.db_path)
     cursor = connection.cursor()
@@ -164,6 +164,37 @@ def test_database_populater_flattened_instantiates_with_expected_attrs(
         "validated_flattened_objs",
         "start_fetch",
         "end_fetch",
-        "batch",
+        "_batch",
     ]
     assert database_populater.ORM_TABLE_MAP is not None
+
+
+def test_update_readwise_last_fetch(mem_db: DbHandle):
+    mock_fetches = [
+        datetime(2025, 1, 1, 1, 1, 1),
+        datetime(2025, 1, 1, 2, 2, 2),
+    ]
+    for mock_fetch in mock_fetches:
+        update_readwise_last_fetch(mem_db.session, start_current_fetch=mock_fetch)
+        mem_db.session.commit()
+
+        actual_record = mem_db.session.get(ReadwiseLastFetch, 1)
+        assert actual_record.last_successful_fetch == mock_fetch
+
+        total_records = mem_db.session.query(ReadwiseLastFetch).count()
+        assert total_records == 1
+
+
+def test_get_last_fetch_returns_none_if_no_entry(mem_db: DbHandle):
+    last_fetch = get_last_fetch(mem_db.session)
+    assert last_fetch is None
+
+
+def test_get_last_fetch_returns_datetime_if_entry_exists(mem_db: DbHandle):
+    mock_last_start_fetch = datetime(2025, 1, 1, 1, 1, 1)
+    # Beware coupling to the upstream function.
+    update_readwise_last_fetch(
+        mem_db.session, start_current_fetch=mock_last_start_fetch
+    )
+    last_fetch = get_last_fetch(mem_db.session)
+    assert last_fetch == mock_last_start_fetch

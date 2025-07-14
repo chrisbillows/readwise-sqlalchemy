@@ -19,6 +19,7 @@ from readwise_local_plus.models import (
     Highlight,
     HighlightTag,
     ReadwiseBatch,
+    ReadwiseLastFetch,
 )
 from readwise_local_plus.types import ReadwiseAPIObject
 
@@ -162,21 +163,56 @@ class DatabasePopulaterFlattenedData:
         Attributes
         ----------
         batch: ReadwiseBatch
-            A ReadwiseBatch object, added to the session and representing the batch of
-            data being processed.
+            A ReadwiseBatch object representing the current batch of data being
+            processed. This is created only when an object is found that needs to be
+            added to the session.
         """
         self.session = session
         self.validated_flattened_objs = validated_flattened_objs
         self.start_fetch = start_fetch
         self.end_fetch = end_fetch
-        self.batch = ReadwiseBatch(
-            start_time=self.start_fetch,
-            end_time=self.end_fetch,
-            database_write_time=datetime.now(tz=timezone.utc),
-        )
-        self.session.add(self.batch)
+        self._batch: ReadwiseBatch | None = None
 
-    def populate_database(self) -> None:
+    @property
+    def batch(self) -> ReadwiseBatch:
+        """
+        The ReadwiseBatch object representing the current batch of data being processed.
+
+        Batches are only created when an object is found that needs to be added to the
+        session.
+
+        Raises
+        ------
+        RuntimeError
+            If the batch property is invoked before it has been set.
+
+        Returns
+        -------
+        ReadwiseBatch
+            The ReadwiseBatch object for the current session.
+        """
+        if self._batch is None:
+            raise RuntimeError(
+                "Batch has not been set. Call _ensure_batch() to create it."
+            )
+        return self._batch
+
+    def _ensure_batch(self) -> None:
+        """
+        Ensure that a ReadwiseBatch object exists for the current session.
+
+        If it does not exist, create a new one with the start and end fetch times. Use
+        this method before adding any objects to the session.
+        """
+        if self._batch is None:
+            self._batch = ReadwiseBatch(
+                start_time=self.start_fetch,
+                end_time=self.end_fetch,
+                database_write_time=datetime.now(tz=timezone.utc),
+            )
+            self.session.add(self._batch)
+
+    def populate_database(self) -> bool:
         """
         Populate the database with objects from a Readwise API response.
 
@@ -189,19 +225,10 @@ class DatabasePopulaterFlattenedData:
         for obj_name, raw_objs in self.validated_flattened_objs.items():
             orm_model = self.ORM_TABLE_MAP[obj_name]
             for raw_obj in raw_objs:
-                self.process_obj(raw_obj, orm_model)
-        try:
-            logging.info("Committing session")
-            self.session.commit()
-        except Exception as err:
-            self.session.rollback()
-            logging.info(f"Error occurred committing session: {err}")
-            raise err
-        finally:
-            logging.info("Closing session")
-            self.session.close()
+                self._process_obj(raw_obj, orm_model)
+        return self._batch is not None
 
-    def process_obj(self, raw_obj: dict[str, Any], orm_model: Type[Base]) -> None:
+    def _process_obj(self, raw_obj: dict[str, Any], orm_model: Type[Base]) -> None:
         """
         Process objects into the database.
 
@@ -223,25 +250,27 @@ class DatabasePopulaterFlattenedData:
 
         if not existing_obj:
             # Object is brand new.
+            self._ensure_batch()
             obj_as_orm = orm_model(**raw_obj, batch=self.batch)
             self.session.add(obj_as_orm)
         else:
             # Object already exists.
-            if not self.existing_obj_is_duplicate(existing_obj, raw_obj):
-                self.version_existing_obj_if_versionable(
+            if not self._existing_obj_is_duplicate(existing_obj, raw_obj):
+                self._ensure_batch()
+                self._version_existing_obj_if_versionable(
                     existing_obj,
                     obj_pk_field,
                     raw_obj_pk_value,
                     orm_model,
                 )
                 # Object has changed // Update existing object.
-                self.add_updated_obj_to_session(existing_obj, raw_obj)
+                self._add_updated_obj_to_session(existing_obj, raw_obj)
 
             else:
                 # Object has not changed. // Do nothing.
                 pass
 
-    def existing_obj_is_duplicate(
+    def _existing_obj_is_duplicate(
         self, existing_obj: ReadwiseAPIObject, raw_obj: dict[str, Any]
     ) -> bool:
         """
@@ -266,7 +295,7 @@ class DatabasePopulaterFlattenedData:
         existing_data = existing_obj.dump_column_data(exclude={"batch_id"})
         return existing_data == raw_obj
 
-    def version_existing_obj_if_versionable(
+    def _version_existing_obj_if_versionable(
         self,
         existing_obj: ReadwiseAPIObject,
         obj_pk_field: str,
@@ -288,7 +317,7 @@ class DatabasePopulaterFlattenedData:
             The ORM model class of the existing object.
         """
         if hasattr(orm_model, "version_class"):
-            version_num = self.iterate_version_number(
+            version_num = self._iterate_version_number(
                 orm_model, obj_pk_field, raw_obj_pk_value
             )
             version_model = orm_model.version_class
@@ -300,7 +329,7 @@ class DatabasePopulaterFlattenedData:
             )
             self.session.add(version_snapshot_orm)
 
-    def add_updated_obj_to_session(
+    def _add_updated_obj_to_session(
         self,
         existing_obj: ReadwiseAPIObject,
         raw_obj: dict[str, Any],
@@ -320,7 +349,7 @@ class DatabasePopulaterFlattenedData:
         existing_obj.batch = self.batch
         self.session.add(existing_obj)
 
-    def iterate_version_number(
+    def _iterate_version_number(
         self, version_model: Type[Base], version_pk_attr: str, raw_obj_pk: Any
     ) -> int:
         """
@@ -341,12 +370,35 @@ class DatabasePopulaterFlattenedData:
         return version_num
 
 
+def update_readwise_last_fetch(session: Session, start_current_fetch: datetime) -> None:
+    """
+    Update the readwise_last_fetch table with the start and end fetch times.
+
+    This will overwrite the existing entry with id=1, or create a new one if it does not
+    exist.
+
+    Parameters
+    ----------
+    session: Session
+        A SQL alchemy session connected to a database.
+    start_current_fetch: datetime
+        The time the fetch was called.
+    """
+    logger.info("Updating Readwise Last Fetch table")
+    existing = session.get(ReadwiseLastFetch, 1)
+    if existing:
+        existing.last_successful_fetch = start_current_fetch
+    else:
+        existing = ReadwiseLastFetch(id=1, last_successful_fetch=start_current_fetch)
+        session.add(existing)
+
+
 def get_last_fetch(session: Session) -> datetime | None:
     """
-    Get the time of the last Readwise API fetch from the database.
+    Get the UTC time of the last Readwise API fetch from the database.
 
     The 'last fetch' uses the *start* time of the previous fetch, to allow for an
-    overlap. Validation removes duplicated book ids/highlights.
+    overlap.
 
     Parameters
     ----------
@@ -356,9 +408,15 @@ def get_last_fetch(session: Session) -> datetime | None:
     Returns
     -------
     datetime | None
-        A datetime object representing the start time of the last fetch, or None.
+        A datetime object representing the UTC start time of the last fetch, or None.
     """
-    stmt = select(ReadwiseBatch).order_by(desc(ReadwiseBatch.start_time)).limit(1)
+    # Only a single entry is expected in the ReadwiseLastFetch table.
+    logger.info("Fetching last Readwise fetch time from database")
+    stmt = (
+        select(ReadwiseLastFetch)
+        .order_by(desc(ReadwiseLastFetch.last_successful_fetch))
+        .limit(1)
+    )
     result = session.execute(stmt).scalars().first()
-    last_fetch = result.database_write_time if result else None
+    last_fetch = result.last_successful_fetch if result else None
     return last_fetch

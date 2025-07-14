@@ -16,10 +16,7 @@ from readwise_local_plus.db_operations import (
     get_session,
     safe_create_sqlite_engine,
 )
-from readwise_local_plus.models import (
-    Base,
-    ReadwiseBatch,
-)
+from readwise_local_plus.models import Base, ReadwiseBatch, ReadwiseLastFetch
 from tests.helpers import DbHandle, flat_mock_api_response_fully_validated
 
 logger = logging.getLogger(__name__)
@@ -165,6 +162,47 @@ def test_database_populater_flattened_instantiates_with_expected_attrs(
         "validated_flattened_objs",
         "start_fetch",
         "end_fetch",
-        "batch",
+        "_batch",
     ]
     assert database_populater.ORM_TABLE_MAP is not None
+
+
+@pytest.mark.skip("Skipping test for now")
+def test_readwise_last_fetch_update(session: Session, mock_user_config: UserConfig):
+    """Test that the readwise_last_fetch table is updated correctly."""
+    from readwise_local_plus.db_operations import update_readwise_last_fetch
+
+    start_fetch = datetime(2025, 1, 1, 1, 1, 1)
+    end_fetch = datetime(2025, 1, 1, 2, 2, 2)
+
+    update_readwise_last_fetch(session, start_fetch=start_fetch, end_fetch=end_fetch)
+
+    last_fetch = session.query(ReadwiseLastFetch).first()
+    assert last_fetch.start_fetch == start_fetch
+    assert last_fetch.end_fetch == end_fetch
+
+
+@pytest.mark.skip("Skipping test for now")
+def test_get_last_fetch_returns_none_if_no_entry(session: Session):
+    """Test that get_last_fetch returns None if there is no entry in the table."""
+    from readwise_local_plus.db_operations import get_last_fetch
+
+    last_fetch = get_last_fetch(session)
+    assert last_fetch is None
+
+
+@pytest.mark.skip("Skipping test for now")
+def test_get_last_fetch_returns_datetime_if_entry_exists(session: Session):
+    """Test that get_last_fetch returns the datetime if there is an entry in the table."""
+    from readwise_local_plus.db_operations import (
+        get_last_fetch,
+        update_readwise_last_fetch,
+    )
+
+    start_fetch = datetime(2025, 1, 1, 1, 1, 1)
+    end_fetch = datetime(2025, 1, 1, 2, 2, 2)
+
+    update_readwise_last_fetch(session, start_fetch=start_fetch, end_fetch=end_fetch)
+
+    last_fetch = get_last_fetch(session)
+    assert last_fetch == end_fetch

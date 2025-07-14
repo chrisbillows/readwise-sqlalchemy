@@ -9,6 +9,7 @@ from readwise_local_plus.config import UserConfig
 from readwise_local_plus.db_operations import (
     DatabasePopulaterFlattenedData,
     get_session,
+    update_readwise_last_fetch,
 )
 from readwise_local_plus.integrations.readwise import fetch_from_export_api
 from readwise_local_plus.schemas import (
@@ -441,9 +442,26 @@ def run_pipeline_flattened_objects(
             default = update_database_flattened_objects()
         Function that populates the database with the flattened objects.
     """
-    session = get_session_func(user_config.db_path)
     raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
-    nested_books_first_validation = validate_nested_objs_func(raw_books)
-    flat_objs_first_validation = flatten_func(nested_books_first_validation)
-    flat_objs_second_validation = validate_flat_objs_func(flat_objs_first_validation)
-    update_db_func(session, flat_objs_second_validation, start_fetch, end_fetch)
+
+    with get_session_func(user_config.db_path) as session:
+        if raw_books:
+            nested_books_first_validation = validate_nested_objs_func(raw_books)
+            flat_objs_first_validation = flatten_func(nested_books_first_validation)
+            flat_objs_second_validation = validate_flat_objs_func(
+                flat_objs_first_validation
+            )
+            update_db_func(session, flat_objs_second_validation, start_fetch, end_fetch)
+
+        # Always update the readwise_last_fetch table with the start and end fetch
+        # times, even if no new data was fetched.
+        update_readwise_last_fetch(session, start_fetch=start_fetch)
+
+        try:
+            logging.info("Committing session")
+            session.commit()
+
+        except Exception as err:
+            session.rollback()
+            logging.info(f"Error occurred committing session: {err}")
+            raise err

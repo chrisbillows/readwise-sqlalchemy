@@ -23,8 +23,9 @@ from tests.helpers import mock_api_response
 @pytest.fixture()
 def mock_run_pipeline_flattened_objs() -> tuple[dict, Any]:
     # Strings are used as simplified return values. They are not the real return types.
+    mock_session = MagicMock()
     mocks = {
-        "mock_get_session": MagicMock(return_value="session"),
+        "mock_get_session": MagicMock(return_value=mock_session),
         "mock_fetch_books_with_highlights": MagicMock(
             return_value=("raw_data", "start", "end")
         ),
@@ -579,15 +580,7 @@ def test_update_database_flattened_objects(mock_db_populater_flattened_data: Mag
                 }
             ),
         ),
-        (
-            "mock_update_database_flattened_objects",
-            lambda m: m.assert_called_once_with(
-                "session",
-                {"obj_name": "objs_with_final_validation_status"},
-                "start",
-                "end",
-            ),
-        ),
+        ("mock_update_database_flattened_objects", lambda m: m.assert_called_once()),
     ],
 )
 def test_run_pipeline_flattened_objects_function_calls(

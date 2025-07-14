@@ -110,11 +110,14 @@ def test_db_populater_flattened_populate_database(
         mem_db.session, validated_flattened_objs, ANYTIME, ANYTIME
     )
     database_populater.populate_database()
+
+    # During usage, this is done in the pipeline caller.
+    mem_db.session.commit()
+
     with Session(mem_db.engine) as clean_session:
         fetched_objects = clean_session.scalars(select(orm_obj)).all()
         actual_obj = fetched_objects[0]
         assert getattr(actual_obj, target_field) == expected_value
-        clean_session.close()
 
 
 def test_book_versioning_for_a_changed_book(setup_db, mock_book):
@@ -137,6 +140,8 @@ def test_book_versioning_for_a_changed_book(setup_db, mock_book):
         ANYTIME,
     )
     dbp.populate_database()
+    # During usage, this is done in the pipeline caller.
+    session_2.commit()
 
     session_check = get_session(db_path)
     with session_check.begin():
@@ -172,6 +177,8 @@ def test_highlight_versioning_for_a_changed_highlight(
         ANYTIME,
     )
     dbp.populate_database()
+    # During usage, this is done in the pipeline caller.
+    session_2.commit()
 
     session_check = get_session(db_path)
     with session_check.begin():
@@ -201,6 +208,8 @@ def test_book_versioning_no_changes(setup_db, mock_book):
         ANYTIME,
     )
     dbp.populate_database()
+    # During usage, this is done in the pipeline caller.
+    session_2.commit()
 
     session_check = get_session(db_path)
     with session_check.begin():
@@ -230,6 +239,8 @@ def test_highlight_versioning_no_changes(setup_db, mock_book, mock_highlight):
         ANYTIME,
     )
     dbp.populate_database()
+    # During usage, this is done in the pipeline caller.
+    session_2.commit()
 
     session_check = get_session(db_path)
     with session_check.begin():

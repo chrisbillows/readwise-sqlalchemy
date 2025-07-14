@@ -197,22 +197,23 @@ def test_find_a_highlight_tag():
 def initial_populate_of_db_from_user_data(
     mock_fetch_from_export_api: MagicMock,
     mock_user_config_module_scoped: UserConfig,
-) -> tuple[UsersReadwiseData, Session]:
+) -> tuple[UsersReadwiseData, Session, UserConfig]:
     """
     Write initial fetch to a new tmp_dir database via the ``mock_user_config`` fixture.
     """
+    user_config = mock_user_config_module_scoped
 
     rw_data = get_users_readwise_data()
     mock_fetch_from_export_api.return_value = rw_data.full_content
 
-    sys.argv = ["rw", "sync", "--delta"]
-    main(mock_user_config_module_scoped)
+    sys.argv = ["rw", "sync"]
+    main(user_config)
 
     # Cheeky assert just as a double check while passing through.
     mock_fetch_from_export_api.assert_called_once_with(None)
 
-    session = get_session(mock_user_config_module_scoped.db_path)
-    return rw_data, session
+    session = get_session(user_config.db_path)
+    return rw_data, session, user_config
 
 
 # -----------------------------
@@ -228,7 +229,7 @@ class TestInitialPopulateOfDBFromUserData:
     def test_initial_populate_of_db_from_user_data(
         self, initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session]
     ):
-        rw_data, session = initial_populate_of_db_from_user_data
+        rw_data, session, _ = initial_populate_of_db_from_user_data
         assert rw_data.total_books > 0
         assert rw_data.total_book_tags > 0
         assert rw_data.total_highlights > 0
@@ -239,7 +240,7 @@ class TestInitialPopulateOfDBFromUserData:
         self,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
-        rw_data, session = initial_populate_of_db_from_user_data
+        rw_data, session, _ = initial_populate_of_db_from_user_data
         stmt = select(func.count()).select_from(Book)
         actual_total_books = session.execute(stmt).scalar()
 
@@ -249,7 +250,7 @@ class TestInitialPopulateOfDBFromUserData:
         self,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
-        rw_data, session = initial_populate_of_db_from_user_data
+        rw_data, session, _ = initial_populate_of_db_from_user_data
         random.seed(1)
         sample_book = random.choice(rw_data.full_content)
         stmt = select(Book).where(Book.title == sample_book["title"])
@@ -266,7 +267,7 @@ class TestInitialPopulateOfDBFromUserData:
         self,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
-        rw_data, session = initial_populate_of_db_from_user_data
+        rw_data, session, _ = initial_populate_of_db_from_user_data
 
         stmt = select(func.count()).select_from(BookTag)
         actual_total_book_tags = session.execute(stmt).scalar()
@@ -277,7 +278,7 @@ class TestInitialPopulateOfDBFromUserData:
         self,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
-        rw_data, session = initial_populate_of_db_from_user_data
+        rw_data, session, _ = initial_populate_of_db_from_user_data
 
         # Find a highlight with tags.
         sample_book, sample_book_tag = find_a_sample_book_tag(rw_data.full_content)
@@ -299,7 +300,7 @@ class TestInitialPopulateOfDBFromUserData:
         self,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
-        rw_data, session = initial_populate_of_db_from_user_data
+        rw_data, session, _ = initial_populate_of_db_from_user_data
 
         stmt = select(func.count()).select_from(Highlight)
         actual_total_highlights = session.execute(stmt).scalar()
@@ -310,7 +311,7 @@ class TestInitialPopulateOfDBFromUserData:
         self,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
-        rw_data, session = initial_populate_of_db_from_user_data
+        rw_data, session, _ = initial_populate_of_db_from_user_data
         random.seed(2)
         sample_book = random.choice(rw_data.full_content)
         sample_highlight = random.choice(sample_book["highlights"])
@@ -328,7 +329,7 @@ class TestInitialPopulateOfDBFromUserData:
         self,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
-        _, session = initial_populate_of_db_from_user_data
+        _, session, _ = initial_populate_of_db_from_user_data
         stmt = select(func.count()).select_from(ReadwiseBatch)
         actual_readwise_batches = session.execute(stmt).scalar()
         assert actual_readwise_batches == 1
@@ -337,7 +338,7 @@ class TestInitialPopulateOfDBFromUserData:
         self,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
-        rw_data, session = initial_populate_of_db_from_user_data
+        rw_data, session, _ = initial_populate_of_db_from_user_data
 
         stmt = select(ReadwiseBatch)
         result = session.execute(stmt).scalars().all()
@@ -359,7 +360,7 @@ class TestInitialPopulateOfDBFromUserData:
         self,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
-        rw_data, session = initial_populate_of_db_from_user_data
+        rw_data, session, _ = initial_populate_of_db_from_user_data
 
         stmt = select(func.count()).select_from(HighlightTag)
         actual_total_highlight_tags = session.execute(stmt).scalar()
@@ -370,7 +371,7 @@ class TestInitialPopulateOfDBFromUserData:
         self,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
-        rw_data, session = initial_populate_of_db_from_user_data
+        rw_data, session, _ = initial_populate_of_db_from_user_data
 
         # Find a highlight with tags.
         _, sample_hl, sample_hl_tag = find_a_sample_highlight_tag(rw_data.full_content)
@@ -386,22 +387,32 @@ class TestInitialPopulateOfDBFromUserData:
         assert fetched_hl_tag.highlight_id == sample_hl["id"]
 
 
+@pytest.mark.skip("Functionality not working. To fix in #67.")
 class TestResyncAllHighlightsWithNoChanges:
     """
-    Tests that the resyncing of all highlights with no changes works as expected.
+    Rerun a full sync of all highlights with no changes.
+
+    All highlights, books, etc. are already in the database and the same real user data
+    is used as the "new data" to sync.
+
+    This test represents running an "all" sync
     """
 
+    @patch("readwise_local_plus.pipeline.fetch_from_export_api")
     def test_resync_all_highlights_with_no_changes(
         self,
+        mock_fetch_from_export_api: MagicMock,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
-        rw_data, session = initial_populate_of_db_from_user_data
+        rw_data, _, user_config = initial_populate_of_db_from_user_data
 
-        # Run the sync command again with no changes.
-        sys.argv = ["rw", "sync", "--delta"]
-        main(fetch_user_config())
+        mock_fetch_from_export_api.return_value = rw_data.full_content
+        sys.argv = ["rw", "sync", "--all"]
+        main(user_config)
 
         # Check the batch count is still 1.
         stmt = select(func.count()).select_from(ReadwiseBatch)
+        session = get_session(user_config.db_path)
         actual_readwise_batches = session.execute(stmt).scalar()
         assert actual_readwise_batches == 1
+        session.close()

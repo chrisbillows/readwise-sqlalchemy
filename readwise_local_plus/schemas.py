@@ -21,10 +21,10 @@ Note
       accept unexpected fields by default.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class TagSchemaBase(BaseModel):
@@ -92,6 +92,23 @@ class HighlightSchemaUnnested(BaseModel, extra="forbid", strict=True):
     is_discard: Optional[bool]
     is_deleted: Optional[bool]
     readwise_url: Optional[str]
+
+    @field_validator("highlighted_at", "created_at", "updated_at")
+    @classmethod
+    def remove_timezone(cls, value: datetime | None) -> datetime | None:
+        """
+        Remove timezone information from a datetime object.
+
+        Due to limitations of SQLite, datetimes are stored without timezone info.
+        This validator removes timezone information, so all datetimes are naive.
+
+        The Readwise API returns datetimes uniformly as UTC-aware datetimes. Therefore,
+        all datetimes should be converted to naive UTC before storage.
+        """
+        if value is not None:
+            value = value.astimezone(timezone.utc)
+            return value.replace(tzinfo=None)
+        return value
 
 
 class BookSchemaUnnested(BaseModel, extra="forbid", strict=True):

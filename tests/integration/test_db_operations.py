@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Union
 
 import pytest
@@ -26,7 +26,7 @@ from tests.helpers import DbHandle, flat_mock_api_response_fully_validated
 logger = logging.getLogger(__name__)
 
 # Reusable mock value
-ANYTIME = datetime(2025, 1, 1, 1, 1, 1)
+ANYTIME = datetime(2025, 1, 1, 1, 1, 1, tzinfo=timezone.utc)
 
 # ----------
 #  Fixtures

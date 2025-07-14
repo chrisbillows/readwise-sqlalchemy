@@ -381,10 +381,8 @@ def update_readwise_last_fetch(session: Session, start_current_fetch: datetime) 
     ----------
     session: Session
         A SQL alchemy session connected to a database.
-    start_fetch: datetime
+    start_current_fetch: datetime
         The time the fetch was called.
-    end_fetch: datetime
-        The time the fetch was completed.
     """
     logger.info("Updating Readwise Last Fetch table")
     existing = session.get(ReadwiseLastFetch, 1)

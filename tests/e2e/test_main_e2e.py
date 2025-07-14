@@ -387,25 +387,23 @@ class TestInitialPopulateOfDBFromUserData:
         assert fetched_hl_tag.highlight_id == sample_hl["id"]
 
 
-@pytest.mark.skip("Functionality not working. To fix in #67.")
 class TestResyncAllHighlightsWithNoChanges:
-    """
-    Rerun a full sync of all highlights with no changes.
-
-    All highlights, books, etc. are already in the database and the same real user data
-    is used as the "new data" to sync.
-
-    This test represents running an "all" sync
-    """
-
     @patch("readwise_local_plus.pipeline.fetch_from_export_api")
     def test_resync_all_highlights_with_no_changes(
         self,
         mock_fetch_from_export_api: MagicMock,
         initial_populate_of_db_from_user_data: tuple[UsersReadwiseData, Session],
     ):
+        """
+        Rerun a full sync of all highlights with no changes.
+
+        All highlights, books, etc. are already in the database and the same real user
+        data is used as the "new data" to sync.
+        """
+        # Fixture handles the initial population of the database.
         rw_data, _, user_config = initial_populate_of_db_from_user_data
 
+        # Mock the fetch from export API to return the same data.
         mock_fetch_from_export_api.return_value = rw_data.full_content
         sys.argv = ["rw", "sync", "--all"]
         main(user_config)

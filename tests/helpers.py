@@ -80,9 +80,9 @@ def mock_api_response() -> list[dict[str, Any]]:
                     "location_type": "location",
                     "note": "document note",
                     "color": "yellow",
-                    "highlighted_at": "2025-01-01T00:01:00",
-                    "created_at": "2025-01-01T00:01:10",
-                    "updated_at": "2025-01-01T00:01:20",
+                    "highlighted_at": "2025-01-01T00:01:00Z",
+                    "created_at": "2025-01-01T00:01:10Z",
+                    "updated_at": "2025-01-01T00:01:20Z",
                     "external_id": None,
                     "end_location": None,
                     "url": None,
@@ -177,7 +177,8 @@ def flat_mock_api_response_fully_validated(
         Each list has only one object. E.g.
         ``{"books": [book], "highlights": [highlight] etc}``.
     """
-    # Mock the pydantic field transformations.
+    # Mock the pydantic field transformations. TZ info is removed from datetime
+    # fields, as the database expects naive datetime objects.
     flattened_output = flattened_nested_validated_mock_api_response_single_book_fn()
     mock_highlight = flattened_output["highlights"][0]
     mock_highlight["highlighted_at"] = datetime(2025, 1, 1, 0, 1)

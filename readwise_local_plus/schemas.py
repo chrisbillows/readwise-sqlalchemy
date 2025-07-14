@@ -106,6 +106,7 @@ class HighlightSchemaUnnested(BaseModel, extra="forbid", strict=True):
         all datetimes should be converted to naive UTC before storage.
         """
         if value is not None:
+            value = value.astimezone(timezone.utc)
             return value.replace(tzinfo=None)
         return value
 

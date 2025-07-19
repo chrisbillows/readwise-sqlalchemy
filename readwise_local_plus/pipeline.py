@@ -12,6 +12,7 @@ from readwise_local_plus.db_operations import (
     update_readwise_last_fetch,
 )
 from readwise_local_plus.integrations.readwise import fetch_from_export_api
+from readwise_local_plus.lock_manager import database_lock
 from readwise_local_plus.schemas import (
     BookSchemaUnnested,
     BookTagsSchema,
@@ -444,24 +445,28 @@ def run_pipeline_flattened_objects(
     """
     raw_books, start_fetch, end_fetch = fetch_func(last_fetch)
 
-    with get_session_func(user_config.db_path) as session:
-        if raw_books:
-            nested_books_first_validation = validate_nested_objs_func(raw_books)
-            flat_objs_first_validation = flatten_func(nested_books_first_validation)
-            flat_objs_second_validation = validate_flat_objs_func(
-                flat_objs_first_validation
-            )
-            update_db_func(session, flat_objs_second_validation, start_fetch, end_fetch)
+    # Acquire database lock before any write operations
+    with database_lock(user_config.db_path):
+        with get_session_func(user_config.db_path) as session:
+            if raw_books:
+                nested_books_first_validation = validate_nested_objs_func(raw_books)
+                flat_objs_first_validation = flatten_func(nested_books_first_validation)
+                flat_objs_second_validation = validate_flat_objs_func(
+                    flat_objs_first_validation
+                )
+                update_db_func(
+                    session, flat_objs_second_validation, start_fetch, end_fetch
+                )
 
-        # Always update the readwise_last_fetch table with the start and end fetch
-        # times, even if no new data was fetched.
-        update_readwise_last_fetch(session, start_current_fetch=start_fetch)
+            # Always update the readwise_last_fetch table with the start and end fetch
+            # times, even if no new data was fetched.
+            update_readwise_last_fetch(session, start_current_fetch=start_fetch)
 
-        try:
-            logging.info("Committing session")
-            session.commit()
+            try:
+                logging.info("Committing session")
+                session.commit()
 
-        except Exception as err:
-            session.rollback()
-            logging.info(f"Error occurred committing session: {err}")
-            raise err
+            except Exception as err:
+                session.rollback()
+                logging.info(f"Error occurred committing session: {err}")
+                raise err

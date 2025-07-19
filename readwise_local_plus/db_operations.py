@@ -12,6 +12,7 @@ from sqlalchemy import Engine, create_engine, desc, event, select
 from sqlalchemy.orm import Session, class_mapper, sessionmaker
 
 from readwise_local_plus.config import UserConfig, fetch_user_config
+from readwise_local_plus.lock_manager import database_lock
 from readwise_local_plus.models import (
     Base,
     Book,
@@ -86,8 +87,9 @@ def get_session(database_path: str | Path) -> Session:
 
 def create_database(database_path: str | Path) -> None:
     """Create the database schema. This should only be called during setup."""
-    engine = safe_create_sqlite_engine(database_path)
-    Base.metadata.create_all(engine)
+    with database_lock(database_path):
+        engine = safe_create_sqlite_engine(database_path)
+        Base.metadata.create_all(engine)
 
 
 def check_database(user_config: Optional[UserConfig] = None) -> None | datetime:
@@ -221,6 +223,11 @@ class DatabasePopulaterFlattenedData:
         are included. i.e. A book might have 100 highlights, but if only 1 highlight has
         been added since the last fetch, only 1 highlight will be in the highlights
         list.
+
+        Note
+        ----
+        This method assumes it is called within a database lock context. The caller
+        is responsible for acquiring the appropriate lock before calling this method.
         """
         for obj_name, raw_objs in self.validated_flattened_objs.items():
             orm_model = self.ORM_TABLE_MAP[obj_name]
@@ -383,6 +390,11 @@ def update_readwise_last_fetch(session: Session, start_current_fetch: datetime) 
         A SQL alchemy session connected to a database.
     start_current_fetch: datetime
         The time the fetch was called.
+
+    Note
+    ----
+    This method assumes it is called within a database lock context. The caller
+    is responsible for acquiring the appropriate lock before calling this method.
     """
     logger.info("Updating Readwise Last Fetch table")
     existing = session.get(ReadwiseLastFetch, 1)
